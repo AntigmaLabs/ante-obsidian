@@ -1,0 +1,9 @@
+{
+  "id": "tmd",
+  "name": "Tmd",
+  "version": "0.1.1",
+  "minAppVersion": "1.6.0",
+  "description": "Ante-powered Markdown actions, diff previews, and a lightweight Obsidian console.",
+  "author": "fuli.foo",
+  "isDesktopOnly": true
+}

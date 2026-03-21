@@ -1,0 +1,288 @@
+.tmd-view {
+  --tmd-terminal-bg: oklch(0.18 0.015 255);
+  --tmd-terminal-bg-2: oklch(0.14 0.014 255);
+  --tmd-terminal-border: oklch(0.3 0.015 255);
+  --tmd-terminal-text: oklch(0.92 0.01 250);
+  --tmd-terminal-muted: oklch(0.74 0.015 250);
+  --tmd-terminal-ok: oklch(0.83 0.08 145);
+  --tmd-terminal-fail: oklch(0.82 0.09 28);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.tmd-section {
+  margin: 0 0 16px;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+}
+
+.tmd-actions {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.tmd-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tmd-meta {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.tmd-empty {
+  color: var(--text-muted);
+  padding: 24px 0;
+}
+
+.tmd-waiting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tmd-error {
+  color: var(--text-error);
+  margin-top: 8px;
+}
+
+.tmd-patch,
+.tmd-text-result,
+.tmd-console-log {
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--background-primary);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.tmd-patch .is-add {
+  color: var(--color-green);
+}
+
+.tmd-patch .is-remove {
+  color: var(--color-red);
+}
+
+.tmd-patch .is-meta,
+.tmd-patch .is-hunk {
+  color: var(--text-accent);
+}
+
+.tmd-console-input {
+  width: 100%;
+  min-height: 120px;
+  margin-bottom: 8px;
+}
+
+.tmd-console-card {
+  padding: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.tmd-terminal-frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 620px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--tmd-terminal-border) 88%, black 12%);
+  border-radius: 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tmd-terminal-bg) 97%, black 3%), color-mix(in srgb, var(--tmd-terminal-bg-2) 94%, black 6%));
+  box-shadow: 0 22px 48px color-mix(in srgb, black 18%, transparent);
+}
+
+.tmd-terminal-chrome,
+.tmd-terminal-meta,
+.tmd-terminal-screen,
+.tmd-terminal-promptbar,
+.tmd-terminal-row,
+.tmd-terminal-shell-input,
+.tmd-terminal-chrome-title,
+.tmd-terminal-status,
+.tmd-terminal-meta-line {
+  font-family: var(--font-monospace);
+}
+
+.tmd-terminal-chrome {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--tmd-terminal-border) 70%, transparent);
+  background: color-mix(in srgb, var(--tmd-terminal-bg) 84%, black 16%);
+}
+
+.tmd-terminal-chrome-title,
+.tmd-terminal-status {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tmd-terminal-chrome-title {
+  color: var(--tmd-terminal-muted);
+}
+
+.tmd-terminal-status {
+  display: inline-flex;
+  align-items: center;
+  color: var(--tmd-terminal-text);
+}
+
+.tmd-terminal-status.is-completed {
+  color: var(--tmd-terminal-ok);
+}
+
+.tmd-terminal-status.is-failed {
+  color: var(--tmd-terminal-fail);
+}
+
+.tmd-terminal-status.is-muted {
+  color: var(--tmd-terminal-muted);
+}
+
+.tmd-terminal-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--tmd-terminal-border) 62%, transparent);
+  background: color-mix(in srgb, var(--tmd-terminal-bg) 90%, black 10%);
+}
+
+.tmd-terminal-meta-line {
+  color: var(--tmd-terminal-muted);
+  font-size: 11px;
+  user-select: text;
+}
+
+.tmd-terminal-screen {
+  flex: 1;
+  min-height: 360px;
+  max-height: 68vh;
+  overflow-y: auto;
+  padding: 14px;
+  user-select: text;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--tmd-terminal-bg) 98%, black 2%), color-mix(in srgb, var(--tmd-terminal-bg-2) 96%, black 4%));
+}
+
+.tmd-terminal-screen::-webkit-scrollbar {
+  width: 10px;
+}
+
+.tmd-terminal-screen::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tmd-terminal-border) 86%, white 14%);
+}
+
+.tmd-terminal-row {
+  display: grid;
+  grid-template-columns: 74px 34px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 4px 0;
+  color: var(--tmd-terminal-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.tmd-terminal-row.is-command {
+  padding-top: 12px;
+  color: var(--tmd-terminal-text);
+}
+
+.tmd-terminal-row.is-system {
+  color: color-mix(in srgb, var(--tmd-terminal-muted) 84%, white 16%);
+}
+
+.tmd-terminal-row.is-error {
+  color: var(--tmd-terminal-fail);
+}
+
+.tmd-terminal-row.is-artifact {
+  color: color-mix(in srgb, var(--tmd-terminal-ok) 84%, white 16%);
+}
+
+.tmd-terminal-row.is-loading {
+  color: var(--tmd-terminal-text);
+}
+
+.tmd-terminal-row-time {
+  color: color-mix(in srgb, var(--tmd-terminal-muted) 84%, white 16%);
+  font-variant-numeric: tabular-nums;
+}
+
+.tmd-terminal-row-prefix {
+  color: var(--tmd-terminal-muted);
+}
+
+.tmd-terminal-row-text {
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tmd-terminal-promptbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 14px 14px;
+  background: transparent;
+}
+
+.tmd-terminal-promptline {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 28px;
+  padding-top: 6px;
+}
+
+.tmd-terminal-shell-sign {
+  color: var(--tmd-terminal-text);
+  font-family: var(--font-monospace);
+  font-size: 13px;
+}
+
+.tmd-terminal-shell-editor {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--tmd-terminal-text);
+  background: transparent;
+  box-shadow: none;
+  caret-color: var(--tmd-terminal-text);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  outline: none;
+  min-height: 21px;
+  user-select: text;
+}
+
+.tmd-terminal-shell-editor[contenteditable="true"] {
+  cursor: text;
+}
+
+.tmd-terminal-shell-editor.is-empty::before {
+  content: attr(data-placeholder);
+  color: color-mix(in srgb, var(--tmd-terminal-muted) 88%, transparent);
+}
+
+.tmd-terminal-shell-editor[contenteditable="false"] {
+  color: color-mix(in srgb, var(--tmd-terminal-muted) 92%, white 8%);
+}

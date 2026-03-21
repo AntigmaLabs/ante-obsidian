@@ -1,0 +1,25 @@
+{
+  "name": "tmd",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Obsidian desktop plugin for ante-driven Markdown workflows with diff previews and a lightweight console.",
+  "scripts": {
+    "build": "npm run sync-version && node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs",
+    "probe": "node scripts/ante-protocol-probe.cjs",
+    "smoke": "node scripts/ante-smoke.cjs",
+    "sync-version": "node scripts/sync-version.cjs",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "diff": "^8.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.27.3",
+    "obsidian": "^1.12.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
