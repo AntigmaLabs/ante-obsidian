@@ -2,6 +2,7 @@
   "name": "tmd",
   "version": "0.1.1",
   "private": true,
+  "license": "MIT",
   "description": "Obsidian desktop plugin for ante-driven Markdown workflows with diff previews and a lightweight console.",
   "scripts": {
     "build": "npm run sync-version && node esbuild.config.mjs production",

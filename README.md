@@ -56,6 +56,7 @@ Runtime scripts resolve Ante like this:
 - `ANTE_CWD`: optional working directory for Ante. Defaults to the repository root.
 - `ANTE_MODEL`: optional model override for probe and smoke scripts. Defaults to `gpt-5.4`.
 - `ANTE_PROVIDER`: optional provider override for probe and smoke scripts. Defaults to `openai-subscription`.
+- `GEMINI_API_KEY`: used by Ante when `ANTE_PROVIDER=gemini`.
 
 Example:
 
@@ -68,16 +69,21 @@ npm run smoke
 
 ## Obsidian Install
 
-To install the plugin into any local Obsidian vault:
+Tmd can be installed in several ways:
 
-1. Build the plugin bundle.
-2. Create `<your-vault>/.obsidian/plugins/tmd/`.
-3. Copy or symlink these files into that folder:
-   - `manifest.json`
-   - `main.js`
-   - `styles.css`
-4. In Obsidian, open `Settings -> Community plugins` and reload plugins.
-5. Enable `Tmd`, then set your local Ante command/provider/model in the plugin settings if needed.
+- Obsidian Community Plugins browser, after official review and listing
+- BRAT, for beta distribution before official listing
+- Manual install from a GitHub release
+- Local install from source
+
+See the full user guide in [INSTALL.md](./INSTALL.md).
+
+After installation:
+
+1. Enable `Tmd` in `Settings -> Community plugins`.
+2. Confirm the local Ante command/provider/model settings if needed.
+3. By default, Tmd follows `~/.ante/settings.json` for provider and model.
+4. If you switch Tmd to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.
 
 The Obsidian plugin still stores local machine settings in its own plugin data file at runtime. That is expected user-local configuration, not repository configuration.
 
