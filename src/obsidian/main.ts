@@ -11,9 +11,16 @@ import { TMD_DIFF_VIEW_TYPE, TmdDiffView } from "./diff-view";
 import { TMD_CONSOLE_VIEW_TYPE, TmdConsoleView } from "./console-view";
 import { TMD_TERMINAL_VIEW_TYPE, TmdTerminalView } from "./terminal-view";
 import type { TaskRecord } from "../core/types";
+import { readAnteDefaults, type AnteDefaults } from "./ante-defaults";
+import { normalizeEnvVarName, readEnvVarFromLoginShell } from "./shell-env";
 
 export default class TmdPlugin extends Plugin {
   settings: TmdSettings = DEFAULT_SETTINGS;
+  anteDefaults: AnteDefaults = {
+    provider: DEFAULT_SETTINGS.anteProvider,
+    model: DEFAULT_SETTINGS.anteModel
+  };
+  shellEnv: Record<string, string> = {};
   hostAdapter!: ObsidianHostAdapter;
   taskEngine!: TaskEngine;
   private runtime!: AnteServeRuntimeAdapter;
@@ -21,15 +28,30 @@ export default class TmdPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    await this.loadAnteDefaults();
+    await this.loadShellEnv();
 
     this.hostAdapter = new ObsidianHostAdapter(this.app);
-    this.runtime = new AnteServeRuntimeAdapter(() => ({
-      command: this.settings.command,
-      argsJson: this.settings.argsJson,
-      cwd: this.settings.cwd,
-      model: this.settings.anteModel,
-      provider: this.settings.anteProvider
-    }));
+    this.runtime = new AnteServeRuntimeAdapter(() => {
+      const resolved = this.getResolvedAnteTarget();
+      const geminiEnvKey = normalizeEnvVarName(this.settings.geminiApiKeyEnvKey);
+      const geminiApiKey =
+        this.settings.geminiApiKey.trim() ||
+        (geminiEnvKey ? this.shellEnv[geminiEnvKey]?.trim() ?? "" : "") ||
+        (geminiEnvKey ? process.env[geminiEnvKey]?.trim() ?? "" : "");
+      return {
+        command: this.settings.command,
+        argsJson: this.settings.argsJson,
+        cwd: this.settings.cwd,
+        model: resolved.model,
+        provider: resolved.provider,
+        autoApproveTools: this.settings.autoApproveAnteTools,
+        env:
+          resolved.provider === "gemini" && geminiEnvKey && geminiApiKey
+            ? { [geminiEnvKey]: geminiApiKey }
+            : {}
+      };
+    });
     this.taskEngine = new TaskEngine(this.runtime, this.hostAdapter);
     this.mentionTrigger = new MentionTriggerService(this.app, this, () => this.settings.mentionTriggerDebug);
 
@@ -52,12 +74,30 @@ export default class TmdPlugin extends Plugin {
   }
 
   async saveSettings(): Promise<void> {
+    await this.loadShellEnv();
     await this.saveData(this.settings);
   }
 
   async loadSettings(): Promise<void> {
     const stored = await this.loadData();
     this.settings = normalizeSettings(stored as Partial<TmdSettings> | null | undefined);
+  }
+
+  async loadAnteDefaults(): Promise<void> {
+    const defaults = await readAnteDefaults();
+    if (defaults) {
+      this.anteDefaults = defaults;
+    }
+  }
+
+  async loadShellEnv(): Promise<void> {
+    const envKey = normalizeEnvVarName(this.settings.geminiApiKeyEnvKey);
+    if (!envKey) {
+      this.shellEnv = {};
+      return;
+    }
+    const value = await readEnvVarFromLoginShell(envKey);
+    this.shellEnv = value ? { [envKey]: value } : {};
   }
 
   async runMentionTask(presetId: PresetId, context: ContextSnapshot, inlineInstruction: string): Promise<string> {
@@ -152,6 +192,32 @@ export default class TmdPlugin extends Plugin {
     });
   }
 
+  watchTaskForResults(taskId: string, sourceLabel: string): void {
+    let settled = false;
+    const unsubscribe = this.taskEngine.subscribe((state) => {
+      if (settled) {
+        return;
+      }
+      const task = state.tasks.find((entry) => entry.id === taskId);
+      if (!task || task.status === "running") {
+        return;
+      }
+
+      settled = true;
+      unsubscribe();
+
+      if (task.artifacts.length > 0) {
+        void this.openResultsView();
+        new Notice(`${sourceLabel} Ante diff is ready in Tmd Results`);
+        return;
+      }
+      if (task.error) {
+        new Notice(task.error);
+        return;
+      }
+    });
+  }
+
   private handleNonArtifactTaskCompletion(task: TaskRecord, sourceLabel: string): void {
     if (task.textResult?.text.trim()) {
       void this.openResultsView();
@@ -166,6 +232,16 @@ export default class TmdPlugin extends Plugin {
     }
 
     new Notice(`${sourceLabel} Ante task finished`);
+  }
+
+  getResolvedAnteTarget(): AnteDefaults {
+    if (this.settings.useAnteDefaults) {
+      return this.anteDefaults;
+    }
+    return {
+      provider: this.settings.anteProvider,
+      model: this.settings.anteModel
+    };
   }
 
   private registerCommands(): void {

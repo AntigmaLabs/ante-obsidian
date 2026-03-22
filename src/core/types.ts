@@ -12,6 +12,7 @@ export type TaskStatus =
 export type DocumentChangeOperation = "replace-selection" | "append-block" | "replace-file" | "create-file";
 export type ApplyState = "pending" | "applying" | "applied" | "reverting" | "reverted" | "failed" | "discarded";
 export type LogStream = "stdout" | "stderr" | "system" | "user";
+export type RuntimeApprovalDecision = "Accept" | "AcceptForSession" | "Skip" | "Abort";
 
 export interface TextPosition {
   line: number;
@@ -47,6 +48,18 @@ export interface LogEntry {
 export interface RuntimeSessionInfo {
   provider: "ante";
   sessionId: string;
+}
+
+export interface RuntimeApprovalTool {
+  id: string;
+  name: string;
+  argsText?: string;
+}
+
+export interface RuntimeApprovalRequest {
+  turnId: string;
+  message: string;
+  tools: RuntimeApprovalTool[];
 }
 
 export type DocumentChangeTarget =
@@ -98,6 +111,7 @@ export interface TaskRecord {
   logs: LogEntry[];
   textResult?: TextResult;
   artifacts: DocumentChangeArtifact[];
+  pendingApproval?: RuntimeApprovalRequest;
   error?: string;
   startedAt: string;
   endedAt?: string;
@@ -124,6 +138,7 @@ export interface TaskRequest {
 export type RuntimeEvent =
   | { type: "log"; stream: LogStream; text: string }
   | { type: "runtime.session"; provider: "ante"; sessionId: string }
+  | { type: "session.approval"; approval: RuntimeApprovalRequest }
   | { type: "result.text"; text: string }
   | { type: "result.change"; change: RuntimeChangeSuggestion }
   | { type: "session.completed"; summary?: string }

@@ -5,6 +5,7 @@ import { getPreset } from "./presets";
 import type {
   ContextSnapshot,
   DocumentChangeArtifact,
+  RuntimeApprovalDecision,
   RuntimeEvent,
   TaskRecord,
   TaskRequest,
@@ -99,6 +100,20 @@ export class TaskEngine {
     this.runtime.cancelActiveRun();
   }
 
+  respondToTaskApproval(taskId: string, decision: RuntimeApprovalDecision): void {
+    const task = this.getTask(taskId);
+    if (!task.pendingApproval) {
+      throw new Error("No pending Ante approval for this task");
+    }
+    if (this.activeTaskId !== taskId) {
+      throw new Error("This Ante task is no longer active");
+    }
+
+    this.runtime.respondToApproval(task.pendingApproval, decision);
+    this.patchTask(taskId, { pendingApproval: undefined });
+    this.appendLog(taskId, "system", `Approval sent: ${decision}`);
+  }
+
   async applyArtifact(taskId: string, artifactId: string): Promise<void> {
     const artifact = this.getArtifact(taskId, artifactId);
     this.patchArtifact(taskId, artifactId, {
@@ -164,6 +179,7 @@ export class TaskEngine {
       status: "running",
       logs: [],
       artifacts: [],
+      pendingApproval: undefined,
       startedAt: new Date().toISOString()
     };
 
@@ -183,12 +199,14 @@ export class TaskEngine {
         onExit: (result) => {
           if (result.status === "cancelled") {
             this.patchTask(request.taskId, {
+              pendingApproval: undefined,
               status: "failed",
               error: "Ante task cancelled",
               endedAt: new Date().toISOString()
             });
           } else if (result.status === "failed" && result.error) {
             this.patchTask(request.taskId, {
+              pendingApproval: undefined,
               status: "failed",
               error: result.error,
               endedAt: new Date().toISOString()
@@ -219,8 +237,12 @@ export class TaskEngine {
       case "runtime.session":
         this.patchTask(request.taskId, { runtimeSession: event });
         return;
+      case "session.approval":
+        this.patchTask(request.taskId, { pendingApproval: event.approval });
+        return;
       case "result.text":
         this.patchTask(request.taskId, {
+          pendingApproval: undefined,
           textResult: {
             kind: "text",
             text: event.text
@@ -238,6 +260,7 @@ export class TaskEngine {
         const task = this.getTask(request.taskId);
         this.patchTask(request.taskId, {
           artifacts: [artifact, ...task.artifacts],
+          pendingApproval: undefined,
           status: "awaiting-apply"
         });
         return;
@@ -245,6 +268,7 @@ export class TaskEngine {
       case "session.completed": {
         const task = this.getTask(request.taskId);
         this.patchTask(request.taskId, {
+          pendingApproval: undefined,
           status: task.artifacts.length > 0 ? "awaiting-apply" : "completed",
           endedAt: new Date().toISOString()
         });
@@ -252,6 +276,7 @@ export class TaskEngine {
       }
       case "session.failed":
         this.patchTask(request.taskId, {
+          pendingApproval: undefined,
           status: "failed",
           error: event.error,
           endedAt: new Date().toISOString()

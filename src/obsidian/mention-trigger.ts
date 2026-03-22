@@ -113,12 +113,12 @@ export class MentionTriggerService {
     };
 
     this.performEditorReplace(editor, () => {
-      editor.replaceRange(`\n\n${this.wrapPlaceholder(markers, triggerToken, `> ${loadingFrames[loadingFrameIndex]} Running…`)}`, insertAt);
+      editor.replaceRange(`\n\n${this.wrapPlaceholder(markers, triggerToken, `> Running${loadingFrames[loadingFrameIndex]}`)}`, insertAt);
     });
 
     const updateLoading = () => {
       loadingFrameIndex = (loadingFrameIndex + 1) % loadingFrames.length;
-      this.replacePlaceholderBody(editor, markers, `> ${loadingFrames[loadingFrameIndex]} Running…`);
+      this.replacePlaceholderBody(editor, markers, `> Running${loadingFrames[loadingFrameIndex]}`);
     };
     const timer = window.setInterval(updateLoading, 800);
 

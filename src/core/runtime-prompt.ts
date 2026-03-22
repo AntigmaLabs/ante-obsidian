@@ -39,28 +39,47 @@ const buildTerminalSchemaBlock = (): string =>
     "- create-file: targetPath is required and afterText is the full new file contents."
   ].join("\n");
 
+const buildTerminalContextBlock = (request: TaskRequest): string => {
+  const lines: string[] = [];
+  if (request.context.filePath) {
+    lines.push(`Current note path: ${request.context.filePath}`);
+  }
+  const selection = request.context.selection?.text?.trim();
+  if (selection) {
+    lines.push(`Selected text:\n${selection}`);
+  }
+  return lines.join("\n\n");
+};
+
 export const buildInteractivePrompt = (request: TaskRequest): string => {
   const inlineInstruction = request.inlineInstruction.trim();
   const followUpPrompt = request.followUpPrompt?.trim() ?? "";
 
   if (request.mode === "followup") {
-    return [followUpPrompt, "", request.kind === "terminal" ? buildTerminalSchemaBlock() : buildSchemaBlock()]
+    if (request.kind === "terminal") {
+      return [followUpPrompt, "", buildTerminalContextBlock(request), "", buildTerminalSchemaBlock()]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+    return [followUpPrompt, "", buildSchemaBlock()].filter(Boolean).join("\n");
+  }
+
+  if (request.kind === "terminal") {
+    return [inlineInstruction, "", buildTerminalContextBlock(request), "", buildTerminalSchemaBlock()]
       .filter(Boolean)
-      .join("\n");
+      .join("\n\n");
   }
 
   return [
     request.kind === "console"
       ? "You are operating inside the Tmd Ante Console for an Obsidian vault."
-      : request.kind === "terminal"
-        ? "You are operating inside the Tmd Ante Terminal for an Obsidian vault. Use the current Markdown note context when it is provided."
-        : "You are handling a Markdown editing task for an Obsidian note.",
+      : "You are handling a Markdown editing task for an Obsidian note.",
     `Preset: ${request.preset.label}`,
     `Goal: ${request.preset.goal}`,
     request.preset.systemInstructions ? `Execution instructions:\n${request.preset.systemInstructions}` : "",
     inlineInstruction ? `User instruction:\n${inlineInstruction}` : "",
     buildContextBlock(request),
-    request.kind === "terminal" ? buildTerminalSchemaBlock() : buildSchemaBlock()
+    buildSchemaBlock()
   ]
     .filter(Boolean)
     .join("\n\n");

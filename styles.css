@@ -122,6 +122,12 @@
   background: color-mix(in srgb, var(--tmd-terminal-bg) 84%, black 16%);
 }
 
+.tmd-terminal-chrome-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .tmd-terminal-chrome-title,
 .tmd-terminal-status {
   font-size: 11px;
@@ -139,16 +145,51 @@
   color: var(--tmd-terminal-text);
 }
 
-.tmd-terminal-status.is-completed {
+.tmd-terminal-status.tmd-is-completed {
   color: var(--tmd-terminal-ok);
 }
 
-.tmd-terminal-status.is-failed {
+.tmd-terminal-status.tmd-is-failed {
   color: var(--tmd-terminal-fail);
 }
 
-.tmd-terminal-status.is-muted {
+.tmd-terminal-status.tmd-is-muted {
   color: var(--tmd-terminal-muted);
+}
+
+.tmd-terminal-stop-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, oklch(0.72 0.16 25) 72%, white 28%);
+  border-radius: 999px;
+  color: color-mix(in srgb, oklch(0.84 0.09 24) 88%, white 12%);
+  background: color-mix(in srgb, oklch(0.34 0.08 22) 68%, black 32%);
+  font-family: var(--font-monospace);
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.tmd-terminal-stop-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, oklch(0.8 0.16 24) 84%, white 16%);
+  background: color-mix(in srgb, oklch(0.42 0.11 24) 72%, black 28%);
+  color: white;
+}
+
+.tmd-terminal-stop-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tmd-terminal-stop-icon {
+  font-size: 9px;
+  line-height: 1;
+}
+
+.tmd-terminal-stop-label {
+  line-height: 1;
 }
 
 .tmd-terminal-meta {
@@ -197,24 +238,24 @@
   line-height: 1.6;
 }
 
-.tmd-terminal-row.is-command {
+.tmd-terminal-row.tmd-is-command {
   padding-top: 12px;
   color: var(--tmd-terminal-text);
 }
 
-.tmd-terminal-row.is-system {
+.tmd-terminal-row.tmd-is-system {
   color: color-mix(in srgb, var(--tmd-terminal-muted) 84%, white 16%);
 }
 
-.tmd-terminal-row.is-error {
+.tmd-terminal-row.tmd-is-error {
   color: var(--tmd-terminal-fail);
 }
 
-.tmd-terminal-row.is-artifact {
+.tmd-terminal-row.tmd-is-artifact {
   color: color-mix(in srgb, var(--tmd-terminal-ok) 84%, white 16%);
 }
 
-.tmd-terminal-row.is-loading {
+.tmd-terminal-row.tmd-is-loading {
   color: var(--tmd-terminal-text);
 }
 
@@ -225,6 +266,14 @@
 
 .tmd-terminal-row-prefix {
   color: var(--tmd-terminal-muted);
+}
+
+.tmd-terminal-row.tmd-is-command .tmd-terminal-row-prefix {
+  color: color-mix(in srgb, oklch(0.82 0.11 235) 86%, white 14%);
+}
+
+.tmd-terminal-row.tmd-is-system .tmd-terminal-row-prefix {
+  color: color-mix(in srgb, oklch(0.78 0.08 145) 82%, white 18%);
 }
 
 .tmd-terminal-row-text {
@@ -239,6 +288,101 @@
   gap: 8px;
   padding: 0 14px 14px;
   background: transparent;
+}
+
+.tmd-terminal-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 14px 14px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, oklch(0.58 0.09 78) 58%, white 42%);
+  border-radius: 12px;
+  background: color-mix(in srgb, oklch(0.28 0.03 78) 78%, black 22%);
+  color: var(--tmd-terminal-text);
+  font-family: var(--font-monospace);
+}
+
+.tmd-terminal-approval-title {
+  color: color-mix(in srgb, oklch(0.86 0.08 100) 88%, white 12%);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tmd-terminal-approval-message {
+  color: color-mix(in srgb, var(--tmd-terminal-muted) 84%, white 16%);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.tmd-terminal-approval-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--tmd-terminal-border) 72%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tmd-terminal-bg) 70%, black 30%);
+}
+
+.tmd-terminal-approval-tool-name {
+  color: var(--tmd-terminal-text);
+  font-size: 12px;
+}
+
+.tmd-terminal-approval-tool-args {
+  color: color-mix(in srgb, var(--tmd-terminal-muted) 82%, white 18%);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tmd-terminal-approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tmd-terminal-approval-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tmd-terminal-border) 78%, transparent);
+  background: color-mix(in srgb, var(--tmd-terminal-bg) 76%, black 24%);
+  color: var(--tmd-terminal-text);
+  font-family: var(--font-monospace);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tmd-terminal-approval-button:hover {
+  color: white;
+}
+
+.tmd-terminal-approval-button.tmd-is-approve,
+.tmd-terminal-approval-button.tmd-is-approve-session {
+  border-color: color-mix(in srgb, oklch(0.72 0.1 145) 76%, white 24%);
+  color: color-mix(in srgb, oklch(0.84 0.08 145) 88%, white 12%);
+}
+
+.tmd-terminal-approval-button.tmd-is-approve:hover,
+.tmd-terminal-approval-button.tmd-is-approve-session:hover {
+  background: color-mix(in srgb, oklch(0.34 0.07 145) 72%, black 28%);
+}
+
+.tmd-terminal-approval-button.tmd-is-deny {
+  border-color: color-mix(in srgb, oklch(0.72 0.14 25) 72%, white 28%);
+  color: color-mix(in srgb, oklch(0.84 0.09 24) 88%, white 12%);
+}
+
+.tmd-terminal-approval-button.tmd-is-deny:hover {
+  background: color-mix(in srgb, oklch(0.38 0.1 25) 72%, black 28%);
 }
 
 .tmd-terminal-promptline {
@@ -278,7 +422,7 @@
   cursor: text;
 }
 
-.tmd-terminal-shell-editor.is-empty::before {
+.tmd-terminal-shell-editor.tmd-is-empty::before {
   content: attr(data-placeholder);
   color: color-mix(in srgb, var(--tmd-terminal-muted) 88%, transparent);
 }

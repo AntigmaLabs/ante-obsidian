@@ -1,6 +1,6 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import type TmdPlugin from "./main";
-import type { ContextSnapshot, TaskRecord, TmdState } from "../core/types";
+import type { ContextSnapshot, RuntimeApprovalDecision, TaskRecord, TmdState } from "../core/types";
 
 export const TMD_TERMINAL_VIEW_TYPE = "tmd-terminal-view";
 
@@ -33,13 +33,13 @@ const terminalStatusClass = (task: TaskRecord | undefined): string => {
   const status = terminalStatus(task);
   switch (status) {
     case "running":
-      return "is-running";
+      return "tmd-is-running";
     case "failed":
-      return "is-failed";
+      return "tmd-is-failed";
     case "discarded":
-      return "is-muted";
+      return "tmd-is-muted";
     default:
-      return "is-completed";
+      return "tmd-is-completed";
   }
 };
 
@@ -57,6 +57,35 @@ const summarizeContext = (context: ContextSnapshot | null | undefined): string =
   return `${context.filePath} · note ${documentText.length} chars`;
 };
 
+const NOISY_SYSTEM_PATTERNS = [
+  /^Launching Ante server\b/,
+  /^Reusing existing Ante session\b/,
+  /^Ante TurnStart\b/,
+  /^Ante ToolStart\b/,
+  /^Ante ToolEnd\b/,
+  /^Ante ToolUpdate\b/
+];
+
+const shouldDisplaySystemLog = (text: string): boolean => !NOISY_SYSTEM_PATTERNS.some((pattern) => pattern.test(text));
+
+const extractRuntimeSummary = (task: TaskRecord | undefined): { provider: string; model: string } | null => {
+  if (!task) {
+    return null;
+  }
+  for (const log of task.logs) {
+    const match =
+      /provider=([^\s·]+)\s+·\s+model=([^\s·]+)/.exec(log.text) ??
+      /provider=([^\s·]+)\s+·\s+model=([^\s·]+)/.exec(log.text.replace(/\n/g, " "));
+    if (match?.[1] && match?.[2]) {
+      return {
+        provider: match[1],
+        model: match[2]
+      };
+    }
+  }
+  return null;
+};
+
 const parseJsonPayload = (value: string): unknown | null => {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -72,7 +101,7 @@ const parseJsonPayload = (value: string): unknown | null => {
   }
 };
 
-const aggregateOutput = (task: TaskRecord): string => {
+const analyzeOutput = (task: TaskRecord): { text: string; suppressStdout: boolean } => {
   const primaryText = task.textResult?.text.trim()
     ? task.textResult.text.trim()
     : task.logs
@@ -82,23 +111,23 @@ const aggregateOutput = (task: TaskRecord): string => {
         .trim();
 
   if (!primaryText) {
-    return "";
+    return { text: "", suppressStdout: false };
   }
 
   const parsed = parseJsonPayload(primaryText);
   if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
     const record = parsed as Record<string, unknown>;
     if ((record.type === "text" || record.type === "terminal") && typeof record.text === "string") {
-      return record.text.trim();
+      return { text: record.text.trim(), suppressStdout: Boolean(task.textResult?.text.trim()) };
     }
     if (record.type === "change") {
       const summary = typeof record.summary === "string" ? record.summary.trim() : "";
       const title = typeof record.title === "string" ? record.title.trim() : "";
-      return summary || title;
+      return { text: summary || title, suppressStdout: true };
     }
   }
 
-  return primaryText;
+  return { text: primaryText, suppressStdout: Boolean(task.textResult?.text.trim()) };
 };
 
 const buildRows = (task: TaskRecord): TerminalRow[] => {
@@ -109,8 +138,22 @@ const buildRows = (task: TaskRecord): TerminalRow[] => {
     timestamp: task.startedAt
   });
 
+  const hasStructuredOutput = Boolean(task.textResult?.text.trim());
+  const stdoutLogs = task.logs.filter((log) => log.stream === "stdout" && log.text.trim());
+  const output = analyzeOutput(task);
+
   for (const log of task.logs) {
     if (log.stream === "stdout") {
+      if (!output.suppressStdout) {
+        rows.push({
+          kind: "output",
+          text: log.text,
+          timestamp: log.timestamp
+        });
+      }
+      continue;
+    }
+    if (log.stream === "system" && !shouldDisplaySystemLog(log.text)) {
       continue;
     }
     rows.push({
@@ -120,11 +163,10 @@ const buildRows = (task: TaskRecord): TerminalRow[] => {
     });
   }
 
-  const output = aggregateOutput(task);
-  if (output) {
+  if (output.text && (output.suppressStdout || hasStructuredOutput || stdoutLogs.length === 0)) {
     rows.push({
       kind: "output",
-      text: output,
+      text: output.text,
       timestamp: task.endedAt ?? task.startedAt
     });
   }
@@ -145,7 +187,7 @@ const buildRows = (task: TaskRecord): TerminalRow[] => {
     });
   }
 
-  if (task.status === "running" && !output) {
+  if (task.status === "running" && !output.text && !task.pendingApproval) {
     rows.push({
       kind: "loading",
       text: "*",
@@ -202,17 +244,34 @@ export class TmdTerminalView extends ItemView {
     const latestTask = tasks[0];
     const latestTerminalSession = tasks.find((task) => task.runtimeSession?.sessionId)?.runtimeSession;
     const context = latestTask?.context ?? state.tasks.find((task) => task.context?.filePath)?.context ?? null;
+    const runtimeSummary = extractRuntimeSummary(latestTask);
+    const approval = latestTask?.pendingApproval;
 
     const frame = contentEl.createDiv({ cls: "tmd-terminal-frame" });
     const chrome = frame.createDiv({ cls: "tmd-terminal-chrome" });
     chrome.createDiv({ cls: "tmd-terminal-chrome-title", text: "ante terminal" });
-    chrome.createDiv({
+    const chromeActions = chrome.createDiv({ cls: "tmd-terminal-chrome-actions" });
+    const stopButton = chromeActions.createEl("button", {
+      cls: "tmd-terminal-stop-button"
+    });
+    stopButton.setAttr("aria-label", "Stop active Ante task");
+    stopButton.createSpan({ cls: "tmd-terminal-stop-icon", text: "■" });
+    stopButton.createSpan({ cls: "tmd-terminal-stop-label", text: "Stop" });
+    stopButton.disabled = !state.tasks.some((task) => task.status === "running");
+    stopButton.addEventListener("click", () => this.plugin.taskEngine.cancelActiveTask());
+    chromeActions.createDiv({
       cls: `tmd-terminal-status ${terminalStatusClass(latestTask)}`,
       text: terminalStatus(latestTask)
     });
 
     const meta = frame.createDiv({ cls: "tmd-terminal-meta" });
     meta.createDiv({ cls: "tmd-terminal-meta-line", text: summarizeContext(context) });
+    if (runtimeSummary) {
+      meta.createDiv({
+        cls: "tmd-terminal-meta-line",
+        text: `${runtimeSummary.provider} · ${runtimeSummary.model}`
+      });
+    }
     meta.createDiv({
       cls: "tmd-terminal-meta-line",
       text: latestTerminalSession?.sessionId ? `session ${latestTerminalSession.sessionId}` : "session new"
@@ -220,7 +279,7 @@ export class TmdTerminalView extends ItemView {
 
     const screen = frame.createDiv({ cls: "tmd-terminal-screen" });
     if (tasks.length === 0) {
-      const empty = screen.createDiv({ cls: "tmd-terminal-row is-system" });
+      const empty = screen.createDiv({ cls: "tmd-terminal-row tmd-is-system" });
       empty.createDiv({ cls: "tmd-terminal-row-time", text: formatTime(new Date().toISOString()) });
       empty.createDiv({ cls: "tmd-terminal-row-prefix", text: "sys" });
       empty.createDiv({ cls: "tmd-terminal-row-text", text: "Ready. Open a Markdown note and enter a prompt below." });
@@ -232,10 +291,55 @@ export class TmdTerminalView extends ItemView {
       }
     }
 
+    if (latestTask?.status === "running" && approval) {
+      const approvalCard = frame.createDiv({ cls: "tmd-terminal-approval" });
+      approvalCard.createDiv({
+        cls: "tmd-terminal-approval-title",
+        text: "Tool approval required"
+      });
+      approvalCard.createDiv({
+        cls: "tmd-terminal-approval-message",
+        text: approval.message
+      });
+
+      for (const tool of approval.tools) {
+        const toolRow = approvalCard.createDiv({ cls: "tmd-terminal-approval-tool" });
+        toolRow.createDiv({
+          cls: "tmd-terminal-approval-tool-name",
+          text: `${tool.name} · ${tool.id}`
+        });
+        if (tool.argsText) {
+          toolRow.createDiv({
+            cls: "tmd-terminal-approval-tool-args",
+            text: tool.argsText
+          });
+        }
+      }
+
+      const actionRow = approvalCard.createDiv({ cls: "tmd-terminal-approval-actions" });
+      const renderAction = (label: string, decision: RuntimeApprovalDecision, cls: string) => {
+        const button = actionRow.createEl("button", {
+          cls: `tmd-terminal-approval-button ${cls}`,
+          text: label
+        });
+        button.addEventListener("click", () => {
+          try {
+            this.plugin.taskEngine.respondToTaskApproval(latestTask.id, decision);
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : "Failed to send Ante approval");
+          }
+        });
+      };
+
+      renderAction("Approve once", "Accept", "tmd-is-approve");
+      renderAction("Allow session", "AcceptForSession", "tmd-is-approve-session");
+      renderAction("Deny", "Skip", "tmd-is-deny");
+    }
+
     const promptBar = frame.createDiv({ cls: "tmd-terminal-promptbar" });
     const prompt = promptBar.createDiv({ cls: "tmd-terminal-promptline" });
     prompt.createDiv({ cls: "tmd-terminal-shell-sign", text: "$" });
-    const editor = prompt.createDiv({ cls: "tmd-terminal-shell-editor is-empty" });
+    const editor = prompt.createDiv({ cls: "tmd-terminal-shell-editor tmd-is-empty" });
     editor.contentEditable = state.tasks.some((task) => task.status === "running") ? "false" : "true";
     editor.dataset.placeholder = context?.filePath ? `Ask Ante about ${context.filePath}` : "Ask Ante";
     editor.setAttr("role", "textbox");
@@ -249,9 +353,10 @@ export class TmdTerminalView extends ItemView {
       void this.plugin.hostAdapter
         .capturePreferredContext()
         .then(() => this.plugin.taskEngine.startTerminalTask(promptText, Boolean(latestTerminalSession)))
-        .then(() => {
+        .then((taskId) => {
+          this.plugin.watchTaskForResults(taskId, "Terminal");
           editor.empty();
-          editor.classList.add("is-empty");
+          editor.classList.add("tmd-is-empty");
         })
         .catch((error) => {
           new Notice(error instanceof Error ? error.message : "Failed to start Ante terminal task");
@@ -259,7 +364,7 @@ export class TmdTerminalView extends ItemView {
     };
 
     editor.addEventListener("input", () => {
-      editor.classList.toggle("is-empty", editor.innerText.trim().length === 0);
+      editor.classList.toggle("tmd-is-empty", editor.innerText.trim().length === 0);
     });
 
     editor.addEventListener("keydown", (event) => {
@@ -289,9 +394,22 @@ export class TmdTerminalView extends ItemView {
   }
 
   private syncLoadingTimer(state: TmdState): void {
-    const shouldAnimate = state.tasks
-      .filter((task) => task.triggerSource === "terminal")
-      .some((task) => task.status === "running" && !aggregateOutput(task));
+    const terminalTasks = state.tasks.filter((task) => task.triggerSource === "terminal");
+    const blockingTasks = terminalTasks
+      .filter((task) => task.status === "running")
+      .map((task) => ({
+        id: task.id,
+        status: task.status,
+        hasTextResult: Boolean(task.textResult?.text.trim()),
+        stdoutCount: task.logs.filter((log) => log.stream === "stdout" && log.text.trim()).length,
+        aggregateOutput: analyzeOutput(task).text,
+        pendingApproval: Boolean(task.pendingApproval),
+        error: task.error,
+        startedAt: task.startedAt,
+        runtimeSessionId: task.runtimeSession?.sessionId
+      }))
+      .filter((task) => !task.aggregateOutput && !task.pendingApproval);
+    const shouldAnimate = blockingTasks.length > 0;
 
     if (shouldAnimate && this.loadingTimer == null) {
       this.loadingTimer = window.setInterval(() => {
@@ -311,7 +429,7 @@ export class TmdTerminalView extends ItemView {
   }
 
   private renderRow(container: HTMLElement, row: TerminalRow): void {
-    const rowEl = container.createDiv({ cls: `tmd-terminal-row is-${row.kind}` });
+    const rowEl = container.createDiv({ cls: `tmd-terminal-row tmd-is-${row.kind}` });
     rowEl.createDiv({ cls: "tmd-terminal-row-time", text: formatTime(row.timestamp) });
     rowEl.createDiv({ cls: "tmd-terminal-row-prefix", text: this.prefixForRow(row.kind) });
     rowEl.createDiv({ cls: "tmd-terminal-row-text", text: row.text });

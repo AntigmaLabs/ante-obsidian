@@ -1,6 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { buildInteractivePrompt } from "../core/runtime-prompt";
 import type {
+  RuntimeApprovalDecision,
+  RuntimeApprovalRequest,
   RuntimeChangeSuggestion,
   RuntimeEvent,
   TaskRequest
@@ -12,6 +14,8 @@ export interface AnteRuntimeConfig {
   cwd: string;
   model: string;
   provider: string;
+  autoApproveTools: boolean;
+  env: Record<string, string>;
 }
 
 export interface RuntimeObserver {
@@ -26,6 +30,7 @@ type AnteEventEnvelope = {
 type ActiveRun = {
   observer: RuntimeObserver;
   request: TaskRequest;
+  autoApproveTools: boolean;
   finalMessage: string;
   emittedStdout: boolean;
   completed: boolean;
@@ -69,7 +74,10 @@ const configSignature = (config: AnteRuntimeConfig): string =>
     argsJson: config.argsJson.trim(),
     cwd: config.cwd.trim(),
     model: config.model.trim(),
-    provider: config.provider.trim()
+    provider: config.provider.trim(),
+    env: Object.entries(config.env)
+      .filter(([, value]) => value.trim())
+      .sort(([left], [right]) => left.localeCompare(right))
   });
 
 const getVariant = (event: unknown): { name: string; payload: unknown } | null => {
@@ -95,6 +103,32 @@ const getStringField = (value: unknown, keys: string[]): string | null => {
     const candidate = record[key];
     if (typeof candidate === "string" && candidate.trim()) {
       return candidate;
+    }
+  }
+  return null;
+};
+
+const findNestedStringField = (value: unknown, keys: string[]): string | null => {
+  const direct = getStringField(value, keys);
+  if (direct) {
+    return direct;
+  }
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const nested = findNestedStringField(entry, keys);
+      if (nested) {
+        return nested;
+      }
+    }
+    return null;
+  }
+  for (const nestedValue of Object.values(value as Record<string, unknown>)) {
+    const nested = findNestedStringField(nestedValue, keys);
+    if (nested) {
+      return nested;
     }
   }
   return null;
@@ -128,13 +162,97 @@ const extractText = (value: unknown): string => {
 };
 
 const extractErrorMessage = (value: unknown): string => {
-  const direct = getStringField(value, ["message", "error", "description", "details"]);
+  const direct = findNestedStringField(value, ["message", "error", "description", "details"]);
   return direct ?? "Ante returned an unknown error";
 };
 
+const extractTurnPauseDetail = (value: unknown): string => {
+  const approval = extractTurnPauseApproval(value);
+  if (!approval) {
+    return "";
+  }
+  const toolSummary =
+    approval.tools.length > 0
+      ? `Approval required for ${approval.tools.map((tool) => `${tool.name} ${tool.id}`.trim()).join(", ")}`
+      : "Approval required";
+  return [toolSummary, approval.message].filter(Boolean).join(": ");
+};
+
+const extractTurnPauseApproval = (value: unknown): RuntimeApprovalRequest | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const turnId = typeof record.turn_id === "string" ? record.turn_id.trim() : "";
+  const reason = record.reason;
+  if (!reason || typeof reason !== "object" || Array.isArray(reason)) {
+    return null;
+  }
+  const approval = (reason as Record<string, unknown>).Approval;
+  if (!approval || typeof approval !== "object" || Array.isArray(approval)) {
+    return null;
+  }
+
+  const approvalRecord = approval as Record<string, unknown>;
+  const message = findNestedStringField(approvalRecord, ["message"]) ?? "Please approve the following tool calls";
+  const tools =
+    Array.isArray(approvalRecord.tools)
+      ? approvalRecord.tools.reduce<RuntimeApprovalRequest["tools"]>((all, tool) => {
+          if (!tool || typeof tool !== "object" || Array.isArray(tool)) {
+            return all;
+          }
+          const toolRecord = tool as Record<string, unknown>;
+          const name = typeof toolRecord.name === "string" ? toolRecord.name.trim() : "";
+          const id = typeof toolRecord.id === "string" ? toolRecord.id.trim() : "";
+          if (!id) {
+            return all;
+          }
+          const argsText =
+            toolRecord.args && typeof toolRecord.args === "object" && !Array.isArray(toolRecord.args)
+              ? JSON.stringify(toolRecord.args)
+              : undefined;
+          all.push({
+            id,
+            name: name || "Tool",
+            argsText
+          });
+          return all;
+        }, [])
+      : [];
+
+  if (!turnId) {
+    return null;
+  }
+
+  return {
+    turnId,
+    message,
+    tools
+  };
+};
+
 const extractSessionId = (value: unknown): string | null => getStringField(value, ["session_id", "sessionId", "id"]);
-const extractTurnStatus = (value: unknown): string | null =>
-  getStringField(value, ["status", "finish_reason", "finishReason"]);
+const extractTurnStatus = (value: unknown): string | null => {
+  const direct = getStringField(value, ["status", "finish_reason", "finishReason"]);
+  if (direct) {
+    return direct;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  for (const key of ["status", "finish_reason", "finishReason"]) {
+    const candidate = record[key];
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      continue;
+    }
+    const entries = Object.entries(candidate as Record<string, unknown>);
+    if (entries.length === 1 && entries[0]?.[0]) {
+      return entries[0][0];
+    }
+  }
+  return null;
+};
 
 const flushBufferedLines = (buffer: string, emit: (line: string) => void): string => {
   const lines = buffer.split(/\r?\n/);
@@ -189,6 +307,12 @@ const parseAssistantMessage = (message: string): RuntimeEvent => {
   return { type: "result.text", text: message.trim() };
 };
 
+export const __test__ = {
+  extractErrorMessage,
+  extractTurnPauseApproval,
+  extractTurnStatus
+};
+
 export class AnteServeRuntimeAdapter {
   private server: AnteServerState | null = null;
   private activeRun: ActiveRun | null = null;
@@ -223,19 +347,20 @@ export class AnteServeRuntimeAdapter {
       observer.onEvent({
         type: "log",
         stream: "system",
-        text: `Launching Ante server · cwd=${config.cwd.trim() || process.cwd()}`
+        text: `Launching Ante server · provider=${config.provider.trim()} · model=${config.model.trim()} · cwd=${config.cwd.trim() || process.cwd()}`
       });
     } else {
       observer.onEvent({
         type: "log",
         stream: "system",
-        text: "Reusing existing Ante session"
+        text: `Reusing existing Ante session · provider=${config.provider.trim()} · model=${config.model.trim()}`
       });
     }
 
     this.activeRun = {
       observer,
       request,
+      autoApproveTools: config.autoApproveTools,
       finalMessage: "",
       emittedStdout: false,
       completed: false
@@ -270,11 +395,31 @@ export class AnteServeRuntimeAdapter {
     this.stopServer();
   }
 
+  respondToApproval(approval: RuntimeApprovalRequest, decision: RuntimeApprovalDecision): void {
+    if (!this.server || !this.activeRun) {
+      throw new Error("Ante is not waiting for approval");
+    }
+    const responses = approval.tools.map((tool) => [tool.id, decision]);
+    if (responses.length === 0) {
+      throw new Error("Ante approval request did not include any tools");
+    }
+    this.sendOperation({
+      ApprovalResponse: {
+        turn_id: approval.turnId,
+        responses
+      }
+    });
+  }
+
   private startServer(config: AnteRuntimeConfig, observer: RuntimeObserver): boolean {
     try {
       const args = ensureServeArgs(this.parseArgs(config.argsJson));
       const child = spawn(config.command.trim(), args, {
         cwd: config.cwd.trim() || undefined,
+        env: {
+          ...process.env,
+          ...config.env
+        },
         stdio: ["pipe", "pipe", "pipe"]
       });
       this.server = {
@@ -295,11 +440,17 @@ export class AnteServeRuntimeAdapter {
         });
       });
       child.once("error", (error) => {
+        if (this.server?.child !== child) {
+          return;
+        }
         observer.onExit({ status: "failed", error: error.message });
         this.activeRun = null;
         this.stopServer();
       });
       child.once("close", (code, signal) => {
+        if (this.server?.child !== child) {
+          return;
+        }
         const activeRun = this.activeRun;
         this.stopServer();
         if (!activeRun || activeRun.completed) {
@@ -380,6 +531,31 @@ export class AnteServeRuntimeAdapter {
         });
         return;
       }
+      case "TurnPause": {
+        const approval = extractTurnPauseApproval(variant.payload);
+        if (approval) {
+          if (this.activeRun.autoApproveTools) {
+            this.activeRun.observer.onEvent({
+              type: "log",
+              stream: "system",
+              text: `Ante auto-approved ${approval.tools.map((tool) => tool.name).join(", ") || "tool call"}`
+            });
+            this.respondToApproval(approval, "AcceptForSession");
+          } else {
+            this.activeRun.observer.onEvent({
+              type: "session.approval",
+              approval
+            });
+          }
+        }
+        const detail = extractTurnPauseDetail(variant.payload);
+        this.activeRun.observer.onEvent({
+          type: "log",
+          stream: "system",
+          text: detail ? `Ante TurnPause: ${detail}` : "Ante TurnPause"
+        });
+        return;
+      }
       case "Error": {
         const message = extractErrorMessage(variant.payload);
         this.activeRun.observer.onEvent({ type: "session.failed", error: message });
@@ -391,7 +567,8 @@ export class AnteServeRuntimeAdapter {
       case "TurnEnd": {
         const status = extractTurnStatus(variant.payload)?.toLowerCase();
         const errorMessage = extractErrorMessage(variant.payload);
-        if (errorMessage !== "Ante returned an unknown error" || (status && !["completed", "success", "succeeded", "ok"].includes(status))) {
+        const isSuccess = Boolean(status && ["completed", "success", "succeeded", "ok"].includes(status));
+        if (!isSuccess) {
           this.activeRun.observer.onEvent({ type: "session.failed", error: errorMessage });
           this.activeRun.completed = true;
           this.activeRun.observer.onExit({ status: "failed", error: errorMessage });
