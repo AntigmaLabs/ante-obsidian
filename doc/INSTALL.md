@@ -98,9 +98,9 @@ npm run build
 ```
 
 5. Copy these files from the repository root into that folder:
-   - `manifest.json`
-   - `main.js`
-   - `styles.css`
+- `manifest.json`
+- `main.js`
+- `styles.css`
 6. Open Obsidian and enable `Tmd` in `Settings -> Community plugins`.
 7. Open the Tmd settings and confirm the Ante command, provider, and model configuration.
 

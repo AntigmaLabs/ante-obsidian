@@ -76,7 +76,12 @@ Tmd can be installed in several ways:
 - Manual install from a GitHub release
 - Local install from source
 
-See the full user guide in [INSTALL.md](./INSTALL.md).
+Detailed docs live in [`doc/`](./doc/):
+
+- English install guide: [doc/INSTALL.md](./doc/INSTALL.md)
+- 中文安装文档: [doc/INSTALL.zh-CN.md](./doc/INSTALL.zh-CN.md)
+- English user guide: [doc/USER_GUIDE.md](./doc/USER_GUIDE.md)
+- 中文使用文档: [doc/USER_GUIDE.zh-CN.md](./doc/USER_GUIDE.zh-CN.md)
 
 After installation:
 
