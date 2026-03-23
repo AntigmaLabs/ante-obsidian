@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { homedir } from "node:os";
 import { AnteServeRuntimeAdapter, type RuntimeObserver, __test__ } from "../src/runtime/ante-serve-adapter";
 import type { TaskRequest } from "../src/core/types";
 
@@ -96,4 +97,59 @@ test("TurnPause approval payload is parsed into tools and turn id", () => {
       }
     ]
   });
+});
+
+test("resolveCommandPath falls back to ~/.ante/bin for bare ante command", () => {
+  const resolved = __test__.resolveCommandPath("ante", {});
+  assert.equal(resolved, `${homedir()}/.ante/bin/ante`);
+});
+
+test("non-approval TurnPause still emits a log when auto-approve is enabled", () => {
+  const events: Array<{ type: string; text?: string }> = [];
+  const observer: RuntimeObserver = {
+    onEvent: (event) => {
+      if (event.type === "log") {
+        events.push(event);
+      }
+    },
+    onExit: () => {}
+  };
+
+  const adapter = new AnteServeRuntimeAdapter(() => ({
+    command: "ante",
+    argsJson: JSON.stringify(["serve", "--stdio"]),
+    cwd: "",
+    model: "gpt-5.4",
+    provider: "openai-subscription",
+    autoApproveTools: true,
+    env: {}
+  }));
+
+  (adapter as unknown as { activeRun: object }).activeRun = {
+    observer,
+    request,
+    autoApproveTools: true,
+    finalMessage: "",
+    emittedStdout: false,
+    completed: false
+  };
+
+  (adapter as unknown as { handleStdoutLine: (line: string) => void }).handleStdoutLine(
+    JSON.stringify({
+      event: {
+        TurnPause: {
+          turn_id: "op_789",
+          reason: {
+            Wait: {
+              message: "still waiting"
+            }
+          }
+        }
+      }
+    })
+  );
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.type, "log");
+  assert.match(events[0]?.text ?? "", /Ante TurnPause/);
 });

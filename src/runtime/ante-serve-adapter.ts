@@ -1,4 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { accessSync, constants } from "node:fs";
+import { homedir } from "node:os";
+import { delimiter, isAbsolute, join } from "node:path";
 import { buildInteractivePrompt } from "../core/runtime-prompt";
 import type {
   RuntimeApprovalDecision,
@@ -39,6 +42,46 @@ type ActiveRun = {
 type AnteServerState = {
   child: ChildProcessWithoutNullStreams;
   signature: string;
+};
+
+const canExecuteFile = (filePath: string): boolean => {
+  try {
+    accessSync(filePath, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const resolveCommandPath = (command: string, env: Record<string, string>): string => {
+  const trimmed = command.trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (trimmed.includes("/") || isAbsolute(trimmed)) {
+    return trimmed;
+  }
+
+  const pathEntries = [
+    ...(env.PATH?.split(delimiter) ?? []),
+    ...(process.env.PATH?.split(delimiter) ?? [])
+  ].filter(Boolean);
+
+  const candidates = [
+    ...pathEntries.map((entry) => join(entry, trimmed)),
+    join(homedir(), ".ante", "bin", trimmed),
+    join("/opt/homebrew/bin", trimmed),
+    join("/usr/local/bin", trimmed)
+  ];
+
+  const uniqueCandidates = [...new Set(candidates)];
+  for (const candidate of uniqueCandidates) {
+    if (canExecuteFile(candidate)) {
+      return candidate;
+    }
+  }
+
+  return trimmed;
 };
 
 const ensureServeArgs = (args: string[]): string[] => {
@@ -278,19 +321,19 @@ const parseJsonPayload = (value: string): unknown | null => {
   }
 };
 
-const parseAssistantMessage = (message: string): RuntimeEvent => {
+const parseAssistantMessage = (message: string): RuntimeEvent[] => {
   const parsed = parseJsonPayload(message);
   if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
     const record = parsed as Record<string, unknown>;
     if (record.type === "text" && typeof record.text === "string") {
-      return { type: "result.text", text: record.text };
+      return [{ type: "result.text", text: record.text }];
     }
     if (
       record.type === "change" &&
       typeof record.operation === "string" &&
       typeof record.afterText === "string"
     ) {
-      return {
+      return [{
         type: "result.change",
         change: {
           kind: "change",
@@ -300,17 +343,42 @@ const parseAssistantMessage = (message: string): RuntimeEvent => {
           title: typeof record.title === "string" ? record.title : undefined,
           summary: typeof record.summary === "string" ? record.summary : undefined
         }
-      };
+      }];
+    }
+    if (record.type === "changes" && Array.isArray(record.changes)) {
+      const changes = record.changes.flatMap((entry): RuntimeChangeSuggestion[] => {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+          return [];
+        }
+        const change = entry as Record<string, unknown>;
+        if (typeof change.operation !== "string" || typeof change.afterText !== "string") {
+          return [];
+        }
+        return [
+          {
+            kind: "change",
+            operation: change.operation as RuntimeChangeSuggestion["operation"],
+            targetPath: typeof change.targetPath === "string" ? change.targetPath : undefined,
+            afterText: change.afterText,
+            title: typeof change.title === "string" ? change.title : undefined,
+            summary: typeof change.summary === "string" ? change.summary : undefined
+          }
+        ];
+      });
+      if (changes.length > 0) {
+        return [{ type: "result.changes", changes }];
+      }
     }
   }
 
-  return { type: "result.text", text: message.trim() };
+  return [{ type: "result.text", text: message.trim() }];
 };
 
 export const __test__ = {
   extractErrorMessage,
   extractTurnPauseApproval,
-  extractTurnStatus
+  extractTurnStatus,
+  resolveCommandPath
 };
 
 export class AnteServeRuntimeAdapter {
@@ -414,7 +482,8 @@ export class AnteServeRuntimeAdapter {
   private startServer(config: AnteRuntimeConfig, observer: RuntimeObserver): boolean {
     try {
       const args = ensureServeArgs(this.parseArgs(config.argsJson));
-      const child = spawn(config.command.trim(), args, {
+      const command = resolveCommandPath(config.command, config.env);
+      const child = spawn(command, args, {
         cwd: config.cwd.trim() || undefined,
         env: {
           ...process.env,
@@ -541,12 +610,13 @@ export class AnteServeRuntimeAdapter {
               text: `Ante auto-approved ${approval.tools.map((tool) => tool.name).join(", ") || "tool call"}`
             });
             this.respondToApproval(approval, "AcceptForSession");
-          } else {
-            this.activeRun.observer.onEvent({
-              type: "session.approval",
-              approval
-            });
+            return;
           }
+          this.activeRun.observer.onEvent({
+            type: "session.approval",
+            approval
+          });
+          return;
         }
         const detail = extractTurnPauseDetail(variant.payload);
         this.activeRun.observer.onEvent({
@@ -576,7 +646,9 @@ export class AnteServeRuntimeAdapter {
           return;
         }
         if (this.activeRun.finalMessage.trim()) {
-          this.activeRun.observer.onEvent(parseAssistantMessage(this.activeRun.finalMessage));
+          for (const event of parseAssistantMessage(this.activeRun.finalMessage)) {
+            this.activeRun.observer.onEvent(event);
+          }
         }
         this.activeRun.observer.onEvent({ type: "session.completed", summary: "Ante session completed" });
         this.activeRun.completed = true;

@@ -21,7 +21,11 @@ export class TmdSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Ante command")
-      .setDesc('Executable used to launch Ante. Default: `ante`.')
+      .setDesc(
+        this.pluginRef.resolvedAnteCommand
+          ? `Executable used to launch Ante. Default: \`ante\`. Auto-detected current path: \`${this.pluginRef.resolvedAnteCommand}\`.`
+          : 'Executable used to launch Ante. Default: `ante`.'
+      )
       .addText((text) =>
         text.setValue(this.pluginRef.settings.command).onChange(async (value) => {
           this.pluginRef.settings.command = value.trim();

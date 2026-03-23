@@ -12,7 +12,7 @@ import { TMD_CONSOLE_VIEW_TYPE, TmdConsoleView } from "./console-view";
 import { TMD_TERMINAL_VIEW_TYPE, TmdTerminalView } from "./terminal-view";
 import type { TaskRecord } from "../core/types";
 import { readAnteDefaults, type AnteDefaults } from "./ante-defaults";
-import { normalizeEnvVarName, readEnvVarFromLoginShell } from "./shell-env";
+import { normalizeEnvVarName, readCommandPathFromLoginShell, readEnvVarFromLoginShell } from "./shell-env";
 
 export default class TmdPlugin extends Plugin {
   settings: TmdSettings = DEFAULT_SETTINGS;
@@ -21,6 +21,7 @@ export default class TmdPlugin extends Plugin {
     model: DEFAULT_SETTINGS.anteModel
   };
   shellEnv: Record<string, string> = {};
+  resolvedAnteCommand = "";
   hostAdapter!: ObsidianHostAdapter;
   taskEngine!: TaskEngine;
   private runtime!: AnteServeRuntimeAdapter;
@@ -40,7 +41,7 @@ export default class TmdPlugin extends Plugin {
         (geminiEnvKey ? this.shellEnv[geminiEnvKey]?.trim() ?? "" : "") ||
         (geminiEnvKey ? process.env[geminiEnvKey]?.trim() ?? "" : "");
       return {
-        command: this.settings.command,
+        command: this.getResolvedAnteCommand(),
         argsJson: this.settings.argsJson,
         cwd: this.settings.cwd,
         model: resolved.model,
@@ -92,6 +93,8 @@ export default class TmdPlugin extends Plugin {
 
   async loadShellEnv(): Promise<void> {
     const envKey = normalizeEnvVarName(this.settings.geminiApiKeyEnvKey);
+    const commandValue = this.settings.command.trim();
+    this.resolvedAnteCommand = !commandValue || commandValue === DEFAULT_SETTINGS.command ? await readCommandPathFromLoginShell("ante") : "";
     if (!envKey) {
       this.shellEnv = {};
       return;
@@ -242,6 +245,14 @@ export default class TmdPlugin extends Plugin {
       provider: this.settings.anteProvider,
       model: this.settings.anteModel
     };
+  }
+
+  getResolvedAnteCommand(): string {
+    const configured = this.settings.command.trim();
+    if (!configured || configured === DEFAULT_SETTINGS.command) {
+      return this.resolvedAnteCommand || DEFAULT_SETTINGS.command;
+    }
+    return configured;
   }
 
   private registerCommands(): void {
