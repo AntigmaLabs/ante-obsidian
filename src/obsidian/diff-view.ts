@@ -1,14 +1,161 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import type TmdPlugin from "./main";
 import type { DocumentChangeArtifact, TaskRecord, TmdState } from "../core/types";
-import { buildPatchRows } from "../core/diff-service";
+import { buildPatchRows, type PatchRow } from "../core/diff-service";
 import { getArtifactLocationLabel } from "../core/artifacts";
 
 export const TMD_DIFF_VIEW_TYPE = "tmd-diff-view";
 
+type DiffStats = {
+  additions: number;
+  removals: number;
+};
+
+type DiffHunk = {
+  header: string;
+  rows: Extract<PatchRow, { kind: "context" | "add" | "remove" }>[];
+};
+
+type ResolvedArtifactDiff = {
+  artifact: DocumentChangeArtifact;
+  rows: PatchRow[];
+  stats: DiffStats;
+  hunks: DiffHunk[];
+};
+
+type RenderableDiffRow = Extract<PatchRow, { kind: "context" | "add" | "remove" }>;
+
+const formatDiffCount = (value: number, marker: "+" | "-"): string => `${marker}${value}`;
+
+const assertNever = (value: never): never => {
+  throw new Error(`Unexpected value: ${String(value)}`);
+};
+
+const getOperationLabel = (operation: DocumentChangeArtifact["operation"]): string => {
+  switch (operation) {
+    case "replace-selection":
+      return "Replace selection";
+    case "append-block":
+      return "Append block";
+    case "replace-file":
+      return "Replace file";
+    case "create-file":
+      return "Create file";
+    default:
+      return assertNever(operation);
+  }
+};
+
+const getApplyStateLabel = (state: DocumentChangeArtifact["applyState"]): string => {
+  switch (state) {
+    case "pending":
+      return "Pending";
+    case "applying":
+      return "Applying";
+    case "applied":
+      return "Applied";
+    case "reverting":
+      return "Reverting";
+    case "reverted":
+      return "Reverted";
+    case "failed":
+      return "Failed";
+    case "discarded":
+      return "Discarded";
+    default:
+      return assertNever(state);
+  }
+};
+
+const getApplyStateClass = (state: DocumentChangeArtifact["applyState"]): string => {
+  switch (state) {
+    case "applied":
+    case "reverted":
+      return "is-positive";
+    case "failed":
+      return "is-negative";
+    case "applying":
+    case "reverting":
+      return "is-active";
+    case "discarded":
+      return "is-muted";
+    case "pending":
+      return "is-pending";
+    default:
+      return assertNever(state);
+  }
+};
+
+const collectDiffStats = (rows: PatchRow[]): DiffStats =>
+  rows.reduce<DiffStats>(
+    (stats, row) => {
+      if (row.kind === "add") {
+        stats.additions += 1;
+      } else if (row.kind === "remove") {
+        stats.removals += 1;
+      }
+      return stats;
+    },
+    { additions: 0, removals: 0 }
+  );
+
+const normalizeRenderableRows = (rows: PatchRow[]): PatchRow[] => {
+  const normalized: PatchRow[] = [];
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const current = rows[index];
+    const next = rows[index + 1];
+
+    if (
+      current?.kind === "remove" &&
+      next?.kind === "add" &&
+      current.text === next.text
+    ) {
+      normalized.push({
+        kind: "context",
+        text: current.text,
+        oldLine: current.oldLine,
+        newLine: next.newLine,
+        marker: " "
+      });
+      index += 1;
+      continue;
+    }
+
+    normalized.push(current);
+  }
+
+  return normalized;
+};
+
+const collectDiffHunks = (rows: PatchRow[]): DiffHunk[] => {
+  const hunks: DiffHunk[] = [];
+  let activeHunk: DiffHunk | null = null;
+
+  for (const row of rows) {
+    if (row.kind === "hunk") {
+      activeHunk = { header: row.text, rows: [] };
+      hunks.push(activeHunk);
+      continue;
+    }
+    if (row.kind === "context" || row.kind === "add" || row.kind === "remove") {
+      if (!activeHunk) {
+        activeHunk = { header: "@@", rows: [] };
+        hunks.push(activeHunk);
+      }
+      activeHunk.rows.push(row as RenderableDiffRow);
+    }
+  }
+
+  return hunks;
+};
+
 export class TmdDiffView extends ItemView {
   private unsubscribe: (() => void) | null = null;
   private latestState!: TmdState;
+  private readonly expandedArtifactIds = new Set<string>();
+  private renderVersion = 0;
+  private expandedStateTaskId: string | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: TmdPlugin) {
     super(leaf);
@@ -36,18 +183,45 @@ export class TmdDiffView extends ItemView {
   }
 
   private async render(state: TmdState): Promise<void> {
-    const { contentEl } = this;
-    contentEl.empty();
-
     const currentTask = state.currentTaskId ? state.tasks.find((task) => task.id === state.currentTaskId) ?? state.tasks[0] : state.tasks[0];
-    contentEl.createEl("h2", { text: "Tmd Results" });
+    const renderVersion = ++this.renderVersion;
 
     if (!currentTask) {
+      if (renderVersion !== this.renderVersion) {
+        return;
+      }
+      const { contentEl } = this;
+      contentEl.empty();
+      contentEl.createEl("h2", { text: "Tmd Results" });
       contentEl.createDiv({ cls: "tmd-empty", text: "No task has run yet." });
       return;
     }
 
+    let resolvedArtifacts: ResolvedArtifactDiff[] = [];
+    if (currentTask.artifacts.length > 0) {
+      resolvedArtifacts = await Promise.all(
+        currentTask.artifacts.map(async (artifact) => {
+          const rows = normalizeRenderableRows(await buildPatchRows(artifact));
+          return {
+            artifact,
+            rows,
+            stats: collectDiffStats(rows),
+            hunks: collectDiffHunks(rows)
+          } satisfies ResolvedArtifactDiff;
+        })
+      );
+    }
+
+    if (renderVersion !== this.renderVersion) {
+      return;
+    }
+
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: "Tmd Results" });
+
     this.renderTaskSummary(contentEl, currentTask);
+    this.ensureExpandedArtifacts(currentTask);
 
     if (currentTask.textResult?.text.trim()) {
       const textSection = contentEl.createDiv({ cls: "tmd-section" });
@@ -67,8 +241,29 @@ export class TmdDiffView extends ItemView {
       return;
     }
 
-    for (const artifact of currentTask.artifacts) {
-      await this.renderArtifact(contentEl, currentTask, artifact);
+    this.renderDiffSummary(contentEl, resolvedArtifacts);
+
+    for (const resolvedArtifact of resolvedArtifacts) {
+      this.renderArtifact(contentEl, currentTask, resolvedArtifact);
+    }
+  }
+
+  private ensureExpandedArtifacts(task: TaskRecord): void {
+    const artifactIds = new Set(task.artifacts.map((artifact) => artifact.id));
+    for (const expandedId of Array.from(this.expandedArtifactIds)) {
+      if (!artifactIds.has(expandedId)) {
+        this.expandedArtifactIds.delete(expandedId);
+      }
+    }
+
+    const switchedTask = this.expandedStateTaskId !== task.id;
+    if (switchedTask) {
+      this.expandedStateTaskId = task.id;
+      this.expandedArtifactIds.clear();
+    }
+
+    if (switchedTask && task.artifacts.length > 0 && this.expandedArtifactIds.size === 0) {
+      this.expandedArtifactIds.add(task.artifacts[0].id);
     }
   }
 
@@ -91,15 +286,91 @@ export class TmdDiffView extends ItemView {
     }
   }
 
-  private async renderArtifact(container: HTMLElement, task: TaskRecord, artifact: DocumentChangeArtifact): Promise<void> {
-    const section = container.createDiv({ cls: "tmd-section" });
-    section.createEl("h3", { text: artifact.title });
-    section.createDiv({ cls: "tmd-meta", text: getArtifactLocationLabel(artifact) });
+  private renderDiffSummary(container: HTMLElement, artifacts: ResolvedArtifactDiff[]): void {
+    const summary = container.createDiv({ cls: "tmd-diff-summary" });
+    const title = summary.createDiv({ cls: "tmd-diff-summary-title" });
+    const fileCount = artifacts.length;
+    title.createSpan({ text: `${fileCount} file${fileCount === 1 ? "" : "s"} changed` });
+
+    const aggregate = artifacts.reduce<DiffStats>(
+      (stats, artifact) => {
+        stats.additions += artifact.stats.additions;
+        stats.removals += artifact.stats.removals;
+        return stats;
+      },
+      { additions: 0, removals: 0 }
+    );
+
+    this.renderStatPills(title, aggregate);
+  }
+
+  private renderStatPills(container: HTMLElement, stats: DiffStats): void {
+    if (stats.additions > 0) {
+      container.createSpan({ cls: "tmd-diff-stat is-add", text: formatDiffCount(stats.additions, "+") });
+    }
+    if (stats.removals > 0) {
+      container.createSpan({ cls: "tmd-diff-stat is-remove", text: formatDiffCount(stats.removals, "-") });
+    }
+    if (stats.additions === 0 && stats.removals === 0) {
+      container.createSpan({ cls: "tmd-diff-stat is-neutral", text: "No text changes" });
+    }
+  }
+
+  private renderArtifact(container: HTMLElement, task: TaskRecord, resolved: ResolvedArtifactDiff): void {
+    const { artifact, stats, hunks } = resolved;
+    const isExpanded = this.expandedArtifactIds.has(artifact.id);
+    const toggleExpanded = (): void => {
+      if (this.expandedArtifactIds.has(artifact.id)) {
+        this.expandedArtifactIds.delete(artifact.id);
+      } else {
+        this.expandedArtifactIds.add(artifact.id);
+      }
+      if (this.latestState) {
+        void this.render(this.latestState);
+      }
+    };
+
+    const section = container.createDiv({ cls: "tmd-diff-file" });
+    section.addClass(isExpanded ? "is-expanded" : "is-collapsed");
+    const header = section.createDiv({ cls: "tmd-diff-file-header" });
+    const headerMain = header.createEl("button", { cls: "tmd-diff-file-main" });
+    headerMain.type = "button";
+    headerMain.setAttr("aria-expanded", String(isExpanded));
+    headerMain.addEventListener("click", toggleExpanded);
+
+    const titleRow = headerMain.createDiv({ cls: "tmd-diff-file-title-row" });
+    titleRow.createSpan({ cls: "tmd-diff-file-name", text: artifact.title });
+    titleRow.createSpan({ cls: "tmd-diff-file-chip tmd-is-operation", text: getOperationLabel(artifact.operation) });
+    const locationRow = headerMain.createDiv({ cls: "tmd-diff-file-location" });
+    locationRow.createSpan({ text: getArtifactLocationLabel(artifact) });
     if (artifact.summary) {
-      section.createEl("p", { text: artifact.summary, cls: "tmd-meta" });
+      headerMain.createDiv({ cls: "tmd-diff-file-summary", text: artifact.summary });
     }
 
-    const actions = section.createDiv({ cls: "tmd-actions" });
+    const headerAside = header.createDiv({ cls: "tmd-diff-file-aside" });
+    this.renderStatPills(headerAside, stats);
+    headerAside.createSpan({
+      cls: `tmd-diff-file-chip tmd-diff-state ${getApplyStateClass(artifact.applyState)}`,
+      text: getApplyStateLabel(artifact.applyState)
+    });
+    const chevronButton = headerAside.createEl("button", {
+      cls: "tmd-diff-file-chevron",
+      text: isExpanded ? "⌃" : "⌄"
+    });
+    chevronButton.type = "button";
+    chevronButton.setAttr("aria-expanded", String(isExpanded));
+    chevronButton.setAttr("aria-label", isExpanded ? "Collapse diff" : "Expand diff");
+    chevronButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      toggleExpanded();
+    });
+
+    if (!isExpanded) {
+      return;
+    }
+
+    const body = section.createDiv({ cls: "tmd-diff-file-body" });
+    const actions = body.createDiv({ cls: "tmd-diff-file-actions" });
     const applyButton = actions.createEl("button", { text: artifact.applyState === "applied" ? "Applied" : "Apply" });
     applyButton.disabled =
       artifact.applyState === "applying" ||
@@ -137,14 +408,21 @@ export class TmdDiffView extends ItemView {
     });
 
     if (artifact.applyError) {
-      section.createDiv({ cls: "tmd-error", text: artifact.applyError });
+      body.createDiv({ cls: "tmd-error", text: artifact.applyError });
     }
 
-    const rows = await buildPatchRows(artifact);
-    const pre = section.createEl("pre", { cls: "tmd-patch" });
-    for (const row of rows) {
-      const line = pre.createDiv({ text: row.text });
-      line.addClass(`is-${row.kind}`);
+    const patch = body.createDiv({ cls: "tmd-diff-patch" });
+    for (const hunk of hunks) {
+      const hunkEl = patch.createDiv({ cls: "tmd-diff-hunk" });
+      hunkEl.createDiv({ cls: "tmd-diff-hunk-header", text: hunk.header });
+      for (const row of hunk.rows) {
+        const line = hunkEl.createDiv({ cls: `tmd-diff-line is-${row.kind}` });
+        line.createDiv({ cls: "tmd-diff-gutter" });
+        line.createDiv({ cls: "tmd-diff-line-number" }).setText(row.oldLine === null ? "" : String(row.oldLine));
+        line.createDiv({ cls: "tmd-diff-line-number" }).setText(row.newLine === null ? "" : String(row.newLine));
+        line.createDiv({ cls: "tmd-diff-line-marker", text: row.marker });
+        line.createDiv({ cls: "tmd-diff-line-text", text: row.text || " " });
+      }
     }
   }
 }

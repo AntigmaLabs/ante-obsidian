@@ -1,7 +1,7 @@
 import type { ContextSnapshot, DocumentChangeArtifact, RuntimeChangeSuggestion } from "./types";
 
 const appendMarkdownBlock = (documentText: string, block: string): string => {
-  const trimmedDoc = documentText.replace(/\s+$/, "");
+  const trimmedDoc = documentText.replace(/\n+$/, "");
   const trimmedBlock = block.trim();
   if (!trimmedBlock) {
     return trimmedDoc;

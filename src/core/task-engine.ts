@@ -1,10 +1,11 @@
 import type { HostAdapter } from "../obsidian/host-adapter";
 import type { AnteServeRuntimeAdapter } from "../runtime/ante-serve-adapter";
-import { toDocumentChangeArtifact } from "./artifacts";
+import { getArtifactTargetPath, toDocumentChangeArtifact } from "./artifacts";
 import { getPreset } from "./presets";
 import type {
   ContextSnapshot,
   DocumentChangeArtifact,
+  RuntimeChangeSuggestion,
   RuntimeApprovalDecision,
   RuntimeEvent,
   TaskRecord,
@@ -250,21 +251,12 @@ export class TaskEngine {
         });
         return;
       case "result.change": {
-        const existingTargetText =
-          event.change.operation === "create-file"
-            ? ""
-            : event.change.targetPath?.trim() && event.change.targetPath !== request.context.filePath
-              ? (await this.host.readFile(event.change.targetPath)) ?? ""
-              : request.context.documentText ?? "";
-        const artifact = toDocumentChangeArtifact(event.change, request.context, existingTargetText);
-        const task = this.getTask(request.taskId);
-        this.patchTask(request.taskId, {
-          artifacts: [artifact, ...task.artifacts],
-          pendingApproval: undefined,
-          status: "awaiting-apply"
-        });
+        await this.addArtifactsFromChanges(request, [event.change]);
         return;
       }
+      case "result.changes":
+        await this.addArtifactsFromChanges(request, event.changes);
+        return;
       case "session.completed": {
         const task = this.getTask(request.taskId);
         this.patchTask(request.taskId, {
@@ -327,6 +319,91 @@ export class TaskEngine {
     this.patchTask(taskId, {
       artifacts: task.artifacts.map((artifact) => (artifact.id === artifactId ? { ...artifact, ...patch } : artifact))
     });
+  }
+
+  private async addArtifactsFromChanges(request: TaskRequest, changes: RuntimeChangeSuggestion[]): Promise<void> {
+    const task = this.getTask(request.taskId);
+    const existingArtifactsByTarget = new Map<string, DocumentChangeArtifact>();
+    for (const artifact of task.artifacts) {
+      existingArtifactsByTarget.set(getArtifactTargetPath(artifact), artifact);
+    }
+
+    const workingTexts = new Map<string, string>();
+
+    for (const change of changes) {
+      const targetPath = this.resolveChangeTargetPath(change, request.context);
+      if (!targetPath) {
+        continue;
+      }
+
+      const existingTargetText =
+        workingTexts.get(targetPath) ??
+        (change.operation === "create-file"
+          ? ""
+          : targetPath !== request.context.filePath
+            ? (await this.host.readFile(targetPath)) ?? ""
+            : request.context.documentText ?? "");
+
+      const contextForChange: ContextSnapshot =
+        targetPath === request.context.filePath
+          ? {
+              ...request.context,
+              documentText: existingTargetText
+            }
+          : request.context;
+
+      const artifact = this.normalizeArtifactToFileUnit(
+        toDocumentChangeArtifact(change, contextForChange, existingTargetText)
+      );
+      workingTexts.set(targetPath, artifact.afterText);
+      existingArtifactsByTarget.set(
+        targetPath,
+        this.mergeArtifactsByFile(existingArtifactsByTarget.get(targetPath), artifact)
+      );
+    }
+
+    this.patchTask(request.taskId, {
+      artifacts: [...existingArtifactsByTarget.values()],
+      pendingApproval: undefined,
+      status: "awaiting-apply"
+    });
+  }
+
+  private resolveChangeTargetPath(change: RuntimeChangeSuggestion, context: ContextSnapshot): string | null {
+    if (change.operation === "create-file") {
+      return change.targetPath?.trim() || null;
+    }
+    return change.targetPath?.trim() || context.filePath;
+  }
+
+  private normalizeArtifactToFileUnit(artifact: DocumentChangeArtifact): DocumentChangeArtifact {
+    const path = getArtifactTargetPath(artifact);
+    return {
+      ...artifact,
+      operation: artifact.operation === "create-file" ? "create-file" : "replace-file",
+      target: {
+        type: "file",
+        path
+      }
+    };
+  }
+
+  private mergeArtifactsByFile(
+    previous: DocumentChangeArtifact | undefined,
+    next: DocumentChangeArtifact
+  ): DocumentChangeArtifact {
+    if (!previous) {
+      return next;
+    }
+
+    return {
+      ...next,
+      id: previous.id,
+      operation: previous.operation === "create-file" ? "create-file" : next.operation,
+      beforeText: previous.beforeText,
+      applyState: previous.applyState === "applied" ? "pending" : next.applyState,
+      applyError: undefined
+    };
   }
 
   private notify(): void {

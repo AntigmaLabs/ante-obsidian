@@ -141,6 +141,7 @@ export type RuntimeEvent =
   | { type: "session.approval"; approval: RuntimeApprovalRequest }
   | { type: "result.text"; text: string }
   | { type: "result.change"; change: RuntimeChangeSuggestion }
+  | { type: "result.changes"; changes: RuntimeChangeSuggestion[] }
   | { type: "session.completed"; summary?: string }
   | { type: "session.failed"; error: string };
 

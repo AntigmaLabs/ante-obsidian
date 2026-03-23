@@ -7,6 +7,7 @@ export const TMD_TERMINAL_VIEW_TYPE = "tmd-terminal-view";
 type TerminalRow =
   | { kind: "command"; text: string; timestamp: string }
   | { kind: "output"; text: string; timestamp: string }
+  | { kind: "streaming"; text: string; timestamp: string }
   | { kind: "system"; text: string; timestamp: string }
   | { kind: "error"; text: string; timestamp: string }
   | { kind: "artifact"; text: string; timestamp: string }
@@ -57,6 +58,17 @@ const summarizeContext = (context: ContextSnapshot | null | undefined): string =
   return `${context.filePath} · note ${documentText.length} chars`;
 };
 
+const summarizeTerminalMeta = (
+  context: ContextSnapshot | null | undefined,
+  runtimeSummary: { provider: string; model: string } | null
+): string => {
+  const parts = [summarizeContext(context)];
+  if (runtimeSummary) {
+    parts.push(`${runtimeSummary.provider} · ${runtimeSummary.model}`);
+  }
+  return parts.join("  ·  ");
+};
+
 const NOISY_SYSTEM_PATTERNS = [
   /^Launching Ante server\b/,
   /^Reusing existing Ante session\b/,
@@ -101,6 +113,41 @@ const parseJsonPayload = (value: string): unknown | null => {
   }
 };
 
+const extractStreamingJsonPreview = (value: string): string => {
+  const candidates = [
+    /"summary"\s*:\s*"((?:\\.|[^"])*)"/s,
+    /"title"\s*:\s*"((?:\\.|[^"])*)"/s,
+    /"afterText"\s*:\s*"((?:\\.|[^"])*)"/s
+  ];
+
+  for (const pattern of candidates) {
+    const match = pattern.exec(value);
+    const raw = match?.[1];
+    if (!raw) {
+      continue;
+    }
+    const normalized = raw
+      .replace(/\\"/g, "\"")
+      .replace(/\\n/g, "\n")
+      .replace(/\\t/g, "\t")
+      .replace(/\\\\/g, "\\")
+      .trim();
+    if (!normalized) {
+      continue;
+    }
+    const lines = normalized
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const preview = lines.slice(0, 2).join("\n").trim();
+    if (preview) {
+      return preview;
+    }
+  }
+
+  return "";
+};
+
 const analyzeOutput = (task: TaskRecord): { text: string; suppressStdout: boolean } => {
   const primaryText = task.textResult?.text.trim()
     ? task.textResult.text.trim()
@@ -125,9 +172,49 @@ const analyzeOutput = (task: TaskRecord): { text: string; suppressStdout: boolea
       const title = typeof record.title === "string" ? record.title.trim() : "";
       return { text: summary || title, suppressStdout: true };
     }
+    if (record.type === "changes" && Array.isArray(record.changes)) {
+      return {
+        text: `${record.changes.length} change artifact(s) prepared.`,
+        suppressStdout: true
+      };
+    }
   }
 
   return { text: primaryText, suppressStdout: Boolean(task.textResult?.text.trim()) };
+};
+
+const buildStreamingPreview = (task: TaskRecord): { text: string; timestamp: string } | null => {
+  const stdoutLogs = task.logs.filter((log) => log.stream === "stdout" && log.text);
+  if (stdoutLogs.length === 0) {
+    return null;
+  }
+
+  const combined = stdoutLogs.map((log) => log.text).join("");
+  if (/"type"\s*:\s*"change"/.test(combined) || /"type"\s*:\s*"changes"/.test(combined)) {
+    const extracted = extractStreamingJsonPreview(combined);
+    return {
+      text: extracted || "Preparing Markdown change...",
+      timestamp: stdoutLogs[stdoutLogs.length - 1]?.timestamp ?? task.startedAt
+    };
+  }
+  const normalized = combined.replace(/\r/g, "").replace(/\\n/g, "\n").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0);
+  const preview = (lines.length > 0 ? lines.slice(-2).join("\n") : normalized).trim();
+  if (!preview) {
+    return null;
+  }
+
+  return {
+    text: preview,
+    timestamp: stdoutLogs[stdoutLogs.length - 1]?.timestamp ?? task.startedAt
+  };
 };
 
 const buildRows = (task: TaskRecord): TerminalRow[] => {
@@ -141,16 +228,10 @@ const buildRows = (task: TaskRecord): TerminalRow[] => {
   const hasStructuredOutput = Boolean(task.textResult?.text.trim());
   const stdoutLogs = task.logs.filter((log) => log.stream === "stdout" && log.text.trim());
   const output = analyzeOutput(task);
+  const streamingPreview = !hasStructuredOutput && task.status === "running" ? buildStreamingPreview(task) : null;
 
   for (const log of task.logs) {
     if (log.stream === "stdout") {
-      if (!output.suppressStdout) {
-        rows.push({
-          kind: "output",
-          text: log.text,
-          timestamp: log.timestamp
-        });
-      }
       continue;
     }
     if (log.stream === "system" && !shouldDisplaySystemLog(log.text)) {
@@ -163,7 +244,15 @@ const buildRows = (task: TaskRecord): TerminalRow[] => {
     });
   }
 
-  if (output.text && (output.suppressStdout || hasStructuredOutput || stdoutLogs.length === 0)) {
+  if (streamingPreview) {
+    rows.push({
+      kind: "streaming",
+      text: streamingPreview.text,
+      timestamp: streamingPreview.timestamp
+    });
+  }
+
+  if (output.text && !streamingPreview && (output.suppressStdout || hasStructuredOutput || stdoutLogs.length === 0)) {
     rows.push({
       kind: "output",
       text: output.text,
@@ -242,7 +331,6 @@ export class TmdTerminalView extends ItemView {
 
     const tasks = state.tasks.filter((task) => task.triggerSource === "terminal");
     const latestTask = tasks[0];
-    const latestTerminalSession = tasks.find((task) => task.runtimeSession?.sessionId)?.runtimeSession;
     const context = latestTask?.context ?? state.tasks.find((task) => task.context?.filePath)?.context ?? null;
     const runtimeSummary = extractRuntimeSummary(latestTask);
     const approval = latestTask?.pendingApproval;
@@ -265,31 +353,31 @@ export class TmdTerminalView extends ItemView {
     });
 
     const meta = frame.createDiv({ cls: "tmd-terminal-meta" });
-    meta.createDiv({ cls: "tmd-terminal-meta-line", text: summarizeContext(context) });
-    if (runtimeSummary) {
-      meta.createDiv({
-        cls: "tmd-terminal-meta-line",
-        text: `${runtimeSummary.provider} · ${runtimeSummary.model}`
-      });
-    }
-    meta.createDiv({
-      cls: "tmd-terminal-meta-line",
-      text: latestTerminalSession?.sessionId ? `session ${latestTerminalSession.sessionId}` : "session new"
-    });
+    meta.createDiv({ cls: "tmd-terminal-meta-line", text: summarizeTerminalMeta(context, runtimeSummary) });
 
     const screen = frame.createDiv({ cls: "tmd-terminal-screen" });
+    const stream = screen.createDiv({ cls: "tmd-terminal-stream" });
     if (tasks.length === 0) {
-      const empty = screen.createDiv({ cls: "tmd-terminal-row tmd-is-system" });
+      const empty = stream.createDiv({ cls: "tmd-terminal-row tmd-is-system" });
       empty.createDiv({ cls: "tmd-terminal-row-time", text: formatTime(new Date().toISOString()) });
       empty.createDiv({ cls: "tmd-terminal-row-prefix", text: "sys" });
       empty.createDiv({ cls: "tmd-terminal-row-text", text: "Ready. Open a Markdown note and enter a prompt below." });
     } else {
       for (const task of [...tasks].reverse()) {
         for (const row of this.buildRows(task)) {
-          this.renderRow(screen, row);
+          this.renderRow(stream, row);
         }
       }
     }
+
+    const prompt = stream.createDiv({ cls: "tmd-terminal-row tmd-terminal-promptline" });
+    const editor = prompt.createDiv({ cls: "tmd-terminal-shell-editor tmd-is-empty" });
+    const isEditable = !state.tasks.some((task) => task.status === "running");
+    editor.contentEditable = isEditable ? "true" : "false";
+    editor.dataset.placeholder = context?.filePath ? `Ask Ante about ${context.filePath}` : "Ask Ante";
+    editor.setAttr("role", "textbox");
+    editor.setAttr("aria-label", "Ante terminal prompt");
+    prompt.classList.toggle("tmd-is-editable", isEditable);
 
     if (latestTask?.status === "running" && approval) {
       const approvalCard = frame.createDiv({ cls: "tmd-terminal-approval" });
@@ -336,15 +424,6 @@ export class TmdTerminalView extends ItemView {
       renderAction("Deny", "Skip", "tmd-is-deny");
     }
 
-    const promptBar = frame.createDiv({ cls: "tmd-terminal-promptbar" });
-    const prompt = promptBar.createDiv({ cls: "tmd-terminal-promptline" });
-    prompt.createDiv({ cls: "tmd-terminal-shell-sign", text: "$" });
-    const editor = prompt.createDiv({ cls: "tmd-terminal-shell-editor tmd-is-empty" });
-    editor.contentEditable = state.tasks.some((task) => task.status === "running") ? "false" : "true";
-    editor.dataset.placeholder = context?.filePath ? `Ask Ante about ${context.filePath}` : "Ask Ante";
-    editor.setAttr("role", "textbox");
-    editor.setAttr("aria-label", "Ante terminal prompt");
-
     const runPrompt = () => {
       const promptText = editor.innerText.replace(/\n/g, " ").trim();
       if (!promptText) {
@@ -352,7 +431,12 @@ export class TmdTerminalView extends ItemView {
       }
       void this.plugin.hostAdapter
         .capturePreferredContext()
-        .then(() => this.plugin.taskEngine.startTerminalTask(promptText, Boolean(latestTerminalSession)))
+        .then(() =>
+          this.plugin.taskEngine.startTerminalTask(
+            promptText,
+            Boolean(tasks.find((task) => task.runtimeSession?.sessionId)?.runtimeSession)
+          )
+        )
         .then((taskId) => {
           this.plugin.watchTaskForResults(taskId, "Terminal");
           editor.empty();
@@ -440,6 +524,8 @@ export class TmdTerminalView extends ItemView {
       case "command":
         return "$";
       case "output":
+        return "out";
+      case "streaming":
         return "out";
       case "error":
         return "err";
