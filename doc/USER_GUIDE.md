@@ -11,7 +11,7 @@ Tmd currently provides 6 main user-facing capabilities:
 1. Trigger AI actions directly inside notes with `@ante`.
 2. Run built-in presets from the editor context menu or command palette.
 3. Review Markdown changes and diffs in `Tmd Results`.
-4. Ask free-form follow-up questions in `Ante Console`.
+4. Ask free-form follow-up questions in `Chat with Ante`.
 5. Use a terminal-style interaction flow in `Ante Terminal`.
 6. Configure the local Ante runtime, provider, model, and credentials from plugin settings.
 
@@ -49,7 +49,7 @@ When you right-click in the Obsidian editor, Tmd adds these entries:
 - `@ante`
 - `@ante research`
 - `@ante plan`
-- `Open Ante Console`
+- `Chat with Ante`
 - `Open Ante Terminal`
 
 ### Why This Matters
@@ -64,7 +64,7 @@ When you right-click in the Obsidian editor, Tmd adds these entries:
 Tmd also registers these commands in the Obsidian command palette:
 
 - `Open Tmd Results`
-- `Open Ante Console`
+- `Chat with Ante`
 - `Open Ante Terminal`
 - `Run @ante on current note`
 - `Run @ante research on current note`
@@ -107,15 +107,15 @@ Tmd currently supports these Markdown change operations:
 
 When Ante returns structured document edits instead of just text, `Tmd Results` is the primary place to inspect the scope, target, and effect of the change.
 
-## Feature 5: Ante Console
+## Feature 5: Chat with Ante
 
-`Ante Console` is a lightweight free-form prompt panel. It is useful when you want to talk to Ante first instead of editing the document immediately.
+`Chat with Ante` is a chat-style prompt panel. It is useful when you want to talk to Ante first instead of editing the document immediately.
 
 ### Main Capabilities
 
 - Send arbitrary prompts
 - Reuse the most recent note context automatically
-- Keep a console history
+- Keep a chat timeline
 - Continue follow-up prompts in an existing session
 - Show text results, logs, and change summaries
 
@@ -128,7 +128,7 @@ When Ante returns structured document edits instead of just text, `Tmd Results` 
 ### Difference From Inline Triggers
 
 - Inline triggers are for acting directly inside the note.
-- Console is for exploratory interaction first, document changes second.
+- Chat is for exploratory interaction first, document changes second.
 
 ## Feature 6: Ante Terminal
 
@@ -158,7 +158,7 @@ Tmd tries to infer the right Markdown context from your current editing state:
 
 - If text is selected, the selection is preferred.
 - If nothing is selected, Tmd may use the current paragraph.
-- In Console and Terminal, Tmd prefers the most recently captured note context.
+- In Chat with Ante and Terminal, Tmd prefers the most recently captured note context.
 
 In practice, this means you usually do not need to copy and paste note content manually. Put the cursor in the right place or select the target text first.
 
@@ -190,7 +190,7 @@ Besides editing workflows, Tmd also gives you several runtime settings for conne
 3. Trigger Tmd with `@ante`, the context menu, or the command palette.
 4. If the result is plain text, it appears in the note or results panel.
 5. If the result is a document change, inspect it in `Tmd Results`.
-6. If you need follow-up interaction, continue in `Ante Console` or `Ante Terminal`.
+6. If you need follow-up interaction, continue in `Chat with Ante` or `Ante Terminal`.
 
 ## Requirements
 
@@ -215,4 +215,4 @@ For day-to-day use, the three most important things to learn first are:
 
 - `@ante` for inline note actions, plus `@ante research` / `@ante plan` from the context menu or command palette
 - `Tmd Results` for inspecting changes
-- `Ante Console` and `Ante Terminal` for follow-up interaction
+- `Chat with Ante` and `Ante Terminal` for follow-up interaction

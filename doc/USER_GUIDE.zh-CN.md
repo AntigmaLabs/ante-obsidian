@@ -11,7 +11,7 @@ Tmd 当前主要提供 6 类用户可见功能：
 1. 在笔记中通过 `@ante` 触发 AI 处理当前内容。
 2. 通过右键菜单或命令面板，对当前笔记直接运行预设任务。
 3. 在 `Tmd Results` 中查看 Markdown 改动结果和 Diff 对比。
-4. 在 `Ante Console` 中发起自由提问或连续追问。
+4. 在 `Chat with Ante` 中发起自由提问或连续追问。
 5. 在 `Ante Terminal` 中以更接近终端的方式与 Ante 交互。
 6. 在插件设置中配置本地 Ante 运行时、provider、model 和凭据。
 
@@ -49,7 +49,7 @@ Tmd 当前主要提供 6 类用户可见功能：
 - `@ante`
 - `@ante research`
 - `@ante plan`
-- `Open Ante Console`
+- `Chat with Ante`
 - `Open Ante Terminal`
 
 ### 这类入口的特点
@@ -64,7 +64,7 @@ Tmd 当前主要提供 6 类用户可见功能：
 Tmd 注册了几个常用命令，可以从 Obsidian 命令面板直接调用：
 
 - `Open Tmd Results`
-- `Open Ante Console`
+- `Chat with Ante`
 - `Open Ante Terminal`
 - `Run @ante on current note`
 - `Run @ante research on current note`
@@ -107,15 +107,15 @@ Tmd 支持处理以下几类 Markdown 变更：
 
 当插件不是直接返回文本，而是准备对笔记做结构性修改时，`Tmd Results` 就是你检查结果、理解改动范围和定位文件的主要界面。
 
-## 功能五：Ante Console
+## 功能五：Chat with Ante
 
-`Ante Console` 提供一个轻量的自由提问界面，适合不直接改文档、而是先和 Ante 对话。
+`Chat with Ante` 提供一个聊天式自由提问界面，适合不直接改文档、而是先和 Ante 对话。
 
-### Console 的主要能力
+### Chat 的主要能力
 
 - 手动输入任意问题或任务
 - 自动带上最近一次可用的笔记上下文
-- 保留控制台历史记录
+- 保留聊天时间线
 - 支持在已有会话基础上继续追问
 - 展示文本回复、日志和已生成的改动提示
 
@@ -125,10 +125,10 @@ Tmd 支持处理以下几类 Markdown 变更：
 - 对刚刚执行过的任务继续追问
 - 做探索性讨论，例如“还有哪些角度可补充”
 
-### Console 和内联触发的区别
+### Chat 和内联触发的区别
 
 - 内联触发更像“在笔记里直接动手”
-- Console 更像“先聊清楚，再决定是否改”
+- Chat 更像“先聊清楚，再决定是否改”
 
 ## 功能六：Ante Terminal
 
@@ -158,7 +158,7 @@ Tmd 会尽量根据你的当前编辑状态，自动推断应该把什么内容�
 
 - 有选区时，优先使用选区
 - 没有选区时，可能使用当前段落
-- 在 Console 或 Terminal 中，优先使用最近一次捕获到的笔记上下文
+- 在 Chat with Ante 或 Terminal 中，优先使用最近一次捕获到的笔记上下文
 
 这意味着你通常不需要手动复制粘贴整段笔记，只要把光标放在合适位置，或先选中目标内容即可。
 
@@ -190,7 +190,7 @@ Tmd 会尽量根据你的当前编辑状态，自动推断应该把什么内容�
 3. 通过 `@ante`、右键菜单或命令面板发起任务。
 4. 如果结果是直接文本，会在笔记里或结果面板中显示。
 5. 如果结果是文档修改，去 `Tmd Results` 检查 Diff。
-6. 如需继续讨论，打开 `Ante Console` 或 `Ante Terminal` 追问。
+6. 如需继续讨论，打开 `Chat with Ante` 或 `Ante Terminal` 追问。
 
 ## 使用前提
 
@@ -215,4 +215,4 @@ Tmd 本身不直接提供模型能力，它依赖你本机可用的 Ante 运行�
 
 - 在笔记里使用 `@ante`，以及通过右键菜单或命令面板使用 `@ante research`、`@ante plan`
 - 在 `Tmd Results` 中检查修改结果
-- 在 `Ante Console` 或 `Ante Terminal` 中做追问和深入交互
+- 在 `Chat with Ante` 或 `Ante Terminal` 中做追问和深入交互

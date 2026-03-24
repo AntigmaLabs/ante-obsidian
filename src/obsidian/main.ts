@@ -272,7 +272,7 @@ export default class TmdPlugin extends Plugin {
 
     this.addCommand({
       id: "open-ante-console",
-      name: "Open Ante Console",
+      name: "Chat with Ante",
       callback: async () => this.openConsoleView()
     });
 

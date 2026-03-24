@@ -6,7 +6,7 @@ Tmd is an Obsidian desktop plugin focused on Ante-powered Markdown workflows.
 
 - Trigger document tasks from Markdown with `@ante`
 - Run `@ante`, `@ante research`, and `@ante plan` from the editor right-click menu
-- Open a lightweight `Ante Console` from the editor menu or command palette
+- Open `Chat with Ante` from the editor menu or command palette
 - Preview Markdown changes as unified diffs before applying them
 - Support both edits to existing `.md` files and creation of new Markdown files
 

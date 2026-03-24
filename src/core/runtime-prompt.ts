@@ -105,7 +105,7 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
 
   return [
     request.kind === "console"
-      ? "You are operating inside the Tmd Ante Console for an Obsidian vault."
+      ? "You are operating inside Chat with Ante in an Obsidian vault."
       : "You are handling a Markdown editing task for an Obsidian note.",
     `Preset: ${request.preset.label}`,
     `Goal: ${request.preset.goal}`,
