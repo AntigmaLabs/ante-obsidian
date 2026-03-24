@@ -2,6 +2,7 @@ import { Editor, MarkdownView, Notice, type App } from "obsidian";
 import { formatLoadingLabel } from "../core/loading-label";
 import { parseMentionLine } from "../core/mention-parser";
 import { buildParagraphSelection } from "../core/paragraph-selection";
+import type { ContextSnapshot, PresetId, TaskTriggerSource } from "../core/types";
 import type TmdPlugin from "./main";
 
 const INVISIBLE_ZERO = "\u200B";
@@ -93,14 +94,25 @@ export class MentionTriggerService {
     }
 
     try {
-      await this.runInlineMention(
+      const triggerLineText = editor.getLine(cursor.line);
+      const replaceFrom = {
+        line: cursor.line,
+        ch: match.start
+      };
+      const replaceTo = {
+        line: cursor.line,
+        ch: triggerLineText.length
+      };
+
+      await this.runTaskWithPlaceholder({
         editor,
-        cursor.line,
-        match.start,
-        match.inlineInstruction,
+        replaceFrom,
+        replaceTo,
         context,
-        match.presetId
-      );
+        presetId: match.presetId,
+        inlineInstruction: match.inlineInstruction,
+        triggerSource: "mention"
+      });
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Inline Ante trigger failed");
     } finally {
@@ -108,33 +120,35 @@ export class MentionTriggerService {
     }
   }
 
-  private async runInlineMention(
-    editor: Editor,
-    triggerLine: number,
-    triggerStart: number,
-    inlineInstruction: string,
-    context: Awaited<ReturnType<TmdPlugin["hostAdapter"]["getActiveContext"]>>,
-    presetId: Parameters<TmdPlugin["runMentionTask"]>[0]
-  ): Promise<void> {
-    if (!context) {
-      throw new Error("Open a Markdown note before using @ante");
-    }
-
+  async runTaskWithPlaceholder(options: {
+    editor: Editor;
+    replaceFrom: { line: number; ch: number };
+    replaceTo: { line: number; ch: number };
+    context: ContextSnapshot;
+    presetId: PresetId;
+    inlineInstruction?: string;
+    triggerSource?: Exclude<TaskTriggerSource, "console">;
+    captureChangesAsArtifacts?: boolean;
+  }): Promise<void> {
+    const {
+      editor,
+      replaceFrom,
+      replaceTo,
+      context,
+      presetId,
+      inlineInstruction,
+      triggerSource = "mention",
+      captureChangesAsArtifacts = true
+    } = options;
     let loadingFrameIndex = 0;
-    const loadingSeed = crypto.randomUUID();
+    const loadingSeed = window.crypto.randomUUID();
     const markers = this.createPlaceholderMarkers(loadingSeed);
-    const triggerLineText = editor.getLine(triggerLine);
-    const replaceFrom = {
-      line: triggerLine,
-      ch: triggerStart
-    };
-    const replaceTo = {
-      line: triggerLine,
-      ch: triggerLineText.length
-    };
-    const placeholderPrefix = triggerStart > 0 ? "\n\n" : "";
+    const placeholderPrefix = replaceFrom.ch > 0 ? "\n\n" : "";
 
     this.performEditorReplace(editor, () => {
+      if (replaceFrom.line === replaceTo.line && replaceFrom.ch === replaceTo.ch) {
+        editor.setSelection(replaceTo, replaceTo);
+      }
       editor.replaceRange(
         `${placeholderPrefix}${this.wrapPlaceholder(markers, `> ${formatLoadingLabel(loadingSeed, loadingFrameIndex)}`)}`,
         replaceFrom,
@@ -148,78 +162,141 @@ export class MentionTriggerService {
     };
     const timer = window.setInterval(updateLoading, 800);
 
-    const taskId = await this.plugin.runMentionTask(presetId, context, inlineInstruction);
-    let settled = false;
-    const unsubscribe = this.plugin.taskEngine.subscribe((state) => {
-      if (settled) {
-        return;
-      }
-      const task = state.tasks.find((entry) => entry.id === taskId);
-      if (!task) {
-        return;
-      }
+    try {
+      const taskId = await this.plugin.taskEngine.startDocumentTask({
+        presetId,
+        triggerSource,
+        context,
+        inlineInstruction,
+        captureChangesAsArtifacts
+      });
 
-      if (task.status === "running") {
-        return;
-      }
-
-      if (task.artifacts.length > 0) {
-        const pendingArtifacts = task.artifacts.filter((artifact) => artifact.applyState === "pending");
-        const activeArtifacts = task.artifacts.filter(
-          (artifact) => artifact.applyState === "applying" || artifact.applyState === "reverting"
-        );
-        if (pendingArtifacts.length > 0) {
-          void (async () => {
-            try {
-              for (const artifact of pendingArtifacts) {
-                await this.plugin.taskEngine.applyArtifact(task.id, artifact.id);
-              }
-            } catch (error) {
-              settled = true;
-              window.clearInterval(timer);
-              unsubscribe();
-              this.replacePlaceholderWhole(
-                editor,
-                markers,
-                `> [!failure]\n> \n> ${error instanceof Error ? error.message : "Failed to apply change"}`
-              );
-            }
-          })();
+      let settled = false;
+      const unsubscribe = this.plugin.taskEngine.subscribe((state) => {
+        if (settled) {
           return;
         }
-        if (activeArtifacts.length > 0) {
+        const task = state.tasks.find((entry) => entry.id === taskId);
+        if (!task) {
+          return;
+        }
+
+        if (task.status === "running") {
+          return;
+        }
+
+        if (task.artifacts.length > 0) {
+          const pendingArtifacts = task.artifacts.filter((artifact) => artifact.applyState === "pending");
+          const activeArtifacts = task.artifacts.filter(
+            (artifact) => artifact.applyState === "applying" || artifact.applyState === "reverting"
+          );
+          if (pendingArtifacts.length > 0) {
+            settled = true;
+            window.clearInterval(timer);
+            unsubscribe();
+
+            void (async () => {
+              try {
+                let localPlaceholderContent = "";
+                let hasLocalPlaceholderContent = false;
+                for (const artifact of pendingArtifacts) {
+                  // If any source changes specify edit or append to this file, we handle it via the placeholder
+                  const currentFileChanges = artifact.sourceChanges.filter(
+                    (change) =>
+                      (change.operation === "append-block" || change.operation === "replace-selection") &&
+                      (!change.targetPath || change.targetPath === context.filePath)
+                  );
+
+                  if (currentFileChanges.length > 0) {
+                    hasLocalPlaceholderContent = true;
+                    for (const change of currentFileChanges) {
+                      localPlaceholderContent += (localPlaceholderContent ? "\n\n" : "") + change.afterText;
+                    }
+                    // Mark as applied in state but skip host modification (we'll do it via placeholder)
+                    await this.plugin.taskEngine.applyArtifact(task.id, artifact.id, { skipHost: true });
+                  } else {
+                    await this.plugin.taskEngine.applyArtifact(task.id, artifact.id);
+                  }
+                }
+
+                if (!hasLocalPlaceholderContent && task.inlineChanges?.length) {
+                  localPlaceholderContent = this.collectInlinePlaceholderContent(task.inlineChanges, context);
+                  hasLocalPlaceholderContent = localPlaceholderContent.length > 0;
+                }
+
+                if (hasLocalPlaceholderContent) {
+                  this.replacePlaceholderWhole(editor, markers, localPlaceholderContent);
+                } else {
+                  this.replacePlaceholderWhole(
+                    editor,
+                    markers,
+                    `> [!success]\n> \n> Applied directly. Open Tmd Results (via Command Palette) if you want to inspect the diff or revert the change.`
+                  );
+                }
+              } catch (error) {
+                this.replacePlaceholderWhole(
+                  editor,
+                  markers,
+                  `> [!failure]\n> \n> ${error instanceof Error ? error.message : "Failed to apply change"}`
+                );
+              }
+            })();
+            return;
+          }
+          if (activeArtifacts.length > 0) {
+            return;
+          }
+
+          settled = true;
+          window.clearInterval(timer);
+          unsubscribe();
+          const failedArtifact = task.artifacts.find((artifact) => artifact.applyState === "failed");
+          if (failedArtifact?.applyError) {
+            this.replacePlaceholderWhole(editor, markers, `> [!failure]\n> \n> ${failedArtifact.applyError}`);
+            return;
+          }
+
+          this.replacePlaceholderWhole(
+            editor,
+            markers,
+            `> [!success]\n> \n> Applied directly. Open Tmd Results if you want to inspect the diff or revert the change.`
+          );
           return;
         }
 
         settled = true;
         window.clearInterval(timer);
         unsubscribe();
-        const failedArtifact = task.artifacts.find((artifact) => artifact.applyState === "failed");
-        if (failedArtifact?.applyError) {
-          this.replacePlaceholderWhole(editor, markers, `> [!failure]\n> \n> ${failedArtifact.applyError}`);
+
+        if (task.inlineChanges?.length) {
+          const localPlaceholderContent = this.collectInlinePlaceholderContent(task.inlineChanges, context);
+          if (localPlaceholderContent) {
+            this.replacePlaceholderWhole(editor, markers, localPlaceholderContent);
+            return;
+          }
+        }
+
+        if (task.textResult?.text.trim()) {
+          this.replacePlaceholderWhole(editor, markers, task.textResult.text.trim());
           return;
         }
 
-        this.replacePlaceholderWhole(editor, markers, `> [!success]\n> \n> Applied directly. Open Tmd Results if you want to inspect the diff or revert the change.`);
-        return;
-      }
+        if (task.error) {
+          this.replacePlaceholderWhole(editor, markers, `> [!failure]\n> \n> ${task.error}`);
+          return;
+        }
 
-      settled = true;
+        this.replacePlaceholderWhole(editor, markers, `> [!warning]\n> \n> Ante returned no visible result.`);
+      });
+    } catch (error) {
       window.clearInterval(timer);
-      unsubscribe();
-
-      if (task.textResult?.text.trim()) {
-        this.replacePlaceholderWhole(editor, markers, task.textResult.text.trim());
-        return;
-      }
-
-      if (task.error) {
-        this.replacePlaceholderWhole(editor, markers, `> [!failure]\n> \n> ${task.error}`);
-        return;
-      }
-
-      this.replacePlaceholderWhole(editor, markers, `> [!warning]\n> \n> Ante returned no visible result.`);
-    });
+      this.replacePlaceholderWhole(
+        editor,
+        markers,
+        `> [!failure]\n> \n> ${error instanceof Error ? error.message : "Failed to start Ante task"}`
+      );
+      throw error;
+    }
   }
 
   private resolveMarkdownViewForEditor(editor: Editor): MarkdownView | null {
@@ -278,6 +355,21 @@ export class MentionTriggerService {
     this.performEditorReplace(editor, () => {
       editor.replaceRange(replacement, startPosition, endPosition);
     });
+  }
+
+  private collectInlinePlaceholderContent(changes: Array<{ operation: string; targetPath?: string; afterText: string }>, context: ContextSnapshot): string {
+    let localPlaceholderContent = "";
+
+    for (const change of changes) {
+      if (
+        (change.operation === "append-block" || change.operation === "replace-selection") &&
+        (!change.targetPath || change.targetPath === context.filePath)
+      ) {
+        localPlaceholderContent += (localPlaceholderContent ? "\n\n" : "") + change.afterText;
+      }
+    }
+
+    return localPlaceholderContent;
   }
 
   private performEditorReplace(editor: Editor, action: () => void): void {

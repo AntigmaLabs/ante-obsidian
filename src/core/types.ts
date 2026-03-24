@@ -1,4 +1,4 @@
-export type PresetId = "default" | "research" | "plan";
+export type PresetId = "default" | "research" | "plan" | "summary";
 export type TaskTriggerSource = "mention" | "context-menu" | "command" | "console" | "terminal";
 export type TaskKind = "document" | "console" | "terminal";
 export type TaskStatus =
@@ -127,6 +127,7 @@ export interface TaskRecord {
   logs: LogEntry[];
   stdoutText: string;
   textResult?: TextResult;
+  inlineChanges?: RuntimeChangeSuggestion[];
   artifacts: DocumentChangeArtifact[];
   pendingApproval?: RuntimeApprovalRequest;
   processLane?: RuntimeProcessLane;
@@ -148,6 +149,7 @@ export interface TaskRequest {
   preset: PresetDefinition;
   context: ContextSnapshot;
   inlineInstruction: string;
+  captureChangesAsArtifacts?: boolean;
   mode?: "initial" | "followup";
   followUpPrompt?: string;
   runtimeSessionId?: string;

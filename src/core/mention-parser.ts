@@ -7,7 +7,7 @@ export interface MentionMatch {
   end: number;
 }
 
-const TOKEN_PATTERN = /(^|[\s(])@ante(?:(?:\s+)(research|plan))?(?=\s|$)/i;
+const TOKEN_PATTERN = /(^|[\s(])@ante(?=\s|$)/i;
 
 export const parseMentionLine = (line: string): MentionMatch | null => {
   const match = TOKEN_PATTERN.exec(line);
@@ -18,8 +18,7 @@ export const parseMentionLine = (line: string): MentionMatch | null => {
   const prefixLength = match[1]?.length ?? 0;
   const tokenStart = match.index + prefixLength;
   const tokenEnd = tokenStart + match[0].slice(prefixLength).length;
-  const modifier = (match[2] ?? "").toLowerCase();
-  const presetId: PresetId = modifier === "research" || modifier === "plan" ? modifier : "default";
+  const presetId: PresetId = "default";
   const inlineInstruction = line.slice(tokenEnd).trim();
 
   return {

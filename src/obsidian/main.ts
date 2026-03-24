@@ -1,4 +1,4 @@
-import { Notice, Plugin, type WorkspaceLeaf } from "obsidian";
+import { MarkdownView, Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 import { TaskEngine } from "../core/task-engine";
 import type { ContextSnapshot, PresetId } from "../core/types";
 import { MentionTriggerService } from "./mention-trigger";
@@ -24,8 +24,8 @@ export default class TmdPlugin extends Plugin {
   resolvedAnteCommand = "";
   hostAdapter!: ObsidianHostAdapter;
   taskEngine!: TaskEngine;
+  mentionTrigger!: MentionTriggerService;
   private runtime!: AnteServeRuntimeAdapter;
-  private mentionTrigger!: MentionTriggerService;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -103,20 +103,25 @@ export default class TmdPlugin extends Plugin {
     this.shellEnv = value ? { [envKey]: value } : {};
   }
 
-  async runMentionTask(presetId: PresetId, context: ContextSnapshot, inlineInstruction: string): Promise<string> {
-    return this.taskEngine.startDocumentTask({
-      presetId,
-      triggerSource: "mention",
-      context,
-      inlineInstruction
-    });
-  }
-
   async runPresetFromContextMenu(presetId: PresetId): Promise<void> {
     try {
       const context = await this.hostAdapter.getActiveContext();
       if (!context) {
         throw new Error("Open a Markdown note or select some text before running Ante");
+      }
+
+      const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+      if (view?.editor && context.selection) {
+        await this.mentionTrigger.runTaskWithPlaceholder({
+          editor: view.editor,
+          replaceFrom: context.selection.to,
+          replaceTo: context.selection.to,
+          context,
+          presetId,
+          triggerSource: "context-menu",
+          captureChangesAsArtifacts: false
+        });
+        return;
       }
 
       const taskId = await this.taskEngine.startDocumentTask({
@@ -293,6 +298,12 @@ export default class TmdPlugin extends Plugin {
       id: "run-ante-plan",
       name: "Run @ante plan on current note",
       callback: async () => this.runPresetFromContextMenu("plan")
+    });
+
+    this.addCommand({
+      id: "run-ante-summary",
+      name: "Run @ante summary on current note",
+      callback: async () => this.runPresetFromContextMenu("summary")
     });
   }
 

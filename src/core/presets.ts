@@ -23,6 +23,13 @@ export const BUILTIN_PRESETS: Record<PresetId, PresetDefinition> = {
     goal: "Turn the current idea into an actionable plan block.",
     systemInstructions:
       "Structure the output as: 目标, 前置条件, 步骤, 验收标准, 风险与待确认项. Prefer append-block unless the user clearly asked for another operation."
+  },
+  summary: {
+    id: "summary",
+    label: "@ante summary",
+    goal: "Summarize the selected Markdown content into a concise, useful block.",
+    systemInstructions:
+      "Structure the output as: 摘要, 关键点, 待跟进项. Prefer append-block unless the user clearly asked for another operation."
   }
 };
 

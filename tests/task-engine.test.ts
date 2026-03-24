@@ -127,6 +127,71 @@ test("stdout chunks are aggregated outside the visible log list", async () => {
   assert.equal(task?.logs[0]?.text, "done");
 });
 
+test("context-menu tasks can keep change suggestions inline without generating artifacts", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "result.change",
+      change: {
+        kind: "change",
+        operation: "append-block",
+        targetPath: "Note.md",
+        afterText: "summary block",
+        title: "Summary"
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  await engine.startDocumentTask({
+    presetId: "summary",
+    triggerSource: "context-menu",
+    context,
+    inlineInstruction: "Summarize this selection",
+    captureChangesAsArtifacts: false
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.artifacts.length, 0);
+  assert.equal(task?.inlineChanges?.length, 1);
+  assert.equal(task?.inlineChanges?.[0]?.afterText, "summary block");
+  assert.equal(task?.status, "completed");
+});
+
+test("context-menu tasks still generate artifacts for non-inline file changes", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "result.change",
+      change: {
+        kind: "change",
+        operation: "create-file",
+        targetPath: "Summary.md",
+        afterText: "# Summary\n",
+        title: "Summary file"
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  await engine.startDocumentTask({
+    presetId: "summary",
+    triggerSource: "context-menu",
+    context,
+    inlineInstruction: "Summarize this selection",
+    captureChangesAsArtifacts: false
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.inlineChanges?.length ?? 0, 0);
+  assert.equal(task?.artifacts.length, 1);
+  assert.equal(task?.artifacts[0]?.target.type, "file");
+  assert.equal(task?.artifacts[0]?.target.path, "Summary.md");
+  assert.equal(task?.status, "awaiting-apply");
+});
+
 test("stdout preview buffer is capped", async () => {
   const runtime = new RuntimeStub((_request, onEvent) => {
     onEvent({ type: "log", stream: "stdout", text: "a".repeat(12000) });

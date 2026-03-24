@@ -38,6 +38,7 @@ interface StartDocumentTaskInput {
   triggerSource: Exclude<TaskTriggerSource, "console">;
   context?: ContextSnapshot | null;
   inlineInstruction?: string;
+  captureChangesAsArtifacts?: boolean;
 }
 
 export class TaskEngine {
@@ -73,7 +74,8 @@ export class TaskEngine {
       triggerSource: input.triggerSource,
       preset: getPreset(input.presetId),
       context,
-      inlineInstruction: input.inlineInstruction?.trim() ?? ""
+      inlineInstruction: input.inlineInstruction?.trim() ?? "",
+      captureChangesAsArtifacts: input.captureChangesAsArtifacts ?? true
     };
     await this.runTask(request);
     return request.taskId;
@@ -136,7 +138,7 @@ export class TaskEngine {
     this.appendLog(taskId, "system", `Approval sent: ${decision}`);
   }
 
-  async applyArtifact(taskId: string, artifactId: string): Promise<void> {
+  async applyArtifact(taskId: string, artifactId: string, options?: { skipHost?: boolean }): Promise<void> {
     const artifact = this.getArtifact(taskId, artifactId);
     this.patchArtifact(taskId, artifactId, {
       applyState: "applying",
@@ -144,7 +146,9 @@ export class TaskEngine {
     });
 
     try {
-      await this.host.applyDocumentChange(artifact);
+      if (!options?.skipHost) {
+        await this.host.applyDocumentChange(artifact);
+      }
       this.patchArtifact(taskId, artifactId, { applyState: "applied" });
       this.patchTask(taskId, { status: "applied" });
     } catch (error) {
@@ -281,10 +285,18 @@ export class TaskEngine {
         });
         return;
       case "result.change": {
+        if (request.captureChangesAsArtifacts === false) {
+          await this.captureInlineAndArtifactChanges(request, [event.change]);
+          return;
+        }
         await this.addArtifactsFromChanges(request, [event.change]);
         return;
       }
       case "result.changes":
+        if (request.captureChangesAsArtifacts === false) {
+          await this.captureInlineAndArtifactChanges(request, event.changes);
+          return;
+        }
         await this.addArtifactsFromChanges(request, event.changes);
         return;
       case "session.completed": {
@@ -388,6 +400,47 @@ export class TaskEngine {
     this.patchTask(taskId, {
       artifacts: task.artifacts.map((artifact) => (artifact.id === artifactId ? { ...artifact, ...patch } : artifact))
     });
+  }
+
+  private appendInlineChanges(taskId: string, changes: RuntimeChangeSuggestion[]): void {
+    const task = this.getTask(taskId);
+    this.patchTask(taskId, {
+      inlineChanges: [...(task.inlineChanges ?? []), ...changes],
+      pendingApproval: undefined
+    });
+  }
+
+  private async captureInlineAndArtifactChanges(request: TaskRequest, changes: RuntimeChangeSuggestion[]): Promise<void> {
+    const { inlineChanges, artifactChanges } = this.partitionInlineAndArtifactChanges(request, changes);
+
+    if (inlineChanges.length > 0) {
+      this.appendInlineChanges(request.taskId, inlineChanges);
+    }
+    if (artifactChanges.length > 0) {
+      await this.addArtifactsFromChanges(request, artifactChanges);
+    }
+  }
+
+  private partitionInlineAndArtifactChanges(
+    request: TaskRequest,
+    changes: RuntimeChangeSuggestion[]
+  ): { inlineChanges: RuntimeChangeSuggestion[]; artifactChanges: RuntimeChangeSuggestion[] } {
+    const inlineChanges: RuntimeChangeSuggestion[] = [];
+    const artifactChanges: RuntimeChangeSuggestion[] = [];
+
+    for (const change of changes) {
+      const isInlineEligible =
+        (change.operation === "append-block" || change.operation === "replace-selection") &&
+        (!change.targetPath || change.targetPath === request.context.filePath);
+
+      if (isInlineEligible) {
+        inlineChanges.push(change);
+      } else {
+        artifactChanges.push(change);
+      }
+    }
+
+    return { inlineChanges, artifactChanges };
   }
 
   private async addArtifactsFromChanges(request: TaskRequest, changes: RuntimeChangeSuggestion[]): Promise<void> {
