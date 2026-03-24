@@ -1,6 +1,6 @@
 # Tmd
 
-Tmd is an Obsidian desktop plugin focused on Ante-powered Markdown workflows.
+Tmd is an Obsidian desktop plugin focused on Ante-powered terminal Markdown workflows.
 
 ## Features
 

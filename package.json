@@ -1,9 +1,9 @@
 {
   "name": "tmd",
-  "version": "0.preview.3",
+  "version": "0.3.0",
   "private": true,
   "license": "MIT",
-  "description": "Obsidian desktop plugin for ante-driven Markdown workflows with diff previews and Chat with Ante.",
+  "description": "Obsidian desktop plugin for Ante-powered terminal Markdown workflows with diff previews and Chat with Ante.",
   "scripts": {
     "build": "npm run sync-version && node esbuild.config.mjs production",
     "build:release": "npm run build && node scripts/package-release.cjs",

@@ -1,6 +1,6 @@
 # Tmd User Guide
 
-Tmd is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to your note editing flow so you can rewrite, expand, plan, and inspect Markdown directly inside Obsidian.
+Tmd is an Obsidian desktop plugin for Ante-powered terminal Markdown workflows. It connects your local Ante runtime to your note editing flow so you can rewrite, expand, plan, and inspect Markdown directly inside Obsidian.
 
 This guide is written for end users. It focuses on what Tmd can do, where each feature is triggered, and where the results appear.
 
@@ -209,7 +209,7 @@ If Ante is not available, Tmd will not work.
 
 In one sentence, Tmd is:
 
-"A bridge between Ante and Obsidian Markdown editing, so you can trigger AI actions inside notes, inspect diffs, apply changes, and continue follow-up interactions."
+"Ante-powered terminal Markdown workflows inside Obsidian, so you can trigger AI actions inside notes, inspect diffs, apply changes, and continue follow-up interactions."
 
 For day-to-day use, the three most important things to learn first are:
 

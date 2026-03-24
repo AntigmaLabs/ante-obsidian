@@ -1,9 +1,9 @@
 {
   "id": "tmd",
   "name": "Tmd",
-  "version": "0.preview.3",
+  "version": "0.3.0",
   "minAppVersion": "1.6.0",
-  "description": "Ante-powered Markdown actions, diff previews, and Chat with Ante.",
+  "description": "Ante-powered terminal Markdown workflows, diff previews, and Chat with Ante.",
   "author": "fuli.foo",
   "isDesktopOnly": true
 }
