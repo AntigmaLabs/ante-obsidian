@@ -57,6 +57,14 @@ const buildTerminalSchemaBlock = (): string =>
   ].join("\n");
 
 const buildTerminalContextBlock = (request: TaskRequest): string => {
+  if (request.reusePriorContext) {
+    return [
+      request.context.filePath ? `Current note path: ${request.context.filePath}` : "Current note path: <unchanged>",
+      "Current note context is unchanged from the previous turn.",
+      "Reuse the same selected text and note content already established in this Ante session."
+    ].join("\n\n");
+  }
+
   const lines: string[] = [];
   if (request.context.filePath) {
     lines.push(`Current note path: ${request.context.filePath}`);

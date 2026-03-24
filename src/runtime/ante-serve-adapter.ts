@@ -8,6 +8,9 @@ import type {
   RuntimeApprovalRequest,
   RuntimeChangeSuggestion,
   RuntimeEvent,
+  RuntimeProcessLane,
+  RuntimeProcessStep,
+  RuntimeProcessStepStatus,
   TaskRequest
 } from "../core/types";
 
@@ -37,11 +40,18 @@ type ActiveRun = {
   finalMessage: string;
   emittedStdout: boolean;
   completed: boolean;
+  processLane?: RuntimeProcessLane;
 };
 
 type AnteServerState = {
   child: ChildProcessWithoutNullStreams;
   signature: string;
+};
+
+type WarmupState = {
+  promise: Promise<void>;
+  resolve: () => void;
+  reject: (error: Error) => void;
 };
 
 const canExecuteFile = (filePath: string): boolean => {
@@ -274,6 +284,98 @@ const extractTurnPauseApproval = (value: unknown): RuntimeApprovalRequest | null
   };
 };
 
+const normalizeProcessStepStatus = (value: unknown): RuntimeProcessStepStatus => {
+  if (typeof value !== "string") {
+    return "pending";
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "completed" || normalized === "done") {
+    return "completed";
+  }
+  if (normalized === "in_progress" || normalized === "in-progress" || normalized === "active" || normalized === "running") {
+    return "in_progress";
+  }
+  return "pending";
+};
+
+const extractTodoSteps = (value: unknown): RuntimeProcessStep[] => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return [];
+  }
+
+  const record = value as Record<string, unknown>;
+  const candidates = [
+    record.todos,
+    record.args && typeof record.args === "object" && !Array.isArray(record.args)
+      ? (record.args as Record<string, unknown>).todos
+      : undefined
+  ];
+
+  for (const candidate of candidates) {
+    if (!Array.isArray(candidate)) {
+      continue;
+    }
+    return candidate.reduce<RuntimeProcessStep[]>((steps, entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return steps;
+      }
+      const todo = entry as Record<string, unknown>;
+      const labelCandidate = typeof todo.content === "string" ? todo.content.trim() : "";
+      const activeLabelCandidate = typeof todo.activeForm === "string" ? todo.activeForm.trim() : "";
+      const label = labelCandidate || activeLabelCandidate;
+      if (!label) {
+        return steps;
+      }
+      steps.push({
+        id: typeof todo.id === "string" && todo.id.trim() ? todo.id.trim() : `todo-${index}`,
+        label,
+        activeLabel: activeLabelCandidate || undefined,
+        status: normalizeProcessStepStatus(todo.status)
+      });
+      return steps;
+    }, []);
+  }
+
+  return [];
+};
+
+const buildProcessLaneFromToolPayload = (
+  eventName: "ToolStart" | "ToolUpdate" | "ToolEnd",
+  payload: unknown,
+  current: RuntimeProcessLane | undefined
+): RuntimeProcessLane | undefined => {
+  const toolName = getStringField(payload, ["name", "tool_name"]) ?? current?.toolName;
+  const todoSteps = extractTodoSteps(payload);
+
+  if (toolName === "TodoWrite" && todoSteps.length > 0) {
+    const activeStep =
+      todoSteps.find((step) => step.status === "in_progress") ??
+      todoSteps.find((step) => step.status === "pending") ??
+      todoSteps[0];
+    return {
+      phase: "planning",
+      label: activeStep?.activeLabel ?? activeStep?.label ?? "Updating plan",
+      toolName,
+      steps: todoSteps
+    };
+  }
+
+  if (eventName === "ToolEnd") {
+    return current;
+  }
+
+  if (!toolName) {
+    return undefined;
+  }
+
+  return {
+    phase: "running",
+    label: `Running ${toolName}`,
+    toolName,
+    steps: current?.steps ?? []
+  };
+};
+
 const extractSessionId = (value: unknown): string | null => getStringField(value, ["session_id", "sessionId", "id"]);
 const extractTurnStatus = (value: unknown): string | null => {
   const direct = getStringField(value, ["status", "finish_reason", "finishReason"]);
@@ -387,8 +489,37 @@ export class AnteServeRuntimeAdapter {
   private stdoutBuffer = "";
   private stderrBuffer = "";
   private sessionId: string | null = null;
+  private sessionStarting = false;
+  private warmup: WarmupState | null = null;
+  private lastSentContextFingerprint: string | null = null;
 
   constructor(private readonly getConfig: () => AnteRuntimeConfig) {}
+
+  async ensureWarmSession(): Promise<void> {
+    const config = this.getConfig();
+    if (!config.command.trim() || !config.model.trim() || !config.provider.trim()) {
+      return;
+    }
+
+    const signature = configSignature(config);
+    if (this.server?.signature === signature && this.sessionId) {
+      return;
+    }
+    if (this.server?.signature !== signature) {
+      this.stopServer();
+    }
+    if (!this.server && !this.startServer(config)) {
+      throw new Error("Failed to start Ante server");
+    }
+
+    if (!this.warmup) {
+      this.warmup = this.createWarmupState();
+    }
+    if (!this.sessionStarting) {
+      this.beginSession(config);
+    }
+    return this.warmup.promise;
+  }
 
   run(request: TaskRequest, observer: RuntimeObserver): void {
     const config = this.getConfig();
@@ -405,8 +536,11 @@ export class AnteServeRuntimeAdapter {
       return;
     }
 
-    const shouldReuse = request.mode === "followup" && this.server && this.sessionId && this.server.signature === configSignature(config);
-    if (!shouldReuse) {
+    const signature = configSignature(config);
+    const hasCompatibleServer = this.server?.signature === signature;
+    const hasReadySession = hasCompatibleServer && Boolean(this.sessionId);
+
+    if (!hasCompatibleServer) {
       this.stopServer();
       if (!this.startServer(config, observer)) {
         return;
@@ -417,11 +551,17 @@ export class AnteServeRuntimeAdapter {
         stream: "system",
         text: `Launching Ante server · provider=${config.provider.trim()} · model=${config.model.trim()} · cwd=${config.cwd.trim() || process.cwd()}`
       });
-    } else {
+    } else if (hasReadySession) {
       observer.onEvent({
         type: "log",
         stream: "system",
         text: `Reusing existing Ante session · provider=${config.provider.trim()} · model=${config.model.trim()}`
+      });
+    } else {
+      observer.onEvent({
+        type: "log",
+        stream: "system",
+        text: `Booting Ante session · provider=${config.provider.trim()} · model=${config.model.trim()}`
       });
     }
 
@@ -434,19 +574,15 @@ export class AnteServeRuntimeAdapter {
       completed: false
     };
 
-    if (shouldReuse && this.sessionId) {
+    if (this.sessionId) {
       observer.onEvent({ type: "runtime.session", provider: "ante", sessionId: this.sessionId });
       this.sendUserInput(request);
       return;
     }
 
-    this.sendOperation({
-      StartSession: {
-        model: config.model.trim(),
-        provider: config.provider.trim(),
-        streaming: true
-      }
-    });
+    if (!this.sessionStarting) {
+      this.beginSession(config);
+    }
   }
 
   cancelActiveRun(): void {
@@ -479,7 +615,7 @@ export class AnteServeRuntimeAdapter {
     });
   }
 
-  private startServer(config: AnteRuntimeConfig, observer: RuntimeObserver): boolean {
+  private startServer(config: AnteRuntimeConfig, observer?: RuntimeObserver): boolean {
     try {
       const args = ensureServeArgs(this.parseArgs(config.argsJson));
       const command = resolveCommandPath(config.command, config.env);
@@ -512,7 +648,9 @@ export class AnteServeRuntimeAdapter {
         if (this.server?.child !== child) {
           return;
         }
-        observer.onExit({ status: "failed", error: error.message });
+        observer?.onExit({ status: "failed", error: error.message });
+        this.warmup?.reject(error);
+        this.warmup = null;
         this.activeRun = null;
         this.stopServer();
       });
@@ -523,6 +661,8 @@ export class AnteServeRuntimeAdapter {
         const activeRun = this.activeRun;
         this.stopServer();
         if (!activeRun || activeRun.completed) {
+          this.warmup?.reject(new Error("Ante server closed before the warm session became ready"));
+          this.warmup = null;
           this.activeRun = null;
           return;
         }
@@ -534,7 +674,7 @@ export class AnteServeRuntimeAdapter {
       });
       return true;
     } catch (error) {
-      observer.onExit({
+      observer?.onExit({
         status: "failed",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -556,7 +696,7 @@ export class AnteServeRuntimeAdapter {
     }
 
     const variant = getVariant(envelope.event);
-    if (!variant || !this.activeRun) {
+    if (!variant) {
       return;
     }
 
@@ -564,10 +704,24 @@ export class AnteServeRuntimeAdapter {
       case "SessionStart": {
         const sessionId = extractSessionId(variant.payload) ?? crypto.randomUUID();
         this.sessionId = sessionId;
+        this.sessionStarting = false;
+        this.warmup?.resolve();
+        this.warmup = null;
+        if (!this.activeRun) {
+          return;
+        }
         this.activeRun.observer.onEvent({ type: "runtime.session", provider: "ante", sessionId });
         this.sendUserInput(this.activeRun.request);
         return;
       }
+      default:
+        if (!this.activeRun) {
+          return;
+        }
+        break;
+    }
+
+    switch (variant.name) {
       case "MessageDelta": {
         const delta = extractText(variant.payload);
         if (!delta) {
@@ -590,19 +744,53 @@ export class AnteServeRuntimeAdapter {
       }
       case "ToolStart":
       case "ToolUpdate":
-      case "ToolEnd":
       case "TurnStart": {
+        const process =
+          variant.name === "TurnStart"
+            ? undefined
+            : buildProcessLaneFromToolPayload(variant.name, variant.payload, this.activeRun.processLane);
+        if (process) {
+          this.activeRun.processLane = process;
+          this.activeRun.observer.onEvent({ type: "process.update", process });
+        }
+        const detail = extractText(variant.payload).trim();
+        if (!process) {
+          this.activeRun.observer.onEvent({
+            type: "log",
+            stream: "system",
+            text: detail ? `Ante ${variant.name}: ${detail}` : `Ante ${variant.name}`
+          });
+        }
+        return;
+      }
+      case "ToolEnd": {
+        const process = buildProcessLaneFromToolPayload("ToolEnd", variant.payload, this.activeRun.processLane);
+        if (process) {
+          this.activeRun.processLane = process;
+          this.activeRun.observer.onEvent({ type: "process.update", process });
+          return;
+        }
         const detail = extractText(variant.payload).trim();
         this.activeRun.observer.onEvent({
           type: "log",
           stream: "system",
-          text: detail ? `Ante ${variant.name}: ${detail}` : `Ante ${variant.name}`
+          text: detail ? `Ante ToolEnd: ${detail}` : "Ante ToolEnd"
         });
         return;
       }
       case "TurnPause": {
         const approval = extractTurnPauseApproval(variant.payload);
         if (approval) {
+          this.activeRun.processLane = {
+            phase: "paused",
+            label: approval.message || "Awaiting tool approval",
+            toolName: approval.tools[0]?.name,
+            steps: this.activeRun.processLane?.steps ?? []
+          };
+          this.activeRun.observer.onEvent({
+            type: "process.update",
+            process: this.activeRun.processLane
+          });
           if (this.activeRun.autoApproveTools) {
             this.activeRun.observer.onEvent({
               type: "log",
@@ -628,6 +816,7 @@ export class AnteServeRuntimeAdapter {
       }
       case "Error": {
         const message = extractErrorMessage(variant.payload);
+        this.activeRun.observer.onEvent({ type: "process.update", process: undefined });
         this.activeRun.observer.onEvent({ type: "session.failed", error: message });
         this.activeRun.completed = true;
         this.activeRun.observer.onExit({ status: "failed", error: message });
@@ -639,6 +828,7 @@ export class AnteServeRuntimeAdapter {
         const errorMessage = extractErrorMessage(variant.payload);
         const isSuccess = Boolean(status && ["completed", "success", "succeeded", "ok"].includes(status));
         if (!isSuccess) {
+          this.activeRun.observer.onEvent({ type: "process.update", process: undefined });
           this.activeRun.observer.onEvent({ type: "session.failed", error: errorMessage });
           this.activeRun.completed = true;
           this.activeRun.observer.onExit({ status: "failed", error: errorMessage });
@@ -650,6 +840,7 @@ export class AnteServeRuntimeAdapter {
             this.activeRun.observer.onEvent(event);
           }
         }
+        this.activeRun.observer.onEvent({ type: "process.update", process: undefined });
         this.activeRun.observer.onEvent({ type: "session.completed", summary: "Ante session completed" });
         this.activeRun.completed = true;
         this.activeRun.observer.onExit({ status: "completed" });
@@ -662,9 +853,25 @@ export class AnteServeRuntimeAdapter {
   }
 
   private sendUserInput(request: TaskRequest): void {
+    const fingerprint = this.getContextFingerprint(request);
+    const shouldReuseContext =
+      request.kind === "terminal" &&
+      Boolean(this.sessionId) &&
+      this.lastSentContextFingerprint === fingerprint;
+
+    request.reusePriorContext = shouldReuseContext;
+    this.activeRun?.observer.onEvent({
+      type: "log",
+      stream: "system",
+      text: shouldReuseContext
+        ? `Sending context reference · note=${request.context.filePath ?? "none"}`
+        : `Sending Markdown context · note=${request.context.filePath ?? "none"}`
+    });
+
     this.sendOperation({
       UserInput: buildInteractivePrompt(request)
     });
+    this.lastSentContextFingerprint = fingerprint;
   }
 
   private sendOperation(op: Record<string, unknown>): void {
@@ -672,11 +879,48 @@ export class AnteServeRuntimeAdapter {
   }
 
   private stopServer(): void {
+    if (this.warmup) {
+      this.warmup.reject(new Error("Ante warm session was interrupted"));
+      this.warmup = null;
+    }
     this.server?.child.kill("SIGTERM");
     this.server = null;
     this.sessionId = null;
+    this.sessionStarting = false;
+    this.lastSentContextFingerprint = null;
     this.stdoutBuffer = "";
     this.stderrBuffer = "";
+  }
+
+  private beginSession(config: AnteRuntimeConfig): void {
+    this.sessionStarting = true;
+    this.sendOperation({
+      StartSession: {
+        model: config.model.trim(),
+        provider: config.provider.trim(),
+        streaming: true
+      }
+    });
+  }
+
+  private createWarmupState(): WarmupState {
+    let resolve = () => {};
+    let reject = (_error: Error) => {};
+    const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+  }
+
+  private getContextFingerprint(request: TaskRequest): string {
+    return JSON.stringify({
+      kind: request.kind,
+      filePath: request.context.filePath,
+      noteTitle: request.context.noteTitle,
+      documentText: request.context.documentText,
+      selection: request.context.selection?.text ?? ""
+    });
   }
 
   private parseArgs(rawArgs: string): string[] {

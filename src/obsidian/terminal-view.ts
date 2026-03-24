@@ -1,17 +1,58 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import type TmdPlugin from "./main";
-import type { ContextSnapshot, RuntimeApprovalDecision, TaskRecord, TmdState } from "../core/types";
+import type {
+  ContextSnapshot,
+  RuntimeApprovalDecision,
+  TaskRecord,
+  TmdState
+} from "../core/types";
+import { formatLoadingLabel } from "../core/loading-label";
+import { renderArtifactDiff, renderDiffSummary, resolveArtifactDiffs, type ResolvedArtifactDiff } from "./diff-block";
 
 export const TMD_TERMINAL_VIEW_TYPE = "tmd-terminal-view";
 
 type TerminalRow =
-  | { kind: "command"; text: string; timestamp: string }
-  | { kind: "output"; text: string; timestamp: string }
-  | { kind: "streaming"; text: string; timestamp: string }
-  | { kind: "system"; text: string; timestamp: string }
-  | { kind: "error"; text: string; timestamp: string }
-  | { kind: "artifact"; text: string; timestamp: string }
-  | { kind: "loading"; text: string; timestamp: string };
+  | { key: string; kind: "command"; text: string; timestamp: string }
+  | { key: string; kind: "output"; text: string; timestamp: string }
+  | { key: string; kind: "streaming"; text: string; timestamp: string }
+  | { key: string; kind: "system"; text: string; timestamp: string }
+  | { key: string; kind: "error"; text: string; timestamp: string }
+  | { key: string; kind: "artifact"; text: string; timestamp: string }
+  | { key: string; kind: "loading"; text: string; timestamp: string };
+
+const EMPTY_ROW_KEY = "terminal-empty";
+const MAX_TERMINAL_PREVIEW_CHARS = 12000;
+const MAX_TERMINAL_PREVIEW_LINES = 160;
+
+const hasContextDispatchLog = (task: TaskRecord): boolean =>
+  task.logs.some(
+    (log) =>
+      log.stream === "system" &&
+      (/^Sending Markdown context\b/.test(log.text) || /^Sending context reference\b/.test(log.text))
+  );
+
+const hasTurnActivityLog = (task: TaskRecord): boolean =>
+  task.logs.some(
+    (log) =>
+      log.stream === "system" &&
+      (/^Ante TurnStart\b/.test(log.text) ||
+        /^Ante ToolStart\b/.test(log.text) ||
+        /^Ante ToolUpdate\b/.test(log.text) ||
+        /^Ante ToolEnd\b/.test(log.text) ||
+        /^Ante TurnPause\b/.test(log.text))
+  );
+
+const hasStdoutLog = (task: TaskRecord): boolean => task.stdoutText.trim().length > 0;
+
+const loadingLabelForTask = (task: TaskRecord, frameIndex: number): string => {
+  if (!task.runtimeSession?.sessionId) {
+    return "booting ante";
+  }
+  if (hasContextDispatchLog(task) && !hasTurnActivityLog(task) && !hasStdoutLog(task)) {
+    return "sending context";
+  }
+  return formatLoadingLabel(task.id, frameIndex);
+};
 
 const formatTime = (timestamp: string): string =>
   new Date(timestamp).toLocaleTimeString([], {
@@ -22,22 +63,31 @@ const formatTime = (timestamp: string): string =>
 
 const terminalStatus = (task: TaskRecord | undefined): string => {
   if (!task) {
-    return "idle";
+    return "ready";
   }
-  if (task.status === "applied") {
-    return "completed";
+
+  switch (task.status) {
+    case "running":
+      return "active";
+    case "applied":
+      return "done";
+    case "failed":
+      return "error";
+    case "discarded":
+      return "stopped";
+    default:
+      return task.status;
   }
-  return task.status;
 };
 
 const terminalStatusClass = (task: TaskRecord | undefined): string => {
   const status = terminalStatus(task);
   switch (status) {
-    case "running":
+    case "active":
       return "tmd-is-running";
-    case "failed":
+    case "error":
       return "tmd-is-failed";
-    case "discarded":
+    case "stopped":
       return "tmd-is-muted";
     default:
       return "tmd-is-completed";
@@ -46,7 +96,7 @@ const terminalStatusClass = (task: TaskRecord | undefined): string => {
 
 const summarizeContext = (context: ContextSnapshot | null | undefined): string => {
   if (!context?.filePath) {
-    return "No Markdown context";
+    return "No Markdown context · open a note to ground the agent";
   }
 
   const selection = context.selection?.text?.trim();
@@ -132,30 +182,73 @@ const extractStreamingJsonPreview = (value: string): string => {
       .replace(/\\t/g, "\t")
       .replace(/\\\\/g, "\\")
       .trim();
-    if (!normalized) {
-      continue;
-    }
-    const lines = normalized
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const preview = lines.slice(0, 2).join("\n").trim();
-    if (preview) {
-      return preview;
+    if (normalized) {
+      return normalized;
     }
   }
 
   return "";
 };
 
+const extractPartialJsonPreview = (value: string): string => {
+  const normalized = value
+    .replace(/\r/g, "")
+    .replace(/\\n/g, "\n")
+    .replace(/\\"/g, "\"")
+    .replace(/\\t/g, "\t")
+    .replace(/\\\\/g, "\\")
+    .trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  const afterTextMatch = /"afterText"\s*:\s*"([\s\S]*)$/s.exec(normalized);
+  if (afterTextMatch?.[1]) {
+    return afterTextMatch[1].trim();
+  }
+
+  const summaryMatch = /"summary"\s*:\s*"([\s\S]*)$/s.exec(normalized);
+  if (summaryMatch?.[1]) {
+    return summaryMatch[1].trim();
+  }
+
+  const titleMatch = /"title"\s*:\s*"([\s\S]*)$/s.exec(normalized);
+  if (titleMatch?.[1]) {
+    return titleMatch[1].trim();
+  }
+
+  return normalized;
+};
+
+const clampTerminalPreview = (value: string): string => {
+  const normalized = value.replace(/\r/g, "");
+  if (!normalized) {
+    return "";
+  }
+
+  const lines = normalized.split("\n");
+  const tailLines = lines.length > MAX_TERMINAL_PREVIEW_LINES ? lines.slice(-MAX_TERMINAL_PREVIEW_LINES) : lines;
+  let preview = tailLines.join("\n");
+
+  if (preview.length > MAX_TERMINAL_PREVIEW_CHARS) {
+    preview = preview.slice(-MAX_TERMINAL_PREVIEW_CHARS);
+  }
+
+  if (preview !== normalized) {
+    const omittedChars = Math.max(0, normalized.length - preview.length);
+    const omittedLines = Math.max(0, lines.length - tailLines.length);
+    const summary = `... truncated terminal preview (${omittedLines} lines, ${omittedChars} chars omitted) ...\n`;
+    preview = summary + preview;
+  }
+
+  return preview.trim();
+};
+
 const analyzeOutput = (task: TaskRecord): { text: string; suppressStdout: boolean } => {
   const primaryText = task.textResult?.text.trim()
     ? task.textResult.text.trim()
-    : task.logs
-        .filter((log) => log.stream === "stdout")
-        .map((log) => log.text)
-        .join("")
-        .trim();
+    : task.stdoutText.trim();
 
   if (!primaryText) {
     return { text: "", suppressStdout: false };
@@ -180,21 +273,23 @@ const analyzeOutput = (task: TaskRecord): { text: string; suppressStdout: boolea
     }
   }
 
-  return { text: primaryText, suppressStdout: Boolean(task.textResult?.text.trim()) };
+  return {
+    text: clampTerminalPreview(primaryText),
+    suppressStdout: Boolean(task.textResult?.text.trim())
+  };
 };
 
 const buildStreamingPreview = (task: TaskRecord): { text: string; timestamp: string } | null => {
-  const stdoutLogs = task.logs.filter((log) => log.stream === "stdout" && log.text);
-  if (stdoutLogs.length === 0) {
+  const combined = task.stdoutText;
+  if (!combined.trim()) {
     return null;
   }
-
-  const combined = stdoutLogs.map((log) => log.text).join("");
   if (/"type"\s*:\s*"change"/.test(combined) || /"type"\s*:\s*"changes"/.test(combined)) {
     const extracted = extractStreamingJsonPreview(combined);
+    const partial = extractPartialJsonPreview(combined);
     return {
-      text: extracted || "Preparing Markdown change...",
-      timestamp: stdoutLogs[stdoutLogs.length - 1]?.timestamp ?? task.startedAt
+      text: clampTerminalPreview(extracted || partial || "Preparing Markdown change..."),
+      timestamp: task.endedAt ?? task.startedAt
     };
   }
   const normalized = combined.replace(/\r/g, "").replace(/\\n/g, "\n").trim();
@@ -202,34 +297,45 @@ const buildStreamingPreview = (task: TaskRecord): { text: string; timestamp: str
     return null;
   }
 
-  const lines = normalized
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0);
-  const preview = (lines.length > 0 ? lines.slice(-2).join("\n") : normalized).trim();
-  if (!preview) {
-    return null;
-  }
-
   return {
-    text: preview,
-    timestamp: stdoutLogs[stdoutLogs.length - 1]?.timestamp ?? task.startedAt
+    text: clampTerminalPreview(normalized),
+    timestamp: task.endedAt ?? task.startedAt
   };
 };
 
-const buildRows = (task: TaskRecord): TerminalRow[] => {
+const prefixForRow = (kind: TerminalRow["kind"]): string => {
+  switch (kind) {
+    case "command":
+      return "$";
+    case "output":
+      return "ante";
+    case "streaming":
+      return "ante";
+    case "error":
+      return "err";
+    case "artifact":
+      return "git";
+    case "loading":
+      return "";
+    default:
+      return "sys";
+  }
+};
+
+const buildRows = (task: TaskRecord, loadingFrame: number): TerminalRow[] => {
   const rows: TerminalRow[] = [];
   rows.push({
+    key: `${task.id}:command`,
     kind: "command",
     text: task.inlineInstruction || "(empty prompt)",
     timestamp: task.startedAt
   });
 
   const hasStructuredOutput = Boolean(task.textResult?.text.trim());
-  const stdoutLogs = task.logs.filter((log) => log.stream === "stdout" && log.text.trim());
   const output = analyzeOutput(task);
   const streamingPreview = !hasStructuredOutput && task.status === "running" ? buildStreamingPreview(task) : null;
 
+  let visibleLogIndex = 0;
   for (const log of task.logs) {
     if (log.stream === "stdout") {
       continue;
@@ -238,22 +344,26 @@ const buildRows = (task: TaskRecord): TerminalRow[] => {
       continue;
     }
     rows.push({
+      key: `${task.id}:log:${visibleLogIndex}`,
       kind: log.stream === "stderr" ? "error" : "system",
       text: log.text,
       timestamp: log.timestamp
     });
+    visibleLogIndex += 1;
   }
 
   if (streamingPreview) {
     rows.push({
+      key: `${task.id}:streaming`,
       kind: "streaming",
       text: streamingPreview.text,
       timestamp: streamingPreview.timestamp
     });
   }
 
-  if (output.text && !streamingPreview && (output.suppressStdout || hasStructuredOutput || stdoutLogs.length === 0)) {
+  if (output.text && !streamingPreview) {
     rows.push({
+      key: `${task.id}:output`,
       kind: "output",
       text: output.text,
       timestamp: task.endedAt ?? task.startedAt
@@ -262,14 +372,16 @@ const buildRows = (task: TaskRecord): TerminalRow[] => {
 
   if (task.artifacts.length > 0) {
     rows.push({
+      key: `${task.id}:artifact`,
       kind: "artifact",
-      text: `${task.artifacts.length} change artifact(s) ready. Open Tmd Results to inspect diff or revert.`,
+      text: `${task.artifacts.length} change artifact(s) ready below.`,
       timestamp: task.endedAt ?? task.startedAt
     });
   }
 
   if (task.error) {
     rows.push({
+      key: `${task.id}:error`,
       kind: "error",
       text: task.error,
       timestamp: task.endedAt ?? task.startedAt
@@ -278,8 +390,9 @@ const buildRows = (task: TaskRecord): TerminalRow[] => {
 
   if (task.status === "running" && !output.text && !task.pendingApproval) {
     rows.push({
+      key: `${task.id}:loading`,
       kind: "loading",
-      text: "*",
+      text: loadingLabelForTask(task, loadingFrame),
       timestamp: new Date().toISOString()
     });
   }
@@ -287,11 +400,46 @@ const buildRows = (task: TaskRecord): TerminalRow[] => {
   return rows;
 };
 
+const buildAllRows = (state: TmdState, loadingFrame: number): TerminalRow[] => {
+  const tasks = state.tasks.filter((task) => task.triggerSource === "terminal");
+  if (tasks.length === 0) {
+    return [
+      {
+        key: EMPTY_ROW_KEY,
+        kind: "system",
+        text: "Ready. Open a Markdown note, then ask Ante to plan, write, edit, inspect, or run follow-up work from that context.",
+        timestamp: new Date().toISOString()
+      }
+    ];
+  }
+
+  return [...tasks].reverse().flatMap((task) => buildRows(task, loadingFrame));
+};
+
 export class TmdTerminalView extends ItemView {
   private unsubscribe: (() => void) | null = null;
   private loadingTimer: number | null = null;
   private loadingFrame = 0;
   private latestState: TmdState | null = null;
+  private liveContext: ContextSnapshot | null = null;
+  private frameEl!: HTMLDivElement;
+  private statusEl!: HTMLDivElement;
+  private metaLineEl!: HTMLDivElement;
+  private processLaneEl!: HTMLDivElement;
+  private screenEl!: HTMLDivElement;
+  private streamEl!: HTMLDivElement;
+  private promptEl!: HTMLDivElement;
+  private editorEl!: HTMLDivElement;
+  private approvalEl: HTMLDivElement | null = null;
+  private inlineArtifactsEl!: HTMLDivElement;
+  private readonly rowEls = new Map<string, HTMLDivElement>();
+  private readonly inlineExpandedArtifactIds = new Set<string>();
+  private didInitialFocus = false;
+  private lastEditable = false;
+  private inlineResolvedArtifacts: ResolvedArtifactDiff[] = [];
+  private inlineArtifactSignature = "";
+  private inlineResolvedTaskId: string | null = null;
+  private inlineResolveVersion = 0;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: TmdPlugin) {
     super(leaf);
@@ -302,12 +450,23 @@ export class TmdTerminalView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "Ante Terminal";
+    return "Ante Workspace";
   }
 
   async onOpen(): Promise<void> {
     this.contentEl.addClass("tmd-view", "tmd-terminal-view");
-    await this.plugin.hostAdapter.capturePreferredContext();
+    this.buildShell();
+    this.liveContext = await this.plugin.hostAdapter.capturePreferredContext();
+    this.registerEvent(
+      this.app.workspace.on("file-open", () => {
+        void this.refreshLiveContext();
+      })
+    );
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => {
+        void this.refreshLiveContext();
+      })
+    );
     this.unsubscribe = this.plugin.taskEngine.subscribe((state) => {
       this.latestState = state;
       this.syncLoadingTimer(state);
@@ -324,20 +483,14 @@ export class TmdTerminalView extends ItemView {
     }
   }
 
-  private render(state: TmdState): void {
+  private buildShell(): void {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl("h2", { text: "Ante Terminal" });
+    contentEl.createEl("h2", { text: "Ante Workspace" });
 
-    const tasks = state.tasks.filter((task) => task.triggerSource === "terminal");
-    const latestTask = tasks[0];
-    const context = latestTask?.context ?? state.tasks.find((task) => task.context?.filePath)?.context ?? null;
-    const runtimeSummary = extractRuntimeSummary(latestTask);
-    const approval = latestTask?.pendingApproval;
-
-    const frame = contentEl.createDiv({ cls: "tmd-terminal-frame" });
-    const chrome = frame.createDiv({ cls: "tmd-terminal-chrome" });
-    chrome.createDiv({ cls: "tmd-terminal-chrome-title", text: "ante terminal" });
+    this.frameEl = contentEl.createDiv({ cls: "tmd-terminal-frame" });
+    const chrome = this.frameEl.createDiv({ cls: "tmd-terminal-chrome" });
+    chrome.createDiv({ cls: "tmd-terminal-chrome-title", text: "markdown context agent" });
     const chromeActions = chrome.createDiv({ cls: "tmd-terminal-chrome-actions" });
     const stopButton = chromeActions.createEl("button", {
       cls: "tmd-terminal-stop-button"
@@ -345,159 +498,321 @@ export class TmdTerminalView extends ItemView {
     stopButton.setAttr("aria-label", "Stop active Ante task");
     stopButton.createSpan({ cls: "tmd-terminal-stop-icon", text: "■" });
     stopButton.createSpan({ cls: "tmd-terminal-stop-label", text: "Stop" });
-    stopButton.disabled = !state.tasks.some((task) => task.status === "running");
     stopButton.addEventListener("click", () => this.plugin.taskEngine.cancelActiveTask());
-    chromeActions.createDiv({
-      cls: `tmd-terminal-status ${terminalStatusClass(latestTask)}`,
-      text: terminalStatus(latestTask)
+    this.statusEl = chromeActions.createDiv({ cls: "tmd-terminal-status" });
+
+    const meta = this.frameEl.createDiv({ cls: "tmd-terminal-meta" });
+    this.metaLineEl = meta.createDiv({ cls: "tmd-terminal-meta-line" });
+    this.processLaneEl = this.frameEl.createDiv({ cls: "tmd-terminal-process-lane" });
+
+    this.screenEl = this.frameEl.createDiv({ cls: "tmd-terminal-screen" });
+    this.streamEl = this.screenEl.createDiv({ cls: "tmd-terminal-stream" });
+    this.promptEl = this.screenEl.createDiv({ cls: "tmd-terminal-row tmd-terminal-promptline" });
+    this.editorEl = this.promptEl.createDiv({ cls: "tmd-terminal-shell-editor tmd-is-empty" });
+    this.editorEl.setAttr("role", "textbox");
+    this.editorEl.setAttr("aria-label", "Ante terminal prompt");
+    this.editorEl.addEventListener("input", () => {
+      this.editorEl.classList.toggle("tmd-is-empty", this.editorEl.innerText.trim().length === 0);
     });
-
-    const meta = frame.createDiv({ cls: "tmd-terminal-meta" });
-    meta.createDiv({ cls: "tmd-terminal-meta-line", text: summarizeTerminalMeta(context, runtimeSummary) });
-
-    const screen = frame.createDiv({ cls: "tmd-terminal-screen" });
-    const stream = screen.createDiv({ cls: "tmd-terminal-stream" });
-    if (tasks.length === 0) {
-      const empty = stream.createDiv({ cls: "tmd-terminal-row tmd-is-system" });
-      empty.createDiv({ cls: "tmd-terminal-row-time", text: formatTime(new Date().toISOString()) });
-      empty.createDiv({ cls: "tmd-terminal-row-prefix", text: "sys" });
-      empty.createDiv({ cls: "tmd-terminal-row-text", text: "Ready. Open a Markdown note and enter a prompt below." });
-    } else {
-      for (const task of [...tasks].reverse()) {
-        for (const row of this.buildRows(task)) {
-          this.renderRow(stream, row);
-        }
-      }
-    }
-
-    const prompt = stream.createDiv({ cls: "tmd-terminal-row tmd-terminal-promptline" });
-    const editor = prompt.createDiv({ cls: "tmd-terminal-shell-editor tmd-is-empty" });
-    const isEditable = !state.tasks.some((task) => task.status === "running");
-    editor.contentEditable = isEditable ? "true" : "false";
-    editor.dataset.placeholder = context?.filePath ? `Ask Ante about ${context.filePath}` : "Ask Ante";
-    editor.setAttr("role", "textbox");
-    editor.setAttr("aria-label", "Ante terminal prompt");
-    prompt.classList.toggle("tmd-is-editable", isEditable);
-
-    if (latestTask?.status === "running" && approval) {
-      const approvalCard = frame.createDiv({ cls: "tmd-terminal-approval" });
-      approvalCard.createDiv({
-        cls: "tmd-terminal-approval-title",
-        text: "Tool approval required"
-      });
-      approvalCard.createDiv({
-        cls: "tmd-terminal-approval-message",
-        text: approval.message
-      });
-
-      for (const tool of approval.tools) {
-        const toolRow = approvalCard.createDiv({ cls: "tmd-terminal-approval-tool" });
-        toolRow.createDiv({
-          cls: "tmd-terminal-approval-tool-name",
-          text: `${tool.name} · ${tool.id}`
-        });
-        if (tool.argsText) {
-          toolRow.createDiv({
-            cls: "tmd-terminal-approval-tool-args",
-            text: tool.argsText
-          });
-        }
-      }
-
-      const actionRow = approvalCard.createDiv({ cls: "tmd-terminal-approval-actions" });
-      const renderAction = (label: string, decision: RuntimeApprovalDecision, cls: string) => {
-        const button = actionRow.createEl("button", {
-          cls: `tmd-terminal-approval-button ${cls}`,
-          text: label
-        });
-        button.addEventListener("click", () => {
-          try {
-            this.plugin.taskEngine.respondToTaskApproval(latestTask.id, decision);
-          } catch (error) {
-            new Notice(error instanceof Error ? error.message : "Failed to send Ante approval");
-          }
-        });
-      };
-
-      renderAction("Approve once", "Accept", "tmd-is-approve");
-      renderAction("Allow session", "AcceptForSession", "tmd-is-approve-session");
-      renderAction("Deny", "Skip", "tmd-is-deny");
-    }
-
-    const runPrompt = () => {
-      const promptText = editor.innerText.replace(/\n/g, " ").trim();
-      if (!promptText) {
-        return;
-      }
-      void this.plugin.hostAdapter
-        .capturePreferredContext()
-        .then(() =>
-          this.plugin.taskEngine.startTerminalTask(
-            promptText,
-            Boolean(tasks.find((task) => task.runtimeSession?.sessionId)?.runtimeSession)
-          )
-        )
-        .then((taskId) => {
-          this.plugin.watchTaskForResults(taskId, "Terminal");
-          editor.empty();
-          editor.classList.add("tmd-is-empty");
-        })
-        .catch((error) => {
-          new Notice(error instanceof Error ? error.message : "Failed to start Ante terminal task");
-        });
-    };
-
-    editor.addEventListener("input", () => {
-      editor.classList.toggle("tmd-is-empty", editor.innerText.trim().length === 0);
-    });
-
-    editor.addEventListener("keydown", (event) => {
+    this.editorEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
-        runPrompt();
+        this.runPrompt();
       }
     });
+    this.inlineArtifactsEl = contentEl.createDiv({ cls: "tmd-terminal-inline-results" });
+  }
 
-    window.requestAnimationFrame(() => {
-      screen.scrollTop = screen.scrollHeight;
-      if (editor.contentEditable === "true") {
-        editor.focus();
+  private render(state: TmdState): void {
+    const tasks = state.tasks.filter((task) => task.triggerSource === "terminal");
+    const latestTask = tasks[0];
+    const context = this.liveContext ?? latestTask?.context ?? state.tasks.find((task) => task.context?.filePath)?.context ?? null;
+    const runtimeSummary = extractRuntimeSummary(latestTask);
+    const isEditable = !state.tasks.some((task) => task.status === "running");
+    const shouldStickToBottom = this.shouldStickToBottom();
+
+    this.statusEl.className = `tmd-terminal-status ${terminalStatusClass(latestTask)}`;
+    this.statusEl.setText(terminalStatus(latestTask));
+    this.metaLineEl.setText(summarizeTerminalMeta(context, runtimeSummary));
+
+    this.syncProcessLane(latestTask);
+    this.syncRows(buildAllRows(state, this.loadingFrame));
+    this.syncPrompt(context, tasks, isEditable);
+    this.syncInlineArtifacts(latestTask);
+    this.syncApproval(latestTask);
+
+    if (shouldStickToBottom && !this.hasSelectionInScreen()) {
+      this.scrollToBottom();
+    }
+    if ((isEditable && !this.lastEditable) || (isEditable && !this.didInitialFocus)) {
+      this.editorEl.focus();
+      this.didInitialFocus = true;
+    }
+    this.lastEditable = isEditable;
+  }
+
+  private syncRows(rows: TerminalRow[]): void {
+    const nextKeys = new Set(rows.map((row) => row.key));
+
+    for (const [key, rowEl] of [...this.rowEls.entries()]) {
+      if (!nextKeys.has(key)) {
+        rowEl.remove();
+        this.rowEls.delete(key);
       }
+    }
+
+    let previousEl: HTMLElement | null = null;
+    for (const row of rows) {
+      let rowEl = this.rowEls.get(row.key);
+      if (!rowEl) {
+        rowEl = this.createRowElement(row);
+        this.rowEls.set(row.key, rowEl);
+      }
+      this.updateRowElement(rowEl, row);
+      const anchor: ChildNode | null = previousEl ? previousEl.nextSibling : this.streamEl.firstChild;
+      this.streamEl.insertBefore(rowEl, anchor);
+      previousEl = rowEl;
+    }
+  }
+
+  private createRowElement(row: TerminalRow): HTMLDivElement {
+    const rowEl = this.streamEl.createDiv({ cls: `tmd-terminal-row tmd-is-${row.kind}` });
+    rowEl.createDiv({ cls: "tmd-terminal-row-time" });
+    rowEl.createDiv({ cls: "tmd-terminal-row-prefix" });
+    rowEl.createDiv({ cls: "tmd-terminal-row-text" });
+    this.updateRowElement(rowEl, row);
+    return rowEl;
+  }
+
+  private updateRowElement(rowEl: HTMLDivElement, row: TerminalRow): void {
+    const nextClassName = `tmd-terminal-row tmd-is-${row.kind}`;
+    if (rowEl.className !== nextClassName) {
+      rowEl.className = nextClassName;
+    }
+    const timeEl = rowEl.children[0] as HTMLDivElement | undefined;
+    const prefixEl = rowEl.children[1] as HTMLDivElement | undefined;
+    const textEl = rowEl.children[2] as HTMLDivElement | undefined;
+    const nextTime = formatTime(row.timestamp);
+    const nextPrefix = prefixForRow(row.kind);
+    if (timeEl && timeEl.dataset.value !== nextTime) {
+      timeEl.dataset.value = nextTime;
+      timeEl.textContent = nextTime;
+    }
+    if (prefixEl && prefixEl.dataset.value !== nextPrefix) {
+      prefixEl.dataset.value = nextPrefix;
+      prefixEl.textContent = nextPrefix;
+    }
+    if (textEl && textEl.dataset.value !== row.text) {
+      textEl.dataset.value = row.text;
+      textEl.textContent = row.text;
+    }
+  }
+
+  private syncPrompt(context: ContextSnapshot | null, tasks: TaskRecord[], isEditable: boolean): void {
+    this.promptEl.classList.toggle("tmd-is-editable", isEditable);
+    this.editorEl.contentEditable = isEditable ? "true" : "false";
+    this.editorEl.dataset.placeholder = context?.filePath
+      ? `Use ${context.filePath} as Markdown context to plan, write, edit, or run tasks`
+      : "Use the current Markdown context to plan, write, edit, or run tasks";
+    if (!isEditable) {
+      return;
+    }
+    if (tasks.length === 0) {
+      this.editorEl.classList.toggle("tmd-is-empty", this.editorEl.innerText.trim().length === 0);
+    }
+  }
+
+  private syncProcessLane(task: TaskRecord | undefined): void {
+    this.processLaneEl.empty();
+    const process = task?.status === "running" ? task.processLane : undefined;
+    if (!process) {
+      this.processLaneEl.hide();
+      return;
+    }
+
+    this.processLaneEl.show();
+    const shell = this.processLaneEl.createDiv({ cls: "tmd-terminal-process-shell" });
+    const header = shell.createDiv({ cls: "tmd-terminal-process-header" });
+    header.createDiv({ cls: "tmd-terminal-process-kicker", text: "Process" });
+    header.createDiv({
+      cls: `tmd-terminal-process-phase tmd-is-${process.phase}`,
+      text: process.phase
+    });
+
+    shell.createDiv({ cls: "tmd-terminal-process-label", text: process.label });
+    if (process.steps.length === 0) {
+      return;
+    }
+
+    const list = shell.createDiv({ cls: "tmd-terminal-process-steps" });
+    for (const step of process.steps) {
+      const row = list.createDiv({ cls: `tmd-terminal-process-step tmd-is-${step.status}` });
+      row.createDiv({
+        cls: "tmd-terminal-process-marker",
+        text: step.status === "completed" ? "■" : step.status === "in_progress" ? "▪" : "□"
+      });
+      row.createDiv({
+        cls: "tmd-terminal-process-step-text",
+        text: step.status === "in_progress" ? step.activeLabel ?? step.label : step.label
+      });
+    }
+  }
+
+  private syncApproval(task: TaskRecord | undefined): void {
+    const approval = task?.status === "running" ? task.pendingApproval : undefined;
+    if (!approval || !task) {
+      this.approvalEl?.remove();
+      this.approvalEl = null;
+      return;
+    }
+
+    const existing = this.approvalEl;
+    if (existing) {
+      existing.remove();
+    }
+
+    const approvalCard = this.frameEl.createDiv({ cls: "tmd-terminal-approval" });
+    approvalCard.createDiv({
+      cls: "tmd-terminal-approval-title",
+      text: "Tool approval required"
+    });
+    approvalCard.createDiv({
+      cls: "tmd-terminal-approval-message",
+      text: approval.message
+    });
+
+    for (const tool of approval.tools) {
+      const toolRow = approvalCard.createDiv({ cls: "tmd-terminal-approval-tool" });
+      toolRow.createDiv({
+        cls: "tmd-terminal-approval-tool-name",
+        text: `${tool.name} · ${tool.id}`
+      });
+      if (tool.argsText) {
+        toolRow.createDiv({
+          cls: "tmd-terminal-approval-tool-args",
+          text: tool.argsText
+        });
+      }
+    }
+
+    const actionRow = approvalCard.createDiv({ cls: "tmd-terminal-approval-actions" });
+    const renderAction = (label: string, decision: RuntimeApprovalDecision, cls: string) => {
+      const button = actionRow.createEl("button", {
+        cls: `tmd-terminal-approval-button ${cls}`,
+        text: label
+      });
+      button.addEventListener("click", () => {
+        try {
+          this.plugin.taskEngine.respondToTaskApproval(task.id, decision);
+        } catch (error) {
+          new Notice(error instanceof Error ? error.message : "Failed to send Ante approval");
+        }
+      });
+    };
+
+    renderAction("Approve once", "Accept", "tmd-is-approve");
+    renderAction("Allow session", "AcceptForSession", "tmd-is-approve-session");
+    renderAction("Deny", "Skip", "tmd-is-deny");
+    this.approvalEl = approvalCard;
+  }
+
+  private runPrompt(): void {
+    const promptText = this.editorEl.innerText.replace(/\n/g, " ").trim();
+    if (!promptText) {
+      return;
+    }
+
+    const tasks = (this.latestState ?? this.plugin.taskEngine.getState()).tasks.filter((task) => task.triggerSource === "terminal");
+    void this.plugin.hostAdapter
+      .capturePreferredContext()
+      .then((contextSnapshot) => {
+        this.liveContext = contextSnapshot;
+      })
+      .then(() =>
+        this.plugin.taskEngine.startTerminalTask(
+          promptText,
+          Boolean(tasks.find((task) => task.runtimeSession?.sessionId)?.runtimeSession)
+        )
+      )
+      .then(() => {
+        this.editorEl.empty();
+        this.editorEl.classList.add("tmd-is-empty");
+      })
+      .catch((error) => {
+        new Notice(error instanceof Error ? error.message : "Failed to start Ante terminal task");
+      });
+  }
+
+  private syncInlineArtifacts(task: TaskRecord | undefined): void {
+    if (!task || task.artifacts.length === 0) {
+      this.inlineArtifactsEl.empty();
+      this.inlineResolvedArtifacts = [];
+      this.inlineArtifactSignature = "";
+      this.inlineResolvedTaskId = task?.id ?? null;
+      this.inlineExpandedArtifactIds.clear();
+      return;
+    }
+
+    const signature = [
+      task.id,
+      ...task.artifacts.map((artifact) => `${artifact.id}:${artifact.applyState}:${artifact.applyError ?? ""}`)
+    ].join("|");
+
+    if (this.inlineResolvedTaskId !== task.id) {
+      this.inlineExpandedArtifactIds.clear();
+      this.inlineExpandedArtifactIds.add(task.artifacts[0]?.id ?? "");
+    }
+
+    if (this.inlineArtifactSignature === signature && this.inlineResolvedTaskId === task.id && this.inlineResolvedArtifacts.length > 0) {
+      this.renderInlineArtifacts(task, this.inlineResolvedArtifacts);
+      return;
+    }
+
+    this.inlineArtifactsEl.empty();
+    const waiting = this.inlineArtifactsEl.createDiv({ cls: "tmd-terminal-inline-placeholder" });
+    waiting.setText("Preparing diff preview...");
+
+    const resolveVersion = ++this.inlineResolveVersion;
+    void resolveArtifactDiffs(task).then((resolvedArtifacts) => {
+      if (resolveVersion !== this.inlineResolveVersion) {
+        return;
+      }
+      this.inlineResolvedArtifacts = resolvedArtifacts;
+      this.inlineArtifactSignature = signature;
+      this.inlineResolvedTaskId = task.id;
+      this.renderInlineArtifacts(task, resolvedArtifacts);
     });
   }
 
-  private buildRows(task: TaskRecord): TerminalRow[] {
-    return buildRows(task).map((row) =>
-      row.kind === "loading"
-        ? {
-            ...row,
-            text: ["*", "**", "***"][this.loadingFrame]
-          }
-        : row
-    );
+  private renderInlineArtifacts(task: TaskRecord, resolvedArtifacts: ResolvedArtifactDiff[]): void {
+    this.inlineArtifactsEl.empty();
+    const section = this.inlineArtifactsEl.createDiv({ cls: "tmd-terminal-inline-shell" });
+    const titleRow = section.createDiv({ cls: "tmd-terminal-inline-header" });
+    titleRow.createDiv({ cls: "tmd-terminal-inline-title", text: "Markdown Changes" });
+
+    renderDiffSummary(section, resolvedArtifacts);
+    for (const resolved of resolvedArtifacts) {
+      const { artifact } = resolved;
+      renderArtifactDiff(section, this.plugin, task, resolved, this.inlineExpandedArtifactIds, () => {
+        if (this.inlineExpandedArtifactIds.has(artifact.id)) {
+          this.inlineExpandedArtifactIds.delete(artifact.id);
+        } else {
+          this.inlineExpandedArtifactIds.add(artifact.id);
+        }
+        this.renderInlineArtifacts(task, this.inlineResolvedArtifacts);
+      });
+    }
   }
 
   private syncLoadingTimer(state: TmdState): void {
     const terminalTasks = state.tasks.filter((task) => task.triggerSource === "terminal");
-    const blockingTasks = terminalTasks
+    const shouldAnimate = terminalTasks
       .filter((task) => task.status === "running")
-      .map((task) => ({
-        id: task.id,
-        status: task.status,
-        hasTextResult: Boolean(task.textResult?.text.trim()),
-        stdoutCount: task.logs.filter((log) => log.stream === "stdout" && log.text.trim()).length,
-        aggregateOutput: analyzeOutput(task).text,
-        pendingApproval: Boolean(task.pendingApproval),
-        error: task.error,
-        startedAt: task.startedAt,
-        runtimeSessionId: task.runtimeSession?.sessionId
-      }))
-      .filter((task) => !task.aggregateOutput && !task.pendingApproval);
-    const shouldAnimate = blockingTasks.length > 0;
+      .some((task) => !analyzeOutput(task).text && !task.pendingApproval);
 
     if (shouldAnimate && this.loadingTimer == null) {
       this.loadingTimer = window.setInterval(() => {
-        this.loadingFrame = (this.loadingFrame + 1) % 3;
+        this.loadingFrame = (this.loadingFrame + 1) % 4;
         if (this.latestState) {
           this.render(this.latestState);
         }
@@ -512,29 +827,37 @@ export class TmdTerminalView extends ItemView {
     }
   }
 
-  private renderRow(container: HTMLElement, row: TerminalRow): void {
-    const rowEl = container.createDiv({ cls: `tmd-terminal-row tmd-is-${row.kind}` });
-    rowEl.createDiv({ cls: "tmd-terminal-row-time", text: formatTime(row.timestamp) });
-    rowEl.createDiv({ cls: "tmd-terminal-row-prefix", text: this.prefixForRow(row.kind) });
-    rowEl.createDiv({ cls: "tmd-terminal-row-text", text: row.text });
+  private shouldStickToBottom(): boolean {
+    const threshold = 24;
+    return this.screenEl.scrollTop + this.screenEl.clientHeight >= this.screenEl.scrollHeight - threshold;
   }
 
-  private prefixForRow(kind: TerminalRow["kind"]): string {
-    switch (kind) {
-      case "command":
-        return "$";
-      case "output":
-        return "out";
-      case "streaming":
-        return "out";
-      case "error":
-        return "err";
-      case "artifact":
-        return "git";
-      case "loading":
-        return "";
-      default:
-        return "sys";
+  private hasSelectionInScreen(): boolean {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      return false;
     }
+    const anchorNode = selection.anchorNode;
+    const focusNode = selection.focusNode;
+    return Boolean(
+      (anchorNode && this.screenEl.contains(anchorNode)) ||
+        (focusNode && this.screenEl.contains(focusNode))
+    );
+  }
+
+  private scrollToBottom(): void {
+    this.screenEl.scrollTop = this.screenEl.scrollHeight;
+  }
+
+  private async refreshLiveContext(): Promise<void> {
+    this.liveContext = await this.plugin.hostAdapter.capturePreferredContext();
+    if (this.latestState) {
+      this.render(this.latestState);
+      return;
+    }
+    this.metaLineEl.setText(summarizeTerminalMeta(this.liveContext, null));
+    this.editorEl.dataset.placeholder = this.liveContext?.filePath
+      ? `Use ${this.liveContext.filePath} as Markdown context to plan, write, edit, or run tasks`
+      : "Use the current Markdown context to plan, write, edit, or run tasks";
   }
 }

@@ -140,6 +140,9 @@ export default class TmdPlugin extends Plugin {
     const leaf = await this.ensureLeaf(TMD_TERMINAL_VIEW_TYPE);
     await leaf.setViewState({ type: TMD_TERMINAL_VIEW_TYPE, active: true });
     this.app.workspace.revealLeaf(leaf);
+    void this.runtime.ensureWarmSession().catch(() => {
+      // Ignore idle warmup failures here; the visible task path still surfaces errors.
+    });
   }
 
   async openResultsView(): Promise<void> {

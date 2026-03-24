@@ -93,6 +93,8 @@ export class TmdConsoleView extends ItemView {
     }
     if (task.textResult?.text) {
       card.createEl("pre", { cls: "tmd-text-result", text: task.textResult.text });
+    } else if (task.stdoutText.trim()) {
+      card.createEl("pre", { cls: "tmd-text-result", text: task.stdoutText.slice(-4000) });
     }
     if (task.artifacts.length > 0) {
       card.createDiv({ cls: "tmd-meta", text: `${task.artifacts.length} change artifact(s) ready in Tmd Results` });

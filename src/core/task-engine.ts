@@ -18,6 +18,21 @@ import { createInitialState } from "./types";
 
 type StateListener = (state: TmdState) => void;
 
+const MAX_STDOUT_BUFFER_CHARS = 16000;
+
+const appendStdoutPreview = (existing: string, incoming: string): string => {
+  if (!incoming) {
+    return existing;
+  }
+
+  const combined = existing + incoming;
+  if (combined.length <= MAX_STDOUT_BUFFER_CHARS) {
+    return combined;
+  }
+
+  return combined.slice(-MAX_STDOUT_BUFFER_CHARS);
+};
+
 interface StartDocumentTaskInput {
   presetId: PresetId;
   triggerSource: Exclude<TaskTriggerSource, "console">;
@@ -29,6 +44,7 @@ export class TaskEngine {
   private state = createInitialState();
   private readonly listeners = new Set<StateListener>();
   private activeTaskId: string | null = null;
+  private readonly pendingStdout = new Map<string, { chunks: string[]; timer: ReturnType<typeof setTimeout> | null }>();
 
   constructor(
     private readonly runtime: AnteServeRuntimeAdapter,
@@ -179,6 +195,7 @@ export class TaskEngine {
       context: request.context,
       status: "running",
       logs: [],
+      stdoutText: "",
       artifacts: [],
       pendingApproval: undefined,
       startedAt: new Date().toISOString()
@@ -198,6 +215,7 @@ export class TaskEngine {
           void this.handleRuntimeEvent(request, event);
         },
         onExit: (result) => {
+          this.flushPendingStdout(request.taskId);
           if (result.status === "cancelled") {
             this.patchTask(request.taskId, {
               pendingApproval: undefined,
@@ -231,6 +249,10 @@ export class TaskEngine {
   }
 
   private async handleRuntimeEvent(request: TaskRequest, event: RuntimeEvent): Promise<void> {
+    if (!(event.type === "log" && event.stream === "stdout")) {
+      this.flushPendingStdout(request.taskId);
+    }
+
     switch (event.type) {
       case "log":
         this.appendLog(request.taskId, event.stream, event.text);
@@ -240,6 +262,9 @@ export class TaskEngine {
         return;
       case "session.approval":
         this.patchTask(request.taskId, { pendingApproval: event.approval });
+        return;
+      case "process.update":
+        this.patchTask(request.taskId, { processLane: event.process });
         return;
       case "result.text":
         this.patchTask(request.taskId, {
@@ -261,6 +286,7 @@ export class TaskEngine {
         const task = this.getTask(request.taskId);
         this.patchTask(request.taskId, {
           pendingApproval: undefined,
+          processLane: undefined,
           status: task.artifacts.length > 0 ? "awaiting-apply" : "completed",
           endedAt: new Date().toISOString()
         });
@@ -269,6 +295,7 @@ export class TaskEngine {
       case "session.failed":
         this.patchTask(request.taskId, {
           pendingApproval: undefined,
+          processLane: undefined,
           status: "failed",
           error: event.error,
           endedAt: new Date().toISOString()
@@ -277,6 +304,11 @@ export class TaskEngine {
   }
 
   private appendLog(taskId: string, stream: TaskRecord["logs"][number]["stream"], text: string): void {
+    if (stream === "stdout") {
+      this.queueStdout(taskId, text);
+      return;
+    }
+
     const task = this.getTask(taskId);
     this.patchTask(taskId, {
       logs: [
@@ -287,6 +319,38 @@ export class TaskEngine {
           timestamp: new Date().toISOString()
         }
       ]
+    });
+  }
+
+  private queueStdout(taskId: string, text: string): void {
+    const pending = this.pendingStdout.get(taskId) ?? { chunks: [], timer: null };
+    pending.chunks.push(text);
+    if (pending.timer == null) {
+      pending.timer = setTimeout(() => {
+        this.flushPendingStdout(taskId);
+      }, 33);
+    }
+    this.pendingStdout.set(taskId, pending);
+  }
+
+  private flushPendingStdout(taskId: string): void {
+    const pending = this.pendingStdout.get(taskId);
+    if (!pending || pending.chunks.length === 0) {
+      if (pending?.timer != null) {
+        clearTimeout(pending.timer);
+        this.pendingStdout.delete(taskId);
+      }
+      return;
+    }
+
+    if (pending.timer != null) {
+      clearTimeout(pending.timer);
+    }
+
+    this.pendingStdout.delete(taskId);
+    const task = this.getTask(taskId);
+    this.patchTask(taskId, {
+      stdoutText: appendStdoutPreview(task.stdoutText, pending.chunks.join(""))
     });
   }
 

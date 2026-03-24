@@ -1,7 +1,7 @@
 import { Editor, MarkdownView, Notice, type App } from "obsidian";
+import { formatLoadingLabel } from "../core/loading-label";
 import { parseMentionLine } from "../core/mention-parser";
 import { buildParagraphSelection } from "../core/paragraph-selection";
-import type { TmdState } from "../core/types";
 import type TmdPlugin from "./main";
 
 const INVISIBLE_ZERO = "\u200B";
@@ -57,6 +57,15 @@ export class MentionTriggerService {
     }
 
     const paragraphSelection = buildParagraphSelection(editor, cursor.line, match.start);
+    const mentionSelection = paragraphSelection
+      ? {
+          ...paragraphSelection,
+          to: {
+            line: cursor.line,
+            ch: line.length
+          }
+        }
+      : null;
     const activeContext = await this.plugin.hostAdapter.getActiveContext();
     if (!activeContext) {
       return;
@@ -67,11 +76,11 @@ export class MentionTriggerService {
         ? activeContext
         : {
             ...activeContext,
-            selection: paragraphSelection
+            selection: mentionSelection
               ? {
-                  text: paragraphSelection.text,
-                  from: paragraphSelection.from,
-                  to: paragraphSelection.to
+                  text: mentionSelection.text,
+                  from: mentionSelection.from,
+                  to: mentionSelection.to
                 }
               : null
           };
@@ -84,7 +93,14 @@ export class MentionTriggerService {
     }
 
     try {
-      await this.runInlineMention(editor, cursor.line, line.slice(match.start, match.end), match.inlineInstruction, context, match.presetId);
+      await this.runInlineMention(
+        editor,
+        cursor.line,
+        match.start,
+        match.inlineInstruction,
+        context,
+        match.presetId
+      );
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Inline Ante trigger failed");
     } finally {
@@ -95,7 +111,7 @@ export class MentionTriggerService {
   private async runInlineMention(
     editor: Editor,
     triggerLine: number,
-    triggerToken: string,
+    triggerStart: number,
     inlineInstruction: string,
     context: Awaited<ReturnType<TmdPlugin["hostAdapter"]["getActiveContext"]>>,
     presetId: Parameters<TmdPlugin["runMentionTask"]>[0]
@@ -104,21 +120,31 @@ export class MentionTriggerService {
       throw new Error("Open a Markdown note before using @ante");
     }
 
-    const loadingFrames = ["*", "**", "***", "**"];
     let loadingFrameIndex = 0;
-    const markers = this.createPlaceholderMarkers(crypto.randomUUID());
-    const insertAt = {
+    const loadingSeed = crypto.randomUUID();
+    const markers = this.createPlaceholderMarkers(loadingSeed);
+    const triggerLineText = editor.getLine(triggerLine);
+    const replaceFrom = {
       line: triggerLine,
-      ch: editor.getLine(triggerLine).length
+      ch: triggerStart
     };
+    const replaceTo = {
+      line: triggerLine,
+      ch: triggerLineText.length
+    };
+    const placeholderPrefix = triggerStart > 0 ? "\n\n" : "";
 
     this.performEditorReplace(editor, () => {
-      editor.replaceRange(`\n\n${this.wrapPlaceholder(markers, triggerToken, `> Running${loadingFrames[loadingFrameIndex]}`)}`, insertAt);
+      editor.replaceRange(
+        `${placeholderPrefix}${this.wrapPlaceholder(markers, `> ${formatLoadingLabel(loadingSeed, loadingFrameIndex)}`)}`,
+        replaceFrom,
+        replaceTo
+      );
     });
 
     const updateLoading = () => {
-      loadingFrameIndex = (loadingFrameIndex + 1) % loadingFrames.length;
-      this.replacePlaceholderBody(editor, markers, `> Running${loadingFrames[loadingFrameIndex]}`);
+      loadingFrameIndex += 1;
+      this.replacePlaceholderBody(editor, markers, `> ${formatLoadingLabel(loadingSeed, loadingFrameIndex)}`);
     };
     const timer = window.setInterval(updateLoading, 800);
 
@@ -155,7 +181,7 @@ export class MentionTriggerService {
               this.replacePlaceholderWhole(
                 editor,
                 markers,
-                `> [!failure] ${triggerToken}\n> \n> ${error instanceof Error ? error.message : "Failed to apply change"}`
+                `> [!failure]\n> \n> ${error instanceof Error ? error.message : "Failed to apply change"}`
               );
             }
           })();
@@ -170,11 +196,11 @@ export class MentionTriggerService {
         unsubscribe();
         const failedArtifact = task.artifacts.find((artifact) => artifact.applyState === "failed");
         if (failedArtifact?.applyError) {
-          this.replacePlaceholderWhole(editor, markers, `> [!failure] ${triggerToken}\n> \n> ${failedArtifact.applyError}`);
+          this.replacePlaceholderWhole(editor, markers, `> [!failure]\n> \n> ${failedArtifact.applyError}`);
           return;
         }
 
-        this.replacePlaceholderWhole(editor, markers, `> [!success] ${triggerToken}\n> \n> Applied directly. Open Tmd Results if you want to inspect the diff or revert the change.`);
+        this.replacePlaceholderWhole(editor, markers, `> [!success]\n> \n> Applied directly. Open Tmd Results if you want to inspect the diff or revert the change.`);
         return;
       }
 
@@ -188,11 +214,11 @@ export class MentionTriggerService {
       }
 
       if (task.error) {
-        this.replacePlaceholderWhole(editor, markers, `> [!failure] ${triggerToken}\n> \n> ${task.error}`);
+        this.replacePlaceholderWhole(editor, markers, `> [!failure]\n> \n> ${task.error}`);
         return;
       }
 
-      this.replacePlaceholderWhole(editor, markers, `> [!warning] ${triggerToken}\n> \n> Ante returned no visible result.`);
+      this.replacePlaceholderWhole(editor, markers, `> [!warning]\n> \n> Ante returned no visible result.`);
     });
   }
 
@@ -210,8 +236,8 @@ export class MentionTriggerService {
     return null;
   }
 
-  private wrapPlaceholder(markers: PlaceholderMarkers, triggerToken: string, body: string): string {
-    return `${markers.blockStart}\n> [!ai] ${triggerToken}\n${body}\n${markers.blockEnd}`;
+  private wrapPlaceholder(markers: PlaceholderMarkers, body: string): string {
+    return `${markers.blockStart}\n> [!ante]\n${body}\n${markers.blockEnd}`;
   }
 
   private replacePlaceholderWhole(editor: Editor, markers: PlaceholderMarkers, replacement: string): void {
@@ -236,7 +262,7 @@ export class MentionTriggerService {
       return;
     }
 
-    const headerStart = content.indexOf("\n> [!ai] ", blockStartIndex);
+    const headerStart = content.indexOf("\n> [!ante]", blockStartIndex);
     if (headerStart < 0) {
       return;
     }

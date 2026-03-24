@@ -99,3 +99,48 @@ test("batched changes for the same file collapse into one file artifact", async 
   assert.equal(task?.artifacts[0]?.beforeText, "alpha\n");
   assert.equal(task?.artifacts[0]?.afterText, "alpha\n\nbeta\n\ngamma\n");
 });
+
+test("stdout chunks are aggregated outside the visible log list", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({ type: "log", stream: "stdout", text: "alpha" });
+    onEvent({ type: "log", stream: "stdout", text: " beta" });
+    onEvent({ type: "log", stream: "system", text: "done" });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Stream text"
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.stdoutText, "alpha beta");
+  assert.equal(task?.logs.length, 1);
+  assert.equal(task?.logs[0]?.stream, "system");
+  assert.equal(task?.logs[0]?.text, "done");
+});
+
+test("stdout preview buffer is capped", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({ type: "log", stream: "stdout", text: "a".repeat(12000) });
+    onEvent({ type: "log", stream: "stdout", text: "b".repeat(12000) });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Stream long text"
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.stdoutText.length, 16000);
+  assert.match(task?.stdoutText ?? "", /^a*b+$/);
+});

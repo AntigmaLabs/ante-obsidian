@@ -13,6 +13,7 @@ export type DocumentChangeOperation = "replace-selection" | "append-block" | "re
 export type ApplyState = "pending" | "applying" | "applied" | "reverting" | "reverted" | "failed" | "discarded";
 export type LogStream = "stdout" | "stderr" | "system" | "user";
 export type RuntimeApprovalDecision = "Accept" | "AcceptForSession" | "Skip" | "Abort";
+export type RuntimeProcessStepStatus = "pending" | "in_progress" | "completed";
 
 export interface TextPosition {
   line: number;
@@ -62,6 +63,20 @@ export interface RuntimeApprovalRequest {
   tools: RuntimeApprovalTool[];
 }
 
+export interface RuntimeProcessStep {
+  id: string;
+  label: string;
+  activeLabel?: string;
+  status: RuntimeProcessStepStatus;
+}
+
+export interface RuntimeProcessLane {
+  phase: "planning" | "running" | "paused";
+  label: string;
+  toolName?: string;
+  steps: RuntimeProcessStep[];
+}
+
 export type DocumentChangeTarget =
   | {
       type: "selection";
@@ -109,9 +124,11 @@ export interface TaskRecord {
   context: ContextSnapshot | null;
   status: TaskStatus;
   logs: LogEntry[];
+  stdoutText: string;
   textResult?: TextResult;
   artifacts: DocumentChangeArtifact[];
   pendingApproval?: RuntimeApprovalRequest;
+  processLane?: RuntimeProcessLane;
   error?: string;
   startedAt: string;
   endedAt?: string;
@@ -133,12 +150,14 @@ export interface TaskRequest {
   mode?: "initial" | "followup";
   followUpPrompt?: string;
   runtimeSessionId?: string;
+  reusePriorContext?: boolean;
 }
 
 export type RuntimeEvent =
   | { type: "log"; stream: LogStream; text: string }
   | { type: "runtime.session"; provider: "ante"; sessionId: string }
   | { type: "session.approval"; approval: RuntimeApprovalRequest }
+  | { type: "process.update"; process?: RuntimeProcessLane }
   | { type: "result.text"; text: string }
   | { type: "result.change"; change: RuntimeChangeSuggestion }
   | { type: "result.changes"; changes: RuntimeChangeSuggestion[] }
