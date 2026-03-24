@@ -1,4 +1,5 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian"
+import { handleError } from "./utils"
 import type TmdPlugin from "./main"
 import type {
   ContextSnapshot,
@@ -596,7 +597,7 @@ export class TmdTerminalView extends ItemView {
       }
     })
     this.inlineArtifactsEl = contentEl.createDiv({
-      cls: "tmd-terminal-inline-results",
+      cls: "tmd-terminal-inline-container",
     })
   }
 
@@ -898,7 +899,6 @@ export class TmdTerminalView extends ItemView {
 
     if (this.inlineResolvedTaskId !== task.id) {
       this.inlineExpandedArtifactIds.clear()
-      this.inlineExpandedArtifactIds.add(task.artifacts[0]?.id ?? "")
     }
 
     if (
@@ -933,20 +933,29 @@ export class TmdTerminalView extends ItemView {
     resolvedArtifacts: ResolvedArtifactDiff[],
   ): void {
     this.inlineArtifactsEl.empty()
-    const section = this.inlineArtifactsEl.createDiv({
-      cls: "tmd-terminal-inline-shell",
-    })
-    const titleRow = section.createDiv({ cls: "tmd-terminal-inline-header" })
-    titleRow.createDiv({
-      cls: "tmd-terminal-inline-title",
-      text: "Markdown Changes",
-    })
-
-    renderDiffSummary(section, resolvedArtifacts)
+    const diffList = renderDiffSummary(
+      this.inlineArtifactsEl,
+      resolvedArtifacts,
+      {
+        actionLabel: "Apply all",
+        isActionDisabled: resolvedArtifacts.every(
+          ({ artifact }) =>
+            artifact.applyState === "applied" ||
+            artifact.applyState === "discarded",
+        ),
+        onAction: () => {
+          void this.plugin.taskEngine
+            .applyAllArtifacts(task.id)
+            .catch((error) => {
+              handleError(error, "Failed to apply all changes")
+            })
+        },
+      },
+    )
     for (const resolved of resolvedArtifacts) {
       const { artifact } = resolved
       renderArtifactDiff(
-        section,
+        diffList,
         this.plugin,
         task,
         resolved,

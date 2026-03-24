@@ -1,4 +1,5 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
+import { handleError } from "./utils";
 import type TmdPlugin from "./main";
 import type { TaskRecord, TmdState } from "../core/types";
 import { formatLoadingLabel } from "../core/loading-label";
@@ -87,10 +88,20 @@ export class TmdDiffView extends ItemView {
       return;
     }
 
-    renderDiffSummary(contentEl, resolvedArtifacts);
+    const diffList = renderDiffSummary(contentEl, resolvedArtifacts, {
+      actionLabel: "Apply all",
+      isActionDisabled: resolvedArtifacts.every(
+        ({ artifact }) => artifact.applyState === "applied" || artifact.applyState === "discarded"
+      ),
+      onAction: () => {
+        void this.plugin.taskEngine.applyAllArtifacts(currentTask.id).catch((error) => {
+          handleError(error, "Failed to apply all changes");
+        });
+      }
+    });
 
     for (const resolvedArtifact of resolvedArtifacts) {
-      this.renderArtifact(contentEl, currentTask, resolvedArtifact);
+      this.renderArtifact(diffList, currentTask, resolvedArtifact);
     }
   }
 
@@ -108,9 +119,6 @@ export class TmdDiffView extends ItemView {
       this.expandedArtifactIds.clear();
     }
 
-    if (switchedTask && task.artifacts.length > 0 && this.expandedArtifactIds.size === 0) {
-      this.expandedArtifactIds.add(task.artifacts[0].id);
-    }
   }
 
   private renderTaskSummary(container: HTMLElement, task: TaskRecord): void {

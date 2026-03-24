@@ -2,7 +2,7 @@ import { Notice, setIcon } from "obsidian";
 import type TmdPlugin from "./main";
 import type { DocumentChangeArtifact, TaskRecord } from "../core/types";
 import { buildPatchRows, type PatchRow } from "../core/diff-service";
-import { getArtifactLocationLabel } from "../core/artifacts";
+import { getArtifactTargetPath } from "../core/artifacts";
 
 export type DiffStats = {
   additions: number;
@@ -25,68 +25,10 @@ type RenderableDiffRow = Extract<PatchRow, { kind: "context" | "add" | "remove" 
 
 const formatDiffCount = (value: number, marker: "+" | "-"): string => `${marker}${value}`;
 
+const formatFileCountLabel = (value: number): string => `${value} file${value === 1 ? "" : "s"} changed`;
+
 const assertNever = (value: never): never => {
   throw new Error(`Unexpected value: ${String(value)}`);
-};
-
-const getOperationLabel = (operation: DocumentChangeArtifact["operation"]): string => {
-  switch (operation) {
-    case "replace-selection":
-      return "Replace selection";
-    case "append-block":
-      return "Append block";
-    case "replace-file":
-      return "Replace file";
-    case "create-file":
-      return "Create file";
-    default:
-      return assertNever(operation);
-  }
-};
-
-const formatSourceChanges = (artifact: DocumentChangeArtifact): string =>
-  artifact.sourceChanges
-    .map((change) => `${change.operation} (${change.afterText.length} chars)`)
-    .join("  ->  ");
-
-const getApplyStateLabel = (state: DocumentChangeArtifact["applyState"]): string => {
-  switch (state) {
-    case "pending":
-      return "Pending";
-    case "applying":
-      return "Applying";
-    case "applied":
-      return "Applied";
-    case "reverting":
-      return "Reverting";
-    case "reverted":
-      return "Reverted";
-    case "failed":
-      return "Failed";
-    case "discarded":
-      return "Discarded";
-    default:
-      return assertNever(state);
-  }
-};
-
-const getApplyStateClass = (state: DocumentChangeArtifact["applyState"]): string => {
-  switch (state) {
-    case "applied":
-    case "reverted":
-      return "is-positive";
-    case "failed":
-      return "is-negative";
-    case "applying":
-    case "reverting":
-      return "is-active";
-    case "discarded":
-      return "is-muted";
-    case "pending":
-      return "is-pending";
-    default:
-      return assertNever(state);
-  }
 };
 
 const collectDiffStats = (rows: PatchRow[]): DiffStats =>
@@ -174,13 +116,8 @@ export const renderStatPills = (container: HTMLElement, stats: DiffStats): void 
   }
 };
 
-export const renderDiffSummary = (container: HTMLElement, artifacts: ResolvedArtifactDiff[]): void => {
-  const summary = container.createDiv({ cls: "tmd-diff-summary" });
-  const title = summary.createDiv({ cls: "tmd-diff-summary-title" });
-  const fileCount = artifacts.length;
-  title.createSpan({ text: `${fileCount} file${fileCount === 1 ? "" : "s"} changed` });
-
-  const aggregate = artifacts.reduce<DiffStats>(
+export const collectAggregateDiffStats = (artifacts: ResolvedArtifactDiff[]): DiffStats =>
+  artifacts.reduce<DiffStats>(
     (stats, artifact) => {
       stats.additions += artifact.stats.additions;
       stats.removals += artifact.stats.removals;
@@ -189,7 +126,34 @@ export const renderDiffSummary = (container: HTMLElement, artifacts: ResolvedArt
     { additions: 0, removals: 0 }
   );
 
-  renderStatPills(title, aggregate);
+export interface RenderDiffSummaryOptions {
+  actionLabel?: string;
+  onAction?: () => void;
+  isActionDisabled?: boolean;
+}
+
+export const renderDiffSummary = (
+  container: HTMLElement,
+  artifacts: ResolvedArtifactDiff[],
+  options?: RenderDiffSummaryOptions
+): HTMLElement => {
+  const card = container.createDiv({ cls: "tmd-diff-card" });
+  const summary = card.createDiv({ cls: "tmd-diff-summary" });
+  const title = summary.createDiv({ cls: "tmd-diff-summary-title" });
+  title.createSpan({ cls: "tmd-diff-summary-count", text: formatFileCountLabel(artifacts.length) });
+  renderStatPills(title, collectAggregateDiffStats(artifacts));
+
+  if (options?.onAction) {
+    const actionButton = summary.createEl("button", {
+      cls: "tmd-diff-summary-action",
+      text: options.actionLabel ?? "Apply all"
+    });
+    actionButton.type = "button";
+    actionButton.disabled = Boolean(options.isActionDisabled);
+    actionButton.addEventListener("click", options.onAction);
+  }
+
+  return card.createDiv({ cls: "tmd-diff-card-list" });
 };
 
 export const renderArtifactDiff = (
@@ -211,23 +175,12 @@ export const renderArtifactDiff = (
   headerMain.setAttr("aria-expanded", String(isExpanded));
   headerMain.addEventListener("click", onToggleExpanded);
 
-  const titleRow = headerMain.createDiv({ cls: "tmd-diff-file-title-row" });
-  titleRow.createSpan({ cls: "tmd-diff-file-name", text: artifact.title });
-  titleRow.createSpan({ cls: "tmd-diff-file-chip tmd-is-operation", text: getOperationLabel(artifact.operation) });
-  const locationRow = headerMain.createDiv({ cls: "tmd-diff-file-location" });
-  locationRow.createSpan({ text: getArtifactLocationLabel(artifact) });
-  if (artifact.summary) {
-    headerMain.createDiv({ cls: "tmd-diff-file-summary", text: artifact.summary });
-  }
+  headerMain.createSpan({ cls: "tmd-diff-file-name", text: getArtifactTargetPath(artifact) });
 
   const headerAside = header.createDiv({ cls: "tmd-diff-file-aside" });
   renderStatPills(headerAside, stats);
-  headerAside.createSpan({
-    cls: `tmd-diff-file-chip tmd-diff-state ${getApplyStateClass(artifact.applyState)}`,
-    text: getApplyStateLabel(artifact.applyState)
-  });
   const chevronButton = headerAside.createEl("button", {
-    cls: "tmd-diff-file-chevron"
+    cls: "tmd-diff-file-chevron clickable-icon"
   });
   chevronButton.type = "button";
   chevronButton.setAttr("aria-expanded", String(isExpanded));
@@ -258,25 +211,12 @@ export const renderArtifactDiff = (
 
   const discardButton = actions.createEl("button", { text: "Discard" });
   discardButton.disabled =
-    artifact.applyState === "applied" ||
-    artifact.applyState === "reverted" ||
+    artifact.applyState === "applying" ||
+    artifact.applyState === "reverting" ||
     artifact.applyState === "discarded";
   discardButton.addEventListener("click", () => {
-    plugin.taskEngine.discardArtifact(task.id, artifact.id);
-  });
-
-  const revertButton = actions.createEl("button", { text: artifact.applyState === "reverted" ? "Reverted" : "Revert" });
-  revertButton.disabled = artifact.applyState !== "applied";
-  revertButton.addEventListener("click", () => {
-    void plugin.taskEngine.revertArtifact(task.id, artifact.id).catch((error) => {
-      new Notice(error instanceof Error ? error.message : "Failed to revert change");
-    });
-  });
-
-  const revealButton = actions.createEl("button", { text: "Reveal" });
-  revealButton.addEventListener("click", () => {
-    void plugin.taskEngine.revealArtifact(task.id, artifact.id).catch((error) => {
-      new Notice(error instanceof Error ? error.message : "Failed to reveal file");
+    void plugin.taskEngine.discardArtifact(task.id, artifact.id).catch((error) => {
+      new Notice(error instanceof Error ? error.message : "Failed to discard change");
     });
   });
 
@@ -284,19 +224,21 @@ export const renderArtifactDiff = (
     body.createDiv({ cls: "tmd-error", text: artifact.applyError });
   }
 
-  body.createDiv({
-    cls: "tmd-meta",
-    text: `Raw change chain: ${formatSourceChanges(artifact) || "none"}`
-  });
-  body.createDiv({
-    cls: "tmd-meta",
-    text: `Expanded file text: before ${artifact.beforeText.length} chars -> after ${artifact.afterText.length} chars`
-  });
-
   const patch = body.createDiv({ cls: "tmd-diff-patch" });
-  for (const hunk of hunks) {
+  const patchToolbar = patch.createDiv({ cls: "tmd-diff-patch-toolbar" });
+  patchToolbar.createDiv({
+    cls: "tmd-diff-patch-title",
+    text: hunks[0]?.header ?? "@@"
+  });
+  const toolbarActions = patchToolbar.createDiv({ cls: "tmd-diff-file-actions" });
+  toolbarActions.appendChild(applyButton);
+  toolbarActions.appendChild(discardButton);
+
+  hunks.forEach((hunk, index) => {
     const hunkEl = patch.createDiv({ cls: "tmd-diff-hunk" });
-    hunkEl.createDiv({ cls: "tmd-diff-hunk-header", text: hunk.header });
+    if (index > 0) {
+      hunkEl.createDiv({ cls: "tmd-diff-hunk-header", text: hunk.header });
+    }
     for (const row of hunk.rows) {
       const line = hunkEl.createDiv({ cls: `tmd-diff-line is-${row.kind}` });
       line.createDiv({ cls: "tmd-diff-gutter" });
@@ -305,5 +247,5 @@ export const renderArtifactDiff = (
       line.createDiv({ cls: "tmd-diff-line-marker", text: row.marker });
       line.createDiv({ cls: "tmd-diff-line-text", text: row.text || " " });
     }
-  }
+  });
 };

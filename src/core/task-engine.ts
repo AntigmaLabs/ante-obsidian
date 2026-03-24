@@ -33,6 +33,28 @@ const appendStdoutPreview = (existing: string, incoming: string): string => {
   return combined.slice(-MAX_STDOUT_BUFFER_CHARS);
 };
 
+const deriveTaskStatusFromArtifacts = (task: TaskRecord): TaskRecord["status"] => {
+  if (task.artifacts.length === 0) {
+    return task.status;
+  }
+
+  const states = task.artifacts.map((artifact) => artifact.applyState);
+
+  if (states.some((state) => state === "failed")) {
+    return "failed";
+  }
+  if (states.some((state) => state === "pending" || state === "applying" || state === "reverting")) {
+    return "awaiting-apply";
+  }
+  if (states.every((state) => state === "applied")) {
+    return "applied";
+  }
+  if (states.every((state) => state === "discarded")) {
+    return "discarded";
+  }
+  return "completed";
+};
+
 interface StartDocumentTaskInput {
   presetId: PresetId;
   triggerSource: Exclude<TaskTriggerSource, "console">;
@@ -144,25 +166,66 @@ export class TaskEngine {
       applyState: "applying",
       applyError: undefined
     });
+    this.reconcileTaskStatus(taskId);
 
     try {
       if (!options?.skipHost) {
         await this.host.applyDocumentChange(artifact);
       }
       this.patchArtifact(taskId, artifactId, { applyState: "applied" });
-      this.patchTask(taskId, { status: "applied" });
+      this.reconcileTaskStatus(taskId);
     } catch (error) {
       this.patchArtifact(taskId, artifactId, {
         applyState: "failed",
         applyError: error instanceof Error ? error.message : String(error)
       });
+      this.reconcileTaskStatus(taskId);
       throw error;
     }
   }
 
-  discardArtifact(taskId: string, artifactId: string): void {
+  async discardArtifact(taskId: string, artifactId: string): Promise<void> {
+    const artifact = this.getArtifact(taskId, artifactId);
+
+    if (artifact.applyState === "applied") {
+      this.patchArtifact(taskId, artifactId, {
+        applyState: "reverting",
+        applyError: undefined
+      });
+      this.reconcileTaskStatus(taskId);
+
+      try {
+        await this.host.revertDocumentChange(artifact);
+      } catch (error) {
+        this.patchArtifact(taskId, artifactId, {
+          applyState: "failed",
+          applyError: error instanceof Error ? error.message : String(error)
+        });
+        this.reconcileTaskStatus(taskId);
+        throw error;
+      }
+
+      this.patchArtifact(taskId, artifactId, {
+        applyState: "pending",
+        applyError: undefined
+      });
+      this.reconcileTaskStatus(taskId);
+      return;
+    }
+
     this.patchArtifact(taskId, artifactId, { applyState: "discarded", applyError: undefined });
-    this.patchTask(taskId, { status: "discarded" });
+    this.reconcileTaskStatus(taskId);
+  }
+
+  async applyAllArtifacts(taskId: string): Promise<void> {
+    const task = this.getTask(taskId);
+    const pendingArtifacts = task.artifacts.filter(
+      (artifact) => artifact.applyState !== "applied" && artifact.applyState !== "discarded"
+    );
+
+    for (const artifact of pendingArtifacts) {
+      await this.applyArtifact(taskId, artifact.id);
+    }
   }
 
   async revertArtifact(taskId: string, artifactId: string): Promise<void> {
@@ -171,16 +234,18 @@ export class TaskEngine {
       applyState: "reverting",
       applyError: undefined
     });
+    this.reconcileTaskStatus(taskId);
 
     try {
       await this.host.revertDocumentChange(artifact);
       this.patchArtifact(taskId, artifactId, { applyState: "reverted" });
-      this.patchTask(taskId, { status: "completed" });
+      this.reconcileTaskStatus(taskId);
     } catch (error) {
       this.patchArtifact(taskId, artifactId, {
         applyState: "failed",
         applyError: error instanceof Error ? error.message : String(error)
       });
+      this.reconcileTaskStatus(taskId);
       throw error;
     }
   }
@@ -400,6 +465,11 @@ export class TaskEngine {
     this.patchTask(taskId, {
       artifacts: task.artifacts.map((artifact) => (artifact.id === artifactId ? { ...artifact, ...patch } : artifact))
     });
+  }
+
+  private reconcileTaskStatus(taskId: string): void {
+    const task = this.getTask(taskId);
+    this.patchTask(taskId, { status: deriveTaskStatusFromArtifacts(task) });
   }
 
   private appendInlineChanges(taskId: string, changes: RuntimeChangeSuggestion[]): void {
