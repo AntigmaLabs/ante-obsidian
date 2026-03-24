@@ -1,6 +1,6 @@
 {
   "name": "tmd",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "license": "MIT",
   "description": "Obsidian desktop plugin for Ante-powered terminal Markdown workflows with diff previews and Chat with Ante.",
