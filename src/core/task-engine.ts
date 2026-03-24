@@ -19,6 +19,7 @@ import { createInitialState } from "./types";
 type StateListener = (state: TmdState) => void;
 
 const MAX_STDOUT_BUFFER_CHARS = 16000;
+const STDOUT_FLUSH_INTERVAL_MS = 100;
 
 const appendStdoutPreview = (existing: string, incoming: string): string => {
   if (!incoming) {
@@ -57,7 +58,7 @@ const deriveTaskStatusFromArtifacts = (task: TaskRecord): TaskRecord["status"] =
 
 interface StartDocumentTaskInput {
   presetId: PresetId;
-  triggerSource: Exclude<TaskTriggerSource, "console">;
+  triggerSource: Exclude<TaskTriggerSource, "chat">;
   context?: ContextSnapshot | null;
   inlineInstruction?: string;
   captureChangesAsArtifacts?: boolean;
@@ -103,8 +104,8 @@ export class TaskEngine {
     return request.taskId;
   }
 
-  async startConsoleTask(prompt: string, followUp = false, contextOverride?: ContextSnapshot | null): Promise<string> {
-    return this.startInteractiveTask("console", prompt, followUp, contextOverride);
+  async startChatTask(prompt: string, followUp = false, contextOverride?: ContextSnapshot | null): Promise<string> {
+    return this.startInteractiveTask("chat", prompt, followUp, contextOverride);
   }
 
   async startTerminalTask(prompt: string, followUp = false, contextOverride?: ContextSnapshot | null): Promise<string> {
@@ -112,7 +113,7 @@ export class TaskEngine {
   }
 
   private async startInteractiveTask(
-    triggerSource: "console" | "terminal",
+    triggerSource: "chat" | "terminal",
     prompt: string,
     followUp: boolean,
     contextOverride?: ContextSnapshot | null
@@ -420,7 +421,7 @@ export class TaskEngine {
     if (pending.timer == null) {
       pending.timer = setTimeout(() => {
         this.flushPendingStdout(taskId);
-      }, 33);
+      }, STDOUT_FLUSH_INTERVAL_MS);
     }
     this.pendingStdout.set(taskId, pending);
   }
@@ -447,11 +448,20 @@ export class TaskEngine {
   }
 
   private getTask(taskId: string): TaskRecord {
-    const task = this.state.tasks.find((entry) => entry.id === taskId);
+    const taskIndex = this.getTaskIndex(taskId);
+    const task = this.state.tasks[taskIndex];
     if (!task) {
       throw new Error(`Task not found: ${taskId}`);
     }
     return task;
+  }
+
+  private getTaskIndex(taskId: string): number {
+    const taskIndex = this.state.tasks.findIndex((entry) => entry.id === taskId);
+    if (taskIndex === -1) {
+      throw new Error(`Task not found: ${taskId}`);
+    }
+    return taskIndex;
   }
 
   private getArtifact(taskId: string, artifactId: string): DocumentChangeArtifact {
@@ -463,17 +473,38 @@ export class TaskEngine {
   }
 
   private patchTask(taskId: string, patch: Partial<TaskRecord>): void {
+    const taskIndex = this.getTaskIndex(taskId);
+    const currentTask = this.state.tasks[taskIndex];
+    const patchEntries = Object.entries(patch) as [keyof TaskRecord, TaskRecord[keyof TaskRecord]][];
+    if (patchEntries.every(([key, value]) => currentTask[key] === value)) {
+      return;
+    }
+    const nextTask = { ...currentTask, ...patch };
+
+    const nextTasks = this.state.tasks.slice();
+    nextTasks[taskIndex] = nextTask;
     this.state = {
       ...this.state,
-      tasks: this.state.tasks.map((task) => (task.id === taskId ? { ...task, ...patch } : task))
+      tasks: nextTasks
     };
     this.notify();
   }
 
   private patchArtifact(taskId: string, artifactId: string, patch: Partial<DocumentChangeArtifact>): void {
     const task = this.getTask(taskId);
+    const artifactIndex = task.artifacts.findIndex((artifact) => artifact.id === artifactId);
+    if (artifactIndex === -1) {
+      throw new Error(`Artifact not found: ${artifactId}`);
+    }
+
+    const nextArtifacts = task.artifacts.slice();
+    nextArtifacts[artifactIndex] = {
+      ...nextArtifacts[artifactIndex],
+      ...patch
+    };
+
     this.patchTask(taskId, {
-      artifacts: task.artifacts.map((artifact) => (artifact.id === artifactId ? { ...artifact, ...patch } : artifact))
+      artifacts: nextArtifacts
     });
   }
 

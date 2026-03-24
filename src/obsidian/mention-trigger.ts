@@ -127,7 +127,7 @@ export class MentionTriggerService {
     context: ContextSnapshot;
     presetId: PresetId;
     inlineInstruction?: string;
-    triggerSource?: Exclude<TaskTriggerSource, "console">;
+    triggerSource?: Exclude<TaskTriggerSource, "chat">;
     captureChangesAsArtifacts?: boolean;
   }): Promise<void> {
     const {

@@ -8,7 +8,7 @@ import { TmdSettingTab } from "./settings-tab";
 import { DEFAULT_SETTINGS, normalizeSettings, type TmdSettings } from "./settings";
 import { AnteServeRuntimeAdapter } from "../runtime/ante-serve-adapter";
 import { TMD_DIFF_VIEW_TYPE, TmdDiffView } from "./diff-view";
-import { TMD_CONSOLE_VIEW_TYPE, TmdConsoleView } from "./console-view";
+import { TMD_CHAT_VIEW_TYPE, TmdChatView } from "./chat-view";
 import { TMD_TERMINAL_VIEW_TYPE, TmdTerminalView } from "./terminal-view";
 import type { TaskRecord } from "../core/types";
 import { readAnteDefaults, type AnteDefaults } from "./ante-defaults";
@@ -57,7 +57,7 @@ export default class TmdPlugin extends Plugin {
     this.mentionTrigger = new MentionTriggerService(this.app, this, () => this.settings.mentionTriggerDebug);
 
     this.registerView(TMD_DIFF_VIEW_TYPE, (leaf) => new TmdDiffView(leaf, this));
-    this.registerView(TMD_CONSOLE_VIEW_TYPE, (leaf) => new TmdConsoleView(leaf, this));
+    this.registerView(TMD_CHAT_VIEW_TYPE, (leaf) => new TmdChatView(leaf, this));
     this.registerView(TMD_TERMINAL_VIEW_TYPE, (leaf) => new TmdTerminalView(leaf, this));
 
     this.addSettingTab(new TmdSettingTab(this));
@@ -70,7 +70,7 @@ export default class TmdPlugin extends Plugin {
     this.mentionTrigger?.destroy();
     this.runtime?.dispose();
     this.app.workspace.detachLeavesOfType(TMD_DIFF_VIEW_TYPE);
-    this.app.workspace.detachLeavesOfType(TMD_CONSOLE_VIEW_TYPE);
+    this.app.workspace.detachLeavesOfType(TMD_CHAT_VIEW_TYPE);
     this.app.workspace.detachLeavesOfType(TMD_TERMINAL_VIEW_TYPE);
   }
 
@@ -135,9 +135,9 @@ export default class TmdPlugin extends Plugin {
     }
   }
 
-  async openConsoleView(): Promise<void> {
-    const leaf = await this.ensureLeaf(TMD_CONSOLE_VIEW_TYPE);
-    await leaf.setViewState({ type: TMD_CONSOLE_VIEW_TYPE, active: true });
+  async openChatView(): Promise<void> {
+    const leaf = await this.ensureLeaf(TMD_CHAT_VIEW_TYPE);
+    await leaf.setViewState({ type: TMD_CHAT_VIEW_TYPE, active: true });
     this.app.workspace.revealLeaf(leaf);
   }
 
@@ -271,9 +271,9 @@ export default class TmdPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "open-ante-console",
+      id: "open-ante-chat",
       name: "Chat with Ante",
-      callback: async () => this.openConsoleView()
+      callback: async () => this.openChatView()
     });
 
     this.addCommand({

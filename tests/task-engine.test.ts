@@ -212,3 +212,53 @@ test("stdout preview buffer is capped", async () => {
   assert.equal(task?.stdoutText.length, 16000);
   assert.match(task?.stdoutText ?? "", /^a*b+$/);
 });
+
+test("startChatTask creates a chat task with chat trigger source", async () => {
+  let capturedRequest: TaskRequest | null = null;
+  const runtime = new RuntimeStub((request, onEvent) => {
+    capturedRequest = request;
+    onEvent({ type: "result.text", text: "hello from chat" });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  await engine.startChatTask("Start a chat");
+
+  assert.ok(capturedRequest);
+  assert.equal(capturedRequest?.kind, "chat");
+  assert.equal(capturedRequest?.triggerSource, "chat");
+  assert.equal(capturedRequest?.mode, "initial");
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.kind, "chat");
+  assert.equal(task?.triggerSource, "chat");
+  assert.equal(task?.textResult?.text, "hello from chat");
+});
+
+test("startChatTask follow-up reuses the latest chat session id", async () => {
+  const seenRequests: TaskRequest[] = [];
+  let runCount = 0;
+  const runtime = new RuntimeStub((request, onEvent) => {
+    seenRequests.push(request);
+    runCount += 1;
+    onEvent({
+      type: "runtime.session",
+      provider: "ante",
+      sessionId: runCount === 1 ? "session-1" : "session-2"
+    });
+    onEvent({ type: "result.text", text: runCount === 1 ? "first" : "second" });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  await engine.startChatTask("First turn");
+  await engine.startChatTask("Second turn", true);
+
+  assert.equal(seenRequests.length, 2);
+  assert.equal(seenRequests[0]?.runtimeSessionId, undefined);
+  assert.equal(seenRequests[0]?.mode, "initial");
+  assert.equal(seenRequests[1]?.mode, "followup");
+  assert.equal(seenRequests[1]?.runtimeSessionId, "session-1");
+  assert.equal(seenRequests[1]?.followUpPrompt, "Second turn");
+});

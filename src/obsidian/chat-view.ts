@@ -15,10 +15,19 @@ import {
 import { formatLoadingLabel } from "../core/loading-label";
 import { shouldHandlePromptEnter } from "../core/terminal-input";
 
-export const TMD_CONSOLE_VIEW_TYPE = "tmd-console-view";
+export const TMD_CHAT_VIEW_TYPE = "tmd-chat-view";
 
 const MAX_CHAT_PREVIEW_CHARS = 12000;
 const MAX_CHAT_PREVIEW_LINES = 160;
+
+const hashText = (value: string): string => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+};
 
 const parseJsonPayload = (value: string): unknown | null => {
   const trimmed = value.trim();
@@ -254,7 +263,36 @@ const buildProcessStatusLines = (task: TaskRecord): string[] => {
   return lines;
 };
 
-export class TmdConsoleView extends ItemView {
+interface ChatContextElements {
+  titleEl: HTMLDivElement;
+  valueEl: HTMLDivElement;
+  snippetEl: HTMLDivElement | null;
+}
+
+interface ChatTaskPairElements {
+  userEl: HTMLDivElement;
+  assistantEl: HTMLDivElement;
+}
+
+interface ChatMessageElements {
+  rootEl: HTMLDivElement;
+  bubbleEl: HTMLDivElement;
+  roleEl: HTMLDivElement;
+  stampEl: HTMLDivElement;
+  textEl: HTMLPreElement | null;
+  textSignature: string | null;
+  loadingEl: HTMLDivElement | null;
+  loadingSignature: string | null;
+  processEl: HTMLDivElement | null;
+  processSignature: string | null;
+  artifactsHostEl: HTMLDivElement | null;
+  artifactsSignature: string | null;
+  approvalHostEl: HTMLDivElement | null;
+  approvalSignature: string | null;
+  errorEl: HTMLDivElement | null;
+}
+
+export class TmdChatView extends ItemView {
   private unsubscribe: (() => void) | null = null;
   private loadingTimer: number | null = null;
   private loadingFrame = 0;
@@ -273,13 +311,20 @@ export class TmdConsoleView extends ItemView {
   private timelineEl!: HTMLDivElement;
   private contextEl!: HTMLDivElement;
   private stopButtonEl!: HTMLButtonElement;
+  private emptyStateEl: HTMLDivElement | null = null;
+  private contextNodes: ChatContextElements | null = null;
+  private readonly taskPairEls = new Map<string, ChatTaskPairElements>();
+  private readonly messageEls = new WeakMap<HTMLElement, ChatMessageElements>();
+  private lastRenderedTasks: TaskRecord[] = [];
+  private readonly outputPreviewCache = new Map<string, { signature: string; text: string }>();
+  private readonly streamingPreviewCache = new Map<string, { signature: string; text: string }>();
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: TmdPlugin) {
     super(leaf);
   }
 
   getViewType(): string {
-    return TMD_CONSOLE_VIEW_TYPE;
+    return TMD_CHAT_VIEW_TYPE;
   }
 
   getDisplayText(): string {
@@ -328,6 +373,12 @@ export class TmdConsoleView extends ItemView {
     this.stopButtonEl.addEventListener("click", () => this.plugin.taskEngine.cancelActiveTask());
 
     this.contextEl = this.shellEl.createDiv({ cls: "tmd-chat-contextbar" });
+    this.contextNodes = {
+      titleEl: this.contextEl.createDiv({ cls: "tmd-chat-context-title" }),
+      valueEl: this.contextEl.createDiv({ cls: "tmd-chat-context-value" }),
+      snippetEl: null
+    };
+    this.contextNodes.titleEl.setText("Current context");
     const body = this.shellEl.createDiv({ cls: "tmd-chat-body" });
     this.timelineEl = body.createDiv({ cls: "tmd-chat-timeline" });
 
@@ -373,22 +424,15 @@ export class TmdConsoleView extends ItemView {
   }
 
   private async render(state: TmdState): Promise<void> {
-    const tasks = [...state.tasks.filter((task) => task.triggerSource === "console")].reverse();
+    const tasks = [...state.tasks.filter((task) => task.triggerSource === "chat")].reverse();
     const renderVersion = ++this.renderVersion;
     const shouldStickToBottom = this.shouldStickToBottom();
 
     const diffsByTask = new Map<string, ResolvedArtifactDiff[]>();
+    const artifactTasks = tasks.filter((task) => task.artifacts.length > 0);
     await Promise.all(
-      tasks.map(async (task) => {
-        if (task.artifacts.length === 0) {
-          return;
-        }
-        const signature = [
-          task.id,
-          ...task.artifacts.map(
-            (artifact) => `${artifact.id}:${artifact.applyState}:${artifact.applyError ?? ""}`
-          )
-        ].join("|");
+      artifactTasks.map(async (task) => {
+        const signature = this.buildArtifactResolutionSignature(task);
         const cached = this.resolvedArtifactsCache.get(task.id);
         if (cached?.signature === signature) {
           diffsByTask.set(task.id, cached.diffs);
@@ -404,45 +448,24 @@ export class TmdConsoleView extends ItemView {
       return;
     }
 
-    const latestTask = state.tasks.find((task) => task.triggerSource === "console");
+    const latestTask = state.tasks.find((task) => task.triggerSource === "chat");
     const context =
       this.liveContext ??
       latestTask?.context ??
       state.tasks.find((task) => task.context?.filePath)?.context ??
       null;
 
-    this.contextEl.empty();
-    this.contextEl.createDiv({
-      cls: "tmd-chat-context-title",
-      text: "Current context"
-    });
-    this.contextEl.createDiv({
-      cls: "tmd-chat-context-value",
-      text: summarizeContext(context)
-    });
-    if (context?.selection?.text?.trim()) {
-      this.contextEl.createDiv({
-        cls: "tmd-chat-context-snippet",
-        text: context.selection.text.trim().slice(0, 2000)
-      });
-    }
-
+    this.syncContext(context);
     this.stopButtonEl.disabled = !state.tasks.some((task) => task.status === "running");
 
-    this.timelineEl.empty();
     if (tasks.length === 0) {
-      const empty = this.timelineEl.createDiv({ cls: "tmd-empty tmd-chat-empty" });
-      empty.createEl("p", { text: "No messages yet." });
-      empty.createEl("p", {
-        cls: "tmd-meta",
-        text: "Use the current note as context and start chatting with Ante."
-      });
+      this.syncEmptyState(true);
+      this.pruneTaskPairs([]);
       return;
     }
 
-    for (const task of tasks) {
-      this.renderTaskPair(task, diffsByTask.get(task.id) ?? []);
-    }
+    this.syncEmptyState(false);
+    this.syncTaskPairs(tasks, diffsByTask);
 
     this.pruneResolvedArtifactCache(tasks);
     if (shouldStickToBottom) {
@@ -450,61 +473,300 @@ export class TmdConsoleView extends ItemView {
     }
   }
 
-  private renderTaskPair(task: TaskRecord, resolvedArtifacts: ResolvedArtifactDiff[]): void {
-    this.renderUserMessage(task);
-    this.renderAssistantMessage(task, resolvedArtifacts);
+  private syncContext(context: ContextSnapshot | null): void {
+    if (!this.contextNodes) {
+      return;
+    }
+
+    const summary = summarizeContext(context);
+    if (this.contextNodes.valueEl.dataset.value !== summary) {
+      this.contextNodes.valueEl.dataset.value = summary;
+      this.contextNodes.valueEl.setText(summary);
+    }
+
+    const snippet = context?.selection?.text?.trim().slice(0, 2000) ?? "";
+    const existingSnippetEl = this.contextNodes.snippetEl;
+    if (!snippet) {
+      existingSnippetEl?.remove();
+      this.contextNodes.snippetEl = null;
+      return;
+    }
+
+    const snippetEl =
+      existingSnippetEl ??
+      this.contextEl.createDiv({
+        cls: "tmd-chat-context-snippet"
+      });
+    if (snippetEl.dataset.value !== snippet) {
+      snippetEl.dataset.value = snippet;
+      snippetEl.setText(snippet);
+    }
+    this.contextNodes.snippetEl = snippetEl;
   }
 
-  private renderUserMessage(task: TaskRecord): void {
-    const message = this.timelineEl.createDiv({ cls: "tmd-chat-message tmd-is-user" });
-    const bubble = message.createDiv({ cls: "tmd-chat-bubble" });
-    const meta = bubble.createDiv({ cls: "tmd-chat-meta" });
-    meta.createDiv({ cls: "tmd-chat-role", text: "You" });
-    meta.createDiv({ cls: "tmd-chat-stamp", text: formatTime(task.startedAt) });
-    bubble.createEl("p", {
-      cls: "tmd-chat-text",
-      text: task.inlineInstruction || "(empty prompt)"
+  private syncEmptyState(isEmpty: boolean): void {
+    if (!isEmpty) {
+      this.emptyStateEl?.remove();
+      this.emptyStateEl = null;
+      return;
+    }
+
+    this.pruneTaskPairs([]);
+    if (this.emptyStateEl) {
+      return;
+    }
+
+    const empty = this.timelineEl.createDiv({ cls: "tmd-empty tmd-chat-empty" });
+    empty.createEl("p", { text: "No messages yet." });
+    empty.createEl("p", {
+      cls: "tmd-meta",
+      text: "Use the current note as context and start chatting with Ante."
     });
+    this.emptyStateEl = empty;
   }
 
-  private renderAssistantMessage(task: TaskRecord, resolvedArtifacts: ResolvedArtifactDiff[]): void {
-    const message = this.timelineEl.createDiv({ cls: "tmd-chat-message tmd-is-assistant" });
-    const bubble = message.createDiv({ cls: "tmd-chat-bubble" });
-    const meta = bubble.createDiv({ cls: "tmd-chat-meta" });
-    meta.createDiv({
-      cls: "tmd-chat-role",
-      text: task.status === "running" ? "Ante is thinking" : "Ante"
-    });
-    meta.createDiv({ cls: "tmd-chat-stamp", text: formatTime(task.endedAt ?? task.startedAt) });
+  private syncTaskPairs(
+    tasks: TaskRecord[],
+    diffsByTask: Map<string, ResolvedArtifactDiff[]>
+  ): void {
+    this.lastRenderedTasks = tasks;
+    let previousEl: HTMLElement | null = null;
+    for (const task of tasks) {
+      const pair = this.syncTaskPair(task, diffsByTask.get(task.id) ?? []);
+      for (const element of [pair.userEl, pair.assistantEl]) {
+        const anchor: ChildNode | null = previousEl
+          ? previousEl.nextSibling
+          : this.timelineEl.firstChild;
+        if (element !== anchor) {
+          this.timelineEl.insertBefore(element, anchor);
+        }
+        previousEl = element;
+      }
+    }
 
-    const text = task.status === "running" ? buildStreamingPreview(task) : analyzeOutput(task);
+    this.pruneTaskPairs(tasks);
+  }
+
+  private syncTaskPair(task: TaskRecord, resolvedArtifacts: ResolvedArtifactDiff[]): ChatTaskPairElements {
+    let pair = this.taskPairEls.get(task.id);
+    if (!pair) {
+      pair = {
+        userEl: this.createMessageElement("user"),
+        assistantEl: this.createMessageElement("assistant")
+      };
+      this.taskPairEls.set(task.id, pair);
+    }
+
+    this.syncUserMessage(pair.userEl, task);
+    this.syncAssistantMessage(pair.assistantEl, task, resolvedArtifacts);
+    return pair;
+  }
+
+  private pruneTaskPairs(tasks: TaskRecord[]): void {
+    const activeTaskIds = new Set(tasks.map((task) => task.id));
+    this.lastRenderedTasks = this.lastRenderedTasks.filter((task) => activeTaskIds.has(task.id));
+    for (const [taskId, pair] of Array.from(this.taskPairEls.entries())) {
+      if (activeTaskIds.has(taskId)) {
+        continue;
+      }
+      pair.userEl.remove();
+      pair.assistantEl.remove();
+      this.taskPairEls.delete(taskId);
+    }
+  }
+
+  private createMessageElement(kind: "user" | "assistant"): HTMLDivElement {
+    const rootEl = createDiv({
+      cls: `tmd-chat-message ${kind === "user" ? "tmd-is-user" : "tmd-is-assistant"}`
+    });
+    const bubbleEl = rootEl.createDiv({ cls: "tmd-chat-bubble" });
+    const metaEl = bubbleEl.createDiv({ cls: "tmd-chat-meta" });
+    const roleEl = metaEl.createDiv({ cls: "tmd-chat-role" });
+    const stampEl = metaEl.createDiv({ cls: "tmd-chat-stamp" });
+    this.messageEls.set(rootEl, {
+      rootEl,
+      bubbleEl,
+      roleEl,
+      stampEl,
+      textEl: null,
+      textSignature: null,
+      loadingEl: null,
+      loadingSignature: null,
+      processEl: null,
+      processSignature: null,
+      artifactsHostEl: null,
+      artifactsSignature: null,
+      approvalHostEl: null,
+      approvalSignature: null,
+      errorEl: null
+    });
+    return rootEl;
+  }
+
+  private syncUserMessage(messageEl: HTMLDivElement, task: TaskRecord): void {
+    const elements = this.getMessageElements(messageEl);
+    this.setTextIfChanged(elements.roleEl, "You");
+    this.setTextIfChanged(elements.stampEl, formatTime(task.startedAt));
+    const text = task.inlineInstruction || "(empty prompt)";
+    this.syncMessageText(elements, text, `user:${text}`);
+  }
+
+  private syncAssistantMessage(
+    messageEl: HTMLDivElement,
+    task: TaskRecord,
+    resolvedArtifacts: ResolvedArtifactDiff[]
+  ): void {
+    const elements = this.getMessageElements(messageEl);
+    this.setTextIfChanged(elements.roleEl, task.status === "running" ? "Ante is thinking" : "Ante");
+    this.setTextIfChanged(elements.stampEl, formatTime(task.endedAt ?? task.startedAt));
+    const text = task.status === "running" ? this.getStreamingPreview(task) : this.getAnalyzedOutput(task);
     if (text) {
-      bubble.createEl("pre", { cls: "tmd-chat-text tmd-chat-pre", text });
+      this.syncMessageText(elements, text, `${task.status}:${text}`);
+      this.removeLoading(elements);
     } else if (task.status === "running") {
-      bubble.createDiv({ cls: "tmd-chat-loading", text: loadingLabelForTask(task, this.loadingFrame) });
+      this.removeText(elements);
+      this.syncLoading(elements, loadingLabelForTask(task, this.loadingFrame));
+    } else {
+      this.removeText(elements);
+      this.removeLoading(elements);
     }
 
     if (task.status === "running") {
       const processLines = buildProcessStatusLines(task);
-      if (processLines.length > 0) {
-        const processBlock = bubble.createDiv({ cls: "tmd-chat-process" });
-        for (const line of processLines) {
-          processBlock.createDiv({ cls: "tmd-chat-process-line", text: line });
-        }
-      }
+      this.syncProcessLines(elements, processLines);
+    } else {
+      this.removeProcess(elements);
     }
 
     if (resolvedArtifacts.length > 0) {
-      this.renderArtifacts(bubble, task, resolvedArtifacts);
+      this.syncArtifacts(elements, task, resolvedArtifacts);
+    } else {
+      this.removeArtifacts(elements);
     }
 
     if (task.pendingApproval) {
-      this.renderApproval(bubble, task);
+      this.syncApproval(elements, task);
+    } else {
+      this.removeApproval(elements);
     }
 
     if (task.error) {
-      bubble.createDiv({ cls: "tmd-error", text: task.error });
+      this.syncError(elements, task.error);
+    } else {
+      this.removeError(elements);
     }
+  }
+
+  private syncMessageText(elements: ChatMessageElements, text: string, signature: string): void {
+    if (elements.textEl && elements.textSignature === signature) {
+      return;
+    }
+    const textEl =
+      elements.textEl ??
+      elements.bubbleEl.createEl("pre", { cls: "tmd-chat-text tmd-chat-pre" });
+    this.setTextIfChanged(textEl, text);
+    elements.textEl = textEl;
+    elements.textSignature = signature;
+  }
+
+  private removeText(elements: ChatMessageElements): void {
+    elements.textEl?.remove();
+    elements.textEl = null;
+    elements.textSignature = null;
+  }
+
+  private syncLoading(elements: ChatMessageElements, text: string): void {
+    if (elements.loadingEl && elements.loadingSignature === text) {
+      return;
+    }
+    const loadingEl =
+      elements.loadingEl ??
+      elements.bubbleEl.createDiv({ cls: "tmd-chat-loading" });
+    this.setTextIfChanged(loadingEl, text);
+    elements.loadingEl = loadingEl;
+    elements.loadingSignature = text;
+  }
+
+  private removeLoading(elements: ChatMessageElements): void {
+    elements.loadingEl?.remove();
+    elements.loadingEl = null;
+    elements.loadingSignature = null;
+  }
+
+  private syncProcessLines(elements: ChatMessageElements, lines: string[]): void {
+    if (lines.length === 0) {
+      this.removeProcess(elements);
+      return;
+    }
+
+    const signature = lines.join("\n");
+    if (elements.processEl && elements.processSignature === signature) {
+      return;
+    }
+
+    const processEl =
+      elements.processEl ??
+      elements.bubbleEl.createDiv({ cls: "tmd-chat-process" });
+    const nextKeys = new Set(lines.map((_, index) => String(index)));
+    const existing = new Map<string, HTMLDivElement>();
+    Array.from(processEl.children).forEach((child, index) => {
+      if (child instanceof HTMLDivElement) {
+        existing.set(String(index), child);
+      }
+    });
+
+    for (const [key, lineEl] of existing.entries()) {
+      if (!nextKeys.has(key)) {
+        lineEl.remove();
+      }
+    }
+
+    let previousEl: HTMLElement | null = null;
+    for (const [index, line] of lines.entries()) {
+      const key = String(index);
+      let lineEl = existing.get(key);
+      if (!lineEl) {
+        lineEl = processEl.createDiv({ cls: "tmd-chat-process-line" });
+      }
+      this.setTextIfChanged(lineEl, line);
+      const anchor: ChildNode | null = previousEl ? previousEl.nextSibling : processEl.firstChild;
+      processEl.insertBefore(lineEl, anchor);
+      previousEl = lineEl;
+    }
+
+    elements.processEl = processEl;
+    elements.processSignature = signature;
+  }
+
+  private removeProcess(elements: ChatMessageElements): void {
+    elements.processEl?.remove();
+    elements.processEl = null;
+    elements.processSignature = null;
+  }
+
+  private syncArtifacts(
+    elements: ChatMessageElements,
+    task: TaskRecord,
+    resolvedArtifacts: ResolvedArtifactDiff[]
+  ): void {
+    const signature = this.buildArtifactsSignature(task, resolvedArtifacts);
+    if (elements.artifactsHostEl && elements.artifactsSignature === signature) {
+      return;
+    }
+
+    const host =
+      elements.artifactsHostEl ??
+      elements.bubbleEl.createDiv({ cls: "tmd-chat-artifacts-host" });
+    host.empty();
+    this.renderArtifacts(host, task, resolvedArtifacts);
+    elements.artifactsHostEl = host;
+    elements.artifactsSignature = signature;
+  }
+
+  private removeArtifacts(elements: ChatMessageElements): void {
+    elements.artifactsHostEl?.remove();
+    elements.artifactsHostEl = null;
+    elements.artifactsSignature = null;
   }
 
   private renderArtifacts(container: HTMLElement, task: TaskRecord, resolvedArtifacts: ResolvedArtifactDiff[]): void {
@@ -558,6 +820,37 @@ export class TmdConsoleView extends ItemView {
     }
   }
 
+  private syncApproval(elements: ChatMessageElements, task: TaskRecord): void {
+    const approval = task.pendingApproval;
+    if (!approval) {
+      this.removeApproval(elements);
+      return;
+    }
+
+    const signature = [
+      approval.turnId,
+      approval.message,
+      ...approval.tools.map((tool) => `${tool.id}:${tool.name}:${tool.argsText ?? ""}`)
+    ].join("|");
+    if (elements.approvalHostEl && elements.approvalSignature === signature) {
+      return;
+    }
+
+    const host =
+      elements.approvalHostEl ??
+      elements.bubbleEl.createDiv({ cls: "tmd-chat-approval-host" });
+    host.empty();
+    this.renderApproval(host, task);
+    elements.approvalHostEl = host;
+    elements.approvalSignature = signature;
+  }
+
+  private removeApproval(elements: ChatMessageElements): void {
+    elements.approvalHostEl?.remove();
+    elements.approvalHostEl = null;
+    elements.approvalSignature = null;
+  }
+
   private renderApproval(container: HTMLElement, task: TaskRecord): void {
     const approval = task.pendingApproval;
     if (!approval) {
@@ -596,6 +889,95 @@ export class TmdConsoleView extends ItemView {
     this.renderApprovalAction(actionRow, task.id, "Deny", "Skip", "tmd-is-deny");
   }
 
+  private syncError(elements: ChatMessageElements, error: string): void {
+    const errorEl =
+      elements.errorEl ??
+      elements.bubbleEl.createDiv({ cls: "tmd-error" });
+    this.setTextIfChanged(errorEl, error);
+    elements.errorEl = errorEl;
+  }
+
+  private removeError(elements: ChatMessageElements): void {
+    elements.errorEl?.remove();
+    elements.errorEl = null;
+  }
+
+  private getMessageElements(messageEl: HTMLDivElement): ChatMessageElements {
+    const elements = this.messageEls.get(messageEl);
+    if (!elements) {
+      throw new Error("Missing chat message elements");
+    }
+    return elements;
+  }
+
+  private setTextIfChanged(el: HTMLElement, text: string): void {
+    if (el.dataset.value === text) {
+      return;
+    }
+    el.dataset.value = text;
+    el.setText(text);
+  }
+
+  private buildArtifactResolutionSignature(task: TaskRecord): string {
+    return [
+      task.id,
+      ...task.artifacts.map((artifact) =>
+        [
+          artifact.id,
+          artifact.applyState,
+          artifact.applyError ?? "",
+          hashText(artifact.beforeText),
+          hashText(artifact.afterText)
+        ].join(":")
+      )
+    ].join("|");
+  }
+
+  private buildArtifactsSignature(task: TaskRecord, resolvedArtifacts: ResolvedArtifactDiff[]): string {
+    return [
+      task.id,
+      this.expandedStateTaskId === task.id ? "active" : "inactive",
+      ...resolvedArtifacts.map(({ artifact, hunks, stats }) =>
+        [
+          artifact.id,
+          artifact.applyState,
+          artifact.applyError ?? "",
+          this.expandedArtifactIds.has(artifact.id) ? "expanded" : "collapsed",
+          stats.additions,
+          stats.removals,
+          hunks.length
+        ].join(":")
+      )
+    ].join("|");
+  }
+
+  private getAnalyzedOutput(task: TaskRecord): string {
+    const signature = [
+      task.textResult?.text ?? "",
+      task.stdoutText,
+      task.status,
+      task.artifacts.length
+    ].join("|");
+    const cached = this.outputPreviewCache.get(task.id);
+    if (cached?.signature === signature) {
+      return cached.text;
+    }
+    const text = analyzeOutput(task);
+    this.outputPreviewCache.set(task.id, { signature, text });
+    return text;
+  }
+
+  private getStreamingPreview(task: TaskRecord): string {
+    const signature = `${task.status}:${task.stdoutText}`;
+    const cached = this.streamingPreviewCache.get(task.id);
+    if (cached?.signature === signature) {
+      return cached.text;
+    }
+    const text = buildStreamingPreview(task);
+    this.streamingPreviewCache.set(task.id, { signature, text });
+    return text;
+  }
+
   private renderApprovalAction(
     container: HTMLElement,
     taskId: string,
@@ -623,14 +1005,14 @@ export class TmdConsoleView extends ItemView {
     }
 
     const latestConsoleSession = (this.latestState ?? this.plugin.taskEngine.getState()).tasks.find(
-      (task) => task.triggerSource === "console" && task.runtimeSession?.sessionId
+      (task) => task.triggerSource === "chat" && task.runtimeSession?.sessionId
     )?.runtimeSession;
 
     void this.plugin.hostAdapter
       .capturePreferredContext()
       .then((contextSnapshot) => {
         this.liveContext = contextSnapshot;
-        return this.plugin.taskEngine.startConsoleTask(prompt, Boolean(latestConsoleSession), contextSnapshot);
+        return this.plugin.taskEngine.startChatTask(prompt, Boolean(latestConsoleSession), contextSnapshot);
       })
       .then(() => {
         this.composerEl.value = "";
@@ -641,17 +1023,15 @@ export class TmdConsoleView extends ItemView {
   }
 
   private syncLoadingTimer(state: TmdState): void {
-    const consoleTasks = state.tasks.filter((task) => task.triggerSource === "console");
-    const shouldAnimate = consoleTasks
+    const chatTasks = state.tasks.filter((task) => task.triggerSource === "chat");
+    const shouldAnimate = chatTasks
       .filter((task) => task.status === "running")
       .some((task) => !buildStreamingPreview(task) && !task.pendingApproval);
 
     if (shouldAnimate && this.loadingTimer == null) {
       this.loadingTimer = window.setInterval(() => {
         this.loadingFrame = (this.loadingFrame + 1) % 4;
-        if (this.latestState) {
-          void this.render(this.latestState);
-        }
+        this.refreshLoadingIndicators();
       }, 500);
       return;
     }
@@ -660,6 +1040,25 @@ export class TmdConsoleView extends ItemView {
       window.clearInterval(this.loadingTimer);
       this.loadingTimer = null;
       this.loadingFrame = 0;
+    }
+  }
+
+  private refreshLoadingIndicators(): void {
+    for (const task of this.lastRenderedTasks) {
+      if (task.status !== "running") {
+        continue;
+      }
+      const pair = this.taskPairEls.get(task.id);
+      if (!pair) {
+        continue;
+      }
+      const elements = this.getMessageElements(pair.assistantEl);
+      const hasStreamingPreview = Boolean(this.getStreamingPreview(task));
+      if (hasStreamingPreview || task.pendingApproval) {
+        this.removeLoading(elements);
+        continue;
+      }
+      this.syncLoading(elements, loadingLabelForTask(task, this.loadingFrame));
     }
   }
 
@@ -676,6 +1075,16 @@ export class TmdConsoleView extends ItemView {
     for (const taskId of Array.from(this.resolvedArtifactsCache.keys())) {
       if (!activeTaskIds.has(taskId)) {
         this.resolvedArtifactsCache.delete(taskId);
+      }
+    }
+    for (const taskId of Array.from(this.outputPreviewCache.keys())) {
+      if (!activeTaskIds.has(taskId)) {
+        this.outputPreviewCache.delete(taskId);
+      }
+    }
+    for (const taskId of Array.from(this.streamingPreviewCache.keys())) {
+      if (!activeTaskIds.has(taskId)) {
+        this.streamingPreviewCache.delete(taskId);
       }
     }
   }

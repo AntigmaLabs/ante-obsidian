@@ -23,6 +23,26 @@ const terminalRequest = (overrides: Partial<TaskRequest> = {}): TaskRequest => (
   ...overrides
 });
 
+const chatRequest = (overrides: Partial<TaskRequest> = {}): TaskRequest => ({
+  taskId: "task-chat-1",
+  kind: "chat",
+  triggerSource: "chat",
+  preset: {
+    id: "default",
+    label: "@ante",
+    goal: "Discuss the current Markdown content before editing anything.",
+    systemInstructions: "Prefer answering directly unless the user asks for file changes."
+  },
+  context: {
+    filePath: "Inbox.md",
+    noteTitle: "Inbox",
+    documentText: "# Inbox\n\n- follow up with design team\n",
+    selection: null
+  },
+  inlineInstruction: "What should I do next?",
+  ...overrides
+});
+
 test("terminal prompt prioritizes provided note context over workspace search", () => {
   const prompt = buildInteractivePrompt(terminalRequest());
 
@@ -40,4 +60,14 @@ test("terminal prompt requires batched change JSON for multiple markdown file ed
   assert.match(prompt, /For multiple Markdown changes/);
   assert.match(prompt, /"type":"changes"/);
   assert.match(prompt, /do not use Bash, Write, or other tools to modify files directly/i);
+});
+
+test("chat prompt uses the chat-specific framing and includes note context", () => {
+  const prompt = buildInteractivePrompt(chatRequest());
+
+  assert.match(prompt, /Chat with Ante in an Obsidian vault/i);
+  assert.match(prompt, /Preset: @ante/);
+  assert.match(prompt, /User instruction:\nWhat should I do next\?/);
+  assert.match(prompt, /Current note path: Inbox\.md/);
+  assert.match(prompt, /follow up with design team/);
 });

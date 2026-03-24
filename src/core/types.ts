@@ -1,6 +1,6 @@
 export type PresetId = "default" | "research" | "plan" | "summary";
-export type TaskTriggerSource = "mention" | "context-menu" | "command" | "console" | "terminal";
-export type TaskKind = "document" | "console" | "terminal";
+export type TaskTriggerSource = "mention" | "context-menu" | "command" | "chat" | "terminal";
+export type TaskKind = "document" | "chat" | "terminal";
 export type TaskStatus =
   | "idle"
   | "running"

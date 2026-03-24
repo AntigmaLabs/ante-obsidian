@@ -28,7 +28,7 @@ export const populateEditorMenu = (menu: Menu, editor: Editor, plugin: TmdPlugin
     entry
       .setTitle("Chat with Ante")
       .setIcon("terminal-square")
-      .onClick(() => void plugin.openConsoleView())
+      .onClick(() => void plugin.openChatView())
   );
 
   menu.addItem((entry) =>
