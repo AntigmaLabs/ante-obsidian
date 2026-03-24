@@ -70,6 +70,7 @@ export const toDocumentChangeArtifact = (
         },
         beforeText: context.documentText,
         afterText: replaceSelectionInDocument(context.documentText, context.selection, change.afterText),
+        sourceChanges: [{ ...change }],
         applyState: "pending"
       };
     }
@@ -89,6 +90,7 @@ export const toDocumentChangeArtifact = (
         },
         beforeText: existingTargetText,
         afterText: appendMarkdownBlock(existingTargetText, change.afterText),
+        sourceChanges: [{ ...change }],
         applyState: "pending"
       };
     }
@@ -108,6 +110,7 @@ export const toDocumentChangeArtifact = (
         },
         beforeText: existingTargetText,
         afterText: change.afterText,
+        sourceChanges: [{ ...change }],
         applyState: "pending"
       };
     }
@@ -127,6 +130,7 @@ export const toDocumentChangeArtifact = (
         },
         beforeText: "",
         afterText: change.afterText,
+        sourceChanges: [{ ...change }],
         applyState: "pending"
       };
     }

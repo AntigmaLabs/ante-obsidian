@@ -44,6 +44,11 @@ const getOperationLabel = (operation: DocumentChangeArtifact["operation"]): stri
   }
 };
 
+const formatSourceChanges = (artifact: DocumentChangeArtifact): string =>
+  artifact.sourceChanges
+    .map((change) => `${change.operation} (${change.afterText.length} chars)`)
+    .join("  ->  ");
+
 const getApplyStateLabel = (state: DocumentChangeArtifact["applyState"]): string => {
   switch (state) {
     case "pending":
@@ -278,6 +283,15 @@ export const renderArtifactDiff = (
   if (artifact.applyError) {
     body.createDiv({ cls: "tmd-error", text: artifact.applyError });
   }
+
+  body.createDiv({
+    cls: "tmd-meta",
+    text: `Raw change chain: ${formatSourceChanges(artifact) || "none"}`
+  });
+  body.createDiv({
+    cls: "tmd-meta",
+    text: `Expanded file text: before ${artifact.beforeText.length} chars -> after ${artifact.afterText.length} chars`
+  });
 
   const patch = body.createDiv({ cls: "tmd-diff-patch" });
   for (const hunk of hunks) {

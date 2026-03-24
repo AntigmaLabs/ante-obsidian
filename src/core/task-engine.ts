@@ -79,16 +79,21 @@ export class TaskEngine {
     return request.taskId;
   }
 
-  async startConsoleTask(prompt: string, followUp = false): Promise<string> {
-    return this.startInteractiveTask("console", prompt, followUp);
+  async startConsoleTask(prompt: string, followUp = false, contextOverride?: ContextSnapshot | null): Promise<string> {
+    return this.startInteractiveTask("console", prompt, followUp, contextOverride);
   }
 
-  async startTerminalTask(prompt: string, followUp = false): Promise<string> {
-    return this.startInteractiveTask("terminal", prompt, followUp);
+  async startTerminalTask(prompt: string, followUp = false, contextOverride?: ContextSnapshot | null): Promise<string> {
+    return this.startInteractiveTask("terminal", prompt, followUp, contextOverride);
   }
 
-  private async startInteractiveTask(triggerSource: "console" | "terminal", prompt: string, followUp: boolean): Promise<string> {
-    const context = (await this.host.getPreferredContext()) ?? {
+  private async startInteractiveTask(
+    triggerSource: "console" | "terminal",
+    prompt: string,
+    followUp: boolean,
+    contextOverride?: ContextSnapshot | null
+  ): Promise<string> {
+    const context = contextOverride ?? (await this.host.getPreferredContext()) ?? {
       filePath: null,
       noteTitle: null,
       documentText: null,
@@ -465,6 +470,7 @@ export class TaskEngine {
       id: previous.id,
       operation: previous.operation === "create-file" ? "create-file" : next.operation,
       beforeText: previous.beforeText,
+      sourceChanges: [...previous.sourceChanges, ...next.sourceChanges],
       applyState: previous.applyState === "applied" ? "pending" : next.applyState,
       applyError: undefined
     };

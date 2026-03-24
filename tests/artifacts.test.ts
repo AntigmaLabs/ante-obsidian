@@ -22,4 +22,6 @@ test("replace-selection can overwrite a trailing @ante trigger outside selection
 
   const artifact = toDocumentChangeArtifact(change, context, context.documentText ?? "");
   assert.equal(artifact.afterText, "New draft");
+  assert.equal(artifact.sourceChanges.length, 1);
+  assert.equal(artifact.sourceChanges[0]?.afterText, "New draft");
 });

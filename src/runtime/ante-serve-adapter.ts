@@ -41,6 +41,11 @@ type ActiveRun = {
   emittedStdout: boolean;
   completed: boolean;
   processLane?: RuntimeProcessLane;
+  startedAtMs: number;
+  userInputSentAtMs?: number;
+  sessionReadyAtMs?: number;
+  firstEventAtMs?: number;
+  firstStdoutAtMs?: number;
 };
 
 type AnteServerState = {
@@ -52,6 +57,12 @@ type WarmupState = {
   promise: Promise<void>;
   resolve: () => void;
   reject: (error: Error) => void;
+};
+
+const logDebug = (...args: unknown[]): void => {
+  if (globalThis.localStorage?.getItem("tmd-debug") === "true") {
+    console.info("[tmd]", ...args);
+  }
 };
 
 const canExecuteFile = (filePath: string): boolean => {
@@ -571,7 +582,8 @@ export class AnteServeRuntimeAdapter {
       autoApproveTools: config.autoApproveTools,
       finalMessage: "",
       emittedStdout: false,
-      completed: false
+      completed: false,
+      startedAtMs: performance.now()
     };
 
     if (this.sessionId) {
@@ -710,6 +722,7 @@ export class AnteServeRuntimeAdapter {
         if (!this.activeRun) {
           return;
         }
+        this.activeRun.sessionReadyAtMs = performance.now();
         this.activeRun.observer.onEvent({ type: "runtime.session", provider: "ante", sessionId });
         this.sendUserInput(this.activeRun.request);
         return;
@@ -727,6 +740,12 @@ export class AnteServeRuntimeAdapter {
         if (!delta) {
           return;
         }
+        if (this.activeRun.firstEventAtMs == null) {
+          this.activeRun.firstEventAtMs = performance.now();
+        }
+        if (this.activeRun.firstStdoutAtMs == null) {
+          this.activeRun.firstStdoutAtMs = this.activeRun.firstEventAtMs;
+        }
         this.activeRun.finalMessage += delta;
         this.activeRun.observer.onEvent({ type: "log", stream: "stdout", text: delta });
         this.activeRun.emittedStdout = true;
@@ -737,6 +756,12 @@ export class AnteServeRuntimeAdapter {
         if (!message.trim()) {
           return;
         }
+        if (this.activeRun.firstEventAtMs == null) {
+          this.activeRun.firstEventAtMs = performance.now();
+        }
+        if (this.activeRun.firstStdoutAtMs == null) {
+          this.activeRun.firstStdoutAtMs = this.activeRun.firstEventAtMs;
+        }
         this.activeRun.finalMessage = message;
         this.activeRun.observer.onEvent({ type: "log", stream: "stdout", text: message });
         this.activeRun.emittedStdout = true;
@@ -745,6 +770,9 @@ export class AnteServeRuntimeAdapter {
       case "ToolStart":
       case "ToolUpdate":
       case "TurnStart": {
+        if (this.activeRun.firstEventAtMs == null) {
+          this.activeRun.firstEventAtMs = performance.now();
+        }
         const process =
           variant.name === "TurnStart"
             ? undefined
@@ -764,6 +792,9 @@ export class AnteServeRuntimeAdapter {
         return;
       }
       case "ToolEnd": {
+        if (this.activeRun.firstEventAtMs == null) {
+          this.activeRun.firstEventAtMs = performance.now();
+        }
         const process = buildProcessLaneFromToolPayload("ToolEnd", variant.payload, this.activeRun.processLane);
         if (process) {
           this.activeRun.processLane = process;
@@ -779,6 +810,9 @@ export class AnteServeRuntimeAdapter {
         return;
       }
       case "TurnPause": {
+        if (this.activeRun.firstEventAtMs == null) {
+          this.activeRun.firstEventAtMs = performance.now();
+        }
         const approval = extractTurnPauseApproval(variant.payload);
         if (approval) {
           this.activeRun.processLane = {
@@ -827,6 +861,23 @@ export class AnteServeRuntimeAdapter {
         const status = extractTurnStatus(variant.payload)?.toLowerCase();
         const errorMessage = extractErrorMessage(variant.payload);
         const isSuccess = Boolean(status && ["completed", "success", "succeeded", "ok"].includes(status));
+        const completedAtMs = performance.now();
+        const totalMs = Math.round(completedAtMs - this.activeRun.startedAtMs);
+        const sessionBootMs =
+          this.activeRun.sessionReadyAtMs != null
+            ? Math.round(this.activeRun.sessionReadyAtMs - this.activeRun.startedAtMs)
+            : null;
+        const postSendToFirstEventMs =
+          this.activeRun.userInputSentAtMs != null && this.activeRun.firstEventAtMs != null
+            ? Math.round(this.activeRun.firstEventAtMs - this.activeRun.userInputSentAtMs)
+            : null;
+        const postSendToFirstStdoutMs =
+          this.activeRun.userInputSentAtMs != null && this.activeRun.firstStdoutAtMs != null
+            ? Math.round(this.activeRun.firstStdoutAtMs - this.activeRun.userInputSentAtMs)
+            : null;
+        logDebug(
+          `timing total=${totalMs}ms${sessionBootMs != null ? ` session=${sessionBootMs}ms` : ""}${postSendToFirstEventMs != null ? ` send->event=${postSendToFirstEventMs}ms` : ""}${postSendToFirstStdoutMs != null ? ` send->stdout=${postSendToFirstStdoutMs}ms` : ""}`
+        );
         if (!isSuccess) {
           this.activeRun.observer.onEvent({ type: "process.update", process: undefined });
           this.activeRun.observer.onEvent({ type: "session.failed", error: errorMessage });
@@ -853,6 +904,7 @@ export class AnteServeRuntimeAdapter {
   }
 
   private sendUserInput(request: TaskRequest): void {
+    const startedAt = performance.now();
     const fingerprint = this.getContextFingerprint(request);
     const shouldReuseContext =
       request.kind === "terminal" &&
@@ -868,9 +920,23 @@ export class AnteServeRuntimeAdapter {
         : `Sending Markdown context · note=${request.context.filePath ?? "none"}`
     });
 
+    const prompt = buildInteractivePrompt(request);
+    logDebug(
+      `prompt stats prompt=${prompt.length} chars doc=${request.context.documentText?.length ?? 0} chars selection=${request.context.selection?.text.length ?? 0} chars`
+    );
+
     this.sendOperation({
-      UserInput: buildInteractivePrompt(request)
+      UserInput: prompt
     });
+    if (this.activeRun) {
+      this.activeRun.userInputSentAtMs = performance.now();
+    }
+    const elapsed = Math.round(performance.now() - startedAt);
+    if (elapsed >= 16) {
+      logDebug(
+        `sendUserInput ${elapsed}ms file=${request.context.filePath ?? "none"} prompt=${prompt.length} chars doc=${request.context.documentText?.length ?? 0}`
+      );
+    }
     this.lastSentContextFingerprint = fingerprint;
   }
 

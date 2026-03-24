@@ -122,6 +122,7 @@ export class ObsidianHostAdapter implements HostAdapter {
     if (!view.file) {
       throw new Error("Markdown view has no file");
     }
+    const startedAt = performance.now();
     const editor = view.editor;
     const selectionText = editor.getSelection();
     const context: ContextSnapshot = {

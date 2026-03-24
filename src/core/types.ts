@@ -97,6 +97,7 @@ export interface DocumentChangeArtifact {
   target: DocumentChangeTarget;
   beforeText: string;
   afterText: string;
+  sourceChanges: RuntimeChangeSuggestion[];
   applyState: ApplyState;
   applyError?: string;
 }

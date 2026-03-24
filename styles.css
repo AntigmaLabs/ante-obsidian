@@ -296,9 +296,9 @@ button.tmd-diff-file-main {
 .tmd-diff-file-chevron {
   display: inline-grid;
   place-items: center;
-  width: 48px;
-  min-width: 48px;
-  height: 48px;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--background-modifier-border) 58%, transparent);
   border-radius: 999px;
@@ -306,7 +306,6 @@ button.tmd-diff-file-main {
   color: var(--text-normal);
   line-height: 0;
   cursor: pointer;
-  box-shadow: 0 6px 14px color-mix(in srgb, black 10%, transparent);
 }
 
 .tmd-diff-file-chevron svg {
@@ -328,10 +327,9 @@ button.tmd-diff-file-main {
 .tmd-diff-file-body {
   display: grid;
   gap: 14px;
-  padding: 0 0 16px;
+  padding:  16px;
 }
 
-.tmd-diff-file-actions,
 .tmd-diff-file-body > .tmd-error,
 .tmd-diff-file-body > p.tmd-meta {
   margin-left: 16px;
@@ -359,7 +357,6 @@ button.tmd-diff-file-main {
 
 .tmd-diff-patch {
   overflow: hidden;
-  margin: 0 16px;
   border: 1px solid color-mix(in srgb, var(--background-modifier-border) 78%, transparent);
   border-radius: 14px;
   background: color-mix(in srgb, var(--background-primary) 94%, var(--background-secondary) 6%);

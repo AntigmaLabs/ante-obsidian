@@ -98,6 +98,9 @@ test("batched changes for the same file collapse into one file artifact", async 
   assert.equal(task?.artifacts[0]?.operation, "replace-file");
   assert.equal(task?.artifacts[0]?.beforeText, "alpha\n");
   assert.equal(task?.artifacts[0]?.afterText, "alpha\n\nbeta\n\ngamma\n");
+  assert.equal(task?.artifacts[0]?.sourceChanges.length, 2);
+  assert.equal(task?.artifacts[0]?.sourceChanges[0]?.afterText, "beta");
+  assert.equal(task?.artifacts[0]?.sourceChanges[1]?.afterText, "gamma");
 });
 
 test("stdout chunks are aggregated outside the visible log list", async () => {
