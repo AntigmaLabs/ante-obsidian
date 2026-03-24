@@ -17,20 +17,16 @@ Tmd currently provides 6 main user-facing capabilities:
 
 ## Feature 1: Inline Triggers Inside Notes
 
-You can type these triggers directly in a Markdown note:
+You can type this trigger directly in a Markdown note:
 
 - `@ante`
-- `@ante research`
-- `@ante plan`
 
-### What Each Trigger Is For
+### What It's For
 
 - `@ante`
   Best for direct work on the current paragraph, selection, or note content, such as rewriting, polishing, completing, or restructuring.
-- `@ante research`
-  Best for expanding the current topic into a research-oriented Markdown block.
-- `@ante plan`
-  Best for turning an idea into an actionable plan block.
+
+For research or planning tasks, please use the context menu or command palette instead.
 
 ### What Happens After Triggering
 
@@ -43,8 +39,8 @@ You can type these triggers directly in a Markdown note:
 ### Typical Uses
 
 - Add `@ante` after a rough paragraph to rewrite it.
-- Add `@ante research` under a topic heading to generate research notes.
-- Add `@ante plan` under a meeting note or idea draft to turn it into an execution plan.
+- Use the context menu `@ante research` action under a topic heading to generate research notes.
+- Use the context menu `@ante plan` action from a meeting note or idea draft to turn it into an execution plan.
 
 ## Feature 2: Editor Context Menu Actions
 
@@ -217,6 +213,6 @@ In one sentence, Tmd is:
 
 For day-to-day use, the three most important things to learn first are:
 
-- `@ante`, `@ante research`, and `@ante plan`
+- `@ante` for inline note actions, plus `@ante research` / `@ante plan` from the context menu or command palette
 - `Tmd Results` for inspecting changes
 - `Ante Console` and `Ante Terminal` for follow-up interaction
