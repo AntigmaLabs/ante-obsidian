@@ -42,6 +42,7 @@ npm install
 npm run typecheck
 npm test
 npm run build
+npm run build:release
 npm run smoke
 npm run probe
 ```
@@ -82,6 +83,18 @@ Detailed docs live in [`doc/`](./doc/):
 - 中文安装文档: [doc/INSTALL.zh-CN.md](./doc/INSTALL.zh-CN.md)
 - English user guide: [doc/USER_GUIDE.md](./doc/USER_GUIDE.md)
 - 中文使用文档: [doc/USER_GUIDE.zh-CN.md](./doc/USER_GUIDE.zh-CN.md)
+
+For GitHub Releases, generate a single installable archive with:
+
+```bash
+npm run build:release
+```
+
+That creates `.release/tmd-<version>.zip`, which expands to a `tmd/` folder containing:
+
+- `manifest.json`
+- `main.js`
+- `styles.css`
 
 After installation:
 

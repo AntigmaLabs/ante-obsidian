@@ -6,8 +6,10 @@
   "description": "Obsidian desktop plugin for ante-driven Markdown workflows with diff previews and a lightweight console.",
   "scripts": {
     "build": "npm run sync-version && node esbuild.config.mjs production",
+    "build:release": "npm run build && node scripts/package-release.cjs",
     "dev": "node esbuild.config.mjs",
     "probe": "node scripts/ante-protocol-probe.cjs",
+    "release:package": "node scripts/package-release.cjs",
     "smoke": "node scripts/ante-smoke.cjs",
     "sync-version": "node scripts/sync-version.cjs",
     "test": "node --import tsx --test tests/**/*.test.ts",

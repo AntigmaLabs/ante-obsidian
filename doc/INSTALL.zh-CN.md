@@ -58,20 +58,25 @@ BRAT 是一个可以直接从 GitHub 仓库安装 Obsidian 插件的社区插件
 如果已有发布版本，但你不想使用 BRAT，可以手动安装。
 
 1. 打开 Tmd 在 GitHub 上的最新 Release 页面
-2. 下载插件发布文件
+2. 下载插件发布压缩包，例如 `tmd-0.2.0.zip`
    不要直接使用 GitHub 自动生成的 `Source code (zip)` 或 `Source code (tar.gz)`，除非你打算自己构建插件
-3. 解压或取出插件文件
-   你需要以下文件：
+3. 解压该压缩包
+   解压后应该直接得到一个 `tmd/` 文件夹，里面包含：
    - `manifest.json`
    - `main.js`
    - `styles.css`
 4. 在你的 vault 中创建以下目录：
 
 ```text
+<your-vault>/.obsidian/plugins/
+```
+
+5. 将解压得到的 `tmd/` 文件夹复制到该目录，使最终路径变成：
+
+```text
 <your-vault>/.obsidian/plugins/tmd/
 ```
 
-5. 将上述文件复制到该目录
 6. 打开 Obsidian
 7. 进入 `Settings -> Community plugins`
 8. 如有需要，重新加载插件

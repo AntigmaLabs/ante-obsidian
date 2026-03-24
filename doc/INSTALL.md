@@ -52,20 +52,25 @@ BRAT is usually the easiest way to distribute test builds before official review
 Use this option if a release is available but you do not want to use BRAT.
 
 1. Open the latest Tmd release on GitHub.
-2. Download the release assets for the plugin itself.
+2. Download the plugin release archive, such as `tmd-0.2.0.zip`.
    Do not use GitHub's automatically generated `Source code (zip)` or `Source code (tar.gz)` files unless you plan to build the plugin yourself.
-3. Extract or copy the plugin release files.
-   You need these files:
+3. Extract the archive.
+   It should expand to a `tmd/` folder that already contains:
    - `manifest.json`
    - `main.js`
    - `styles.css`
 4. Create this folder inside your vault:
 
 ```text
+<your-vault>/.obsidian/plugins/
+```
+
+5. Copy the extracted `tmd/` folder into that directory so the final path is:
+
+```text
 <your-vault>/.obsidian/plugins/tmd/
 ```
 
-5. Copy those files into that folder.
 6. Open Obsidian.
 7. Go to `Settings -> Community plugins`.
 8. Reload plugins if needed.
