@@ -488,6 +488,13 @@ button.tmd-diff-file-main {
   letter-spacing: -0.02em;
 }
 
+.tmd-chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
 .tmd-chat-contextbar {
   padding: 12px 20px 14px;
   border-bottom: 1px solid var(--tmd-chat-line);

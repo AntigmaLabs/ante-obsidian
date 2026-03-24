@@ -311,6 +311,7 @@ export class TmdChatView extends ItemView {
   private timelineEl!: HTMLDivElement;
   private contextEl!: HTMLDivElement;
   private stopButtonEl!: HTMLButtonElement;
+  private resetButtonEl!: HTMLButtonElement;
   private emptyStateEl: HTMLDivElement | null = null;
   private contextNodes: ChatContextElements | null = null;
   private readonly taskPairEls = new Map<string, ChatTaskPairElements>();
@@ -369,7 +370,10 @@ export class TmdChatView extends ItemView {
     this.shellEl = contentEl.createDiv({ cls: "tmd-chat-shell" });
     const titleRow = this.shellEl.createDiv({ cls: "tmd-title-row tmd-chat-header" });
     titleRow.createEl("h2", { text: "Chat with Ante" });
-    this.stopButtonEl = titleRow.createEl("button", { text: "Stop" });
+    const headerActions = titleRow.createDiv({ cls: "tmd-chat-header-actions" });
+    this.resetButtonEl = headerActions.createEl("button", { text: "Reset" });
+    this.resetButtonEl.addEventListener("click", () => this.resetChatHistory());
+    this.stopButtonEl = headerActions.createEl("button", { text: "Stop" });
     this.stopButtonEl.addEventListener("click", () => this.plugin.taskEngine.cancelActiveTask());
 
     this.contextEl = this.shellEl.createDiv({ cls: "tmd-chat-contextbar" });
@@ -456,7 +460,9 @@ export class TmdChatView extends ItemView {
       null;
 
     this.syncContext(context);
-    this.stopButtonEl.disabled = !state.tasks.some((task) => task.status === "running");
+    const hasRunningTask = state.tasks.some((task) => task.status === "running");
+    this.stopButtonEl.disabled = !hasRunningTask;
+    this.resetButtonEl.disabled = hasRunningTask || tasks.length === 0;
 
     if (tasks.length === 0) {
       this.syncEmptyState(true);
@@ -817,6 +823,10 @@ export class TmdChatView extends ItemView {
     if (this.expandedStateTaskId !== task.id) {
       this.expandedStateTaskId = task.id;
       this.expandedArtifactIds.clear();
+      const firstArtifactId = task.artifacts[0]?.id;
+      if (firstArtifactId) {
+        this.expandedArtifactIds.add(firstArtifactId);
+      }
     }
   }
 
@@ -1060,6 +1070,20 @@ export class TmdChatView extends ItemView {
       }
       this.syncLoading(elements, loadingLabelForTask(task, this.loadingFrame));
     }
+  }
+
+  private resetChatHistory(): void {
+    const hasRunningTask = (this.latestState ?? this.plugin.taskEngine.getState()).tasks.some(
+      (task) => task.triggerSource === "chat" && task.status === "running"
+    );
+    if (hasRunningTask) {
+      new Notice("Stop the active chat task before resetting the conversation");
+      return;
+    }
+
+    this.plugin.taskEngine.clearTasksByTriggerSource("chat");
+    this.expandedArtifactIds.clear();
+    this.expandedStateTaskId = null;
   }
 
   private shouldStickToBottom(): boolean {

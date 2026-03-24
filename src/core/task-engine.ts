@@ -147,6 +147,35 @@ export class TaskEngine {
     this.runtime.cancelActiveRun();
   }
 
+  clearTasksByTriggerSource(triggerSource: TaskTriggerSource): void {
+    const remainingTasks = this.state.tasks.filter((task) => task.triggerSource !== triggerSource);
+    const removedTaskIds = new Set(
+      this.state.tasks
+        .filter((task) => task.triggerSource === triggerSource)
+        .map((task) => task.id)
+    );
+
+    for (const taskId of removedTaskIds) {
+      const pending = this.pendingStdout.get(taskId);
+      if (pending?.timer != null) {
+        clearTimeout(pending.timer);
+      }
+      this.pendingStdout.delete(taskId);
+    }
+
+    const currentTaskId =
+      this.state.currentTaskId && removedTaskIds.has(this.state.currentTaskId)
+        ? null
+        : this.state.currentTaskId;
+
+    this.state = {
+      ...this.state,
+      currentTaskId,
+      tasks: remainingTasks
+    };
+    this.notify();
+  }
+
   respondToTaskApproval(taskId: string, decision: RuntimeApprovalDecision): void {
     const task = this.getTask(taskId);
     if (!task.pendingApproval) {

@@ -262,3 +262,21 @@ test("startChatTask follow-up reuses the latest chat session id", async () => {
   assert.equal(seenRequests[1]?.runtimeSessionId, "session-1");
   assert.equal(seenRequests[1]?.followUpPrompt, "Second turn");
 });
+
+test("clearTasksByTriggerSource removes only chat tasks", async () => {
+  const runtime = new RuntimeStub((request, onEvent) => {
+    onEvent({ type: "result.text", text: request.inlineInstruction });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  await engine.startChatTask("Chat turn");
+  await engine.startTerminalTask("Terminal turn");
+
+  engine.clearTasksByTriggerSource("chat");
+
+  const tasks = engine.getState().tasks;
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0]?.triggerSource, "terminal");
+  assert.equal(tasks[0]?.inlineInstruction, "Terminal turn");
+});
