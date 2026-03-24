@@ -9,6 +9,11 @@ import type {
 } from "../core/types"
 import { formatLoadingLabel } from "../core/loading-label"
 import {
+  navigatePromptHistory as computePromptHistoryNavigation,
+  shouldHandlePromptEnter,
+  shouldStopFromPromptShortcut,
+} from "../core/terminal-input"
+import {
   renderArtifactDiff,
   renderDiffSummary,
   resolveArtifactDiffs,
@@ -21,6 +26,7 @@ type TerminalRow =
   | { key: string; kind: "command"; text: string; timestamp: string }
   | { key: string; kind: "output"; text: string; timestamp: string }
   | { key: string; kind: "streaming"; text: string; timestamp: string }
+  | { key: string; kind: "process"; text: string; timestamp: string }
   | { key: string; kind: "system"; text: string; timestamp: string }
   | { key: string; kind: "error"; text: string; timestamp: string }
   | { key: string; kind: "artifact"; text: string; timestamp: string }
@@ -365,6 +371,8 @@ const prefixForRow = (kind: TerminalRow["kind"]): string => {
       return "ante"
     case "streaming":
       return "ante"
+    case "process":
+      return "out"
     case "error":
       return "err"
     case "artifact":
@@ -374,6 +382,47 @@ const prefixForRow = (kind: TerminalRow["kind"]): string => {
     default:
       return "sys"
   }
+}
+
+const buildProcessRows = (task: TaskRecord): TerminalRow[] => {
+  const process = task.status === "running" ? task.processLane : undefined
+  if (!process) {
+    return []
+  }
+
+  const rows: TerminalRow[] = []
+  const activeStep =
+    process.steps.find((step) => step.status === "in_progress") ??
+    process.steps.find((step) => step.status === "pending")
+
+  rows.push({
+    key: `${task.id}:process:label`,
+    kind: "process",
+    text: activeStep?.activeLabel ?? activeStep?.label ?? process.label,
+    timestamp: task.startedAt,
+  })
+
+  for (const step of process.steps) {
+    rows.push({
+      key: `${task.id}:process:step:${step.id}`,
+      kind: "process",
+      text: `${step.status === "completed" ? "■" : step.status === "in_progress" ? "▪" : "□"} ${
+        step.status === "in_progress" ? (step.activeLabel ?? step.label) : step.label
+      }`,
+      timestamp: task.startedAt,
+    })
+  }
+
+  if (process.steps.length === 0 && process.label !== rows[0]?.text) {
+    rows.push({
+      key: `${task.id}:process:phase`,
+      kind: "process",
+      text: `${process.phase} · ${process.label}`,
+      timestamp: task.startedAt,
+    })
+  }
+
+  return rows
 }
 
 const buildRows = (task: TaskRecord, loadingFrame: number): TerminalRow[] => {
@@ -409,6 +458,8 @@ const buildRows = (task: TaskRecord, loadingFrame: number): TerminalRow[] => {
     visibleLogIndex += 1
   }
 
+  rows.push(...buildProcessRows(task))
+
   if (streamingPreview) {
     rows.push({
       key: `${task.id}:streaming`,
@@ -422,7 +473,7 @@ const buildRows = (task: TaskRecord, loadingFrame: number): TerminalRow[] => {
     rows.push({
       key: `${task.id}:output`,
       kind: "output",
-      text: clampDisplayLines(output.text),
+      text: output.text,
       timestamp: task.endedAt ?? task.startedAt,
     })
   }
@@ -482,13 +533,16 @@ export class TmdTerminalView extends ItemView {
   private frameEl!: HTMLDivElement
   private statusEl!: HTMLDivElement
   private metaLineEl!: HTMLDivElement
-  private processLaneEl!: HTMLDivElement
   private screenEl!: HTMLDivElement
   private streamEl!: HTMLDivElement
   private promptEl!: HTMLDivElement
   private editorEl!: HTMLDivElement
   private approvalEl: HTMLDivElement | null = null
   private inlineArtifactsEl!: HTMLDivElement
+  private promptHistory: string[] = []
+  private historyIndex: number = -1
+  private draftPrompt = ""
+  private isComposing = false
   private readonly rowEls = new Map<string, HTMLDivElement>()
   private readonly inlineExpandedArtifactIds = new Set<string>()
   private didInitialFocus = false
@@ -497,6 +551,7 @@ export class TmdTerminalView extends ItemView {
   private inlineArtifactSignature = ""
   private inlineResolvedTaskId: string | null = null
   private inlineResolveVersion = 0
+  private initialFocusFrame: number | null = null
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -516,6 +571,12 @@ export class TmdTerminalView extends ItemView {
   async onOpen(): Promise<void> {
     this.contentEl.addClass("tmd-view", "tmd-terminal-view")
     this.buildShell()
+    this.initialFocusFrame = window.requestAnimationFrame(() => {
+      this.initialFocusFrame = null
+      this.editorEl.focus()
+      this.moveCaretToEnd()
+      this.didInitialFocus = true
+    })
     this.liveContext = await this.plugin.hostAdapter.capturePreferredContext()
     this.registerEvent(
       this.app.workspace.on("file-open", () => {
@@ -540,6 +601,10 @@ export class TmdTerminalView extends ItemView {
     if (this.loadingTimer) {
       window.clearInterval(this.loadingTimer)
       this.loadingTimer = null
+    }
+    if (this.initialFocusFrame != null) {
+      window.cancelAnimationFrame(this.initialFocusFrame)
+      this.initialFocusFrame = null
     }
   }
 
@@ -570,9 +635,6 @@ export class TmdTerminalView extends ItemView {
 
     const meta = this.frameEl.createDiv({ cls: "tmd-terminal-meta" })
     this.metaLineEl = meta.createDiv({ cls: "tmd-terminal-meta-line" })
-    this.processLaneEl = this.frameEl.createDiv({
-      cls: "tmd-terminal-process-lane",
-    })
 
     this.screenEl = this.frameEl.createDiv({ cls: "tmd-terminal-screen" })
     this.streamEl = this.screenEl.createDiv({ cls: "tmd-terminal-stream" })
@@ -585,15 +647,59 @@ export class TmdTerminalView extends ItemView {
     this.editorEl.setAttr("role", "textbox")
     this.editorEl.setAttr("aria-label", "Ante terminal prompt")
     this.editorEl.addEventListener("input", () => {
-      this.editorEl.classList.toggle(
-        "tmd-is-empty",
-        this.editorEl.innerText.trim().length === 0,
-      )
+      const text = this.getEditorText()
+      this.editorEl.classList.toggle("tmd-is-empty", text.length === 0)
+      if (this.historyIndex === -1) {
+        this.draftPrompt = text
+      }
+    })
+    this.editorEl.addEventListener("compositionstart", () => {
+      this.isComposing = true
+    })
+    this.editorEl.addEventListener("compositionend", () => {
+      this.isComposing = false
     })
     this.editorEl.addEventListener("keydown", (event) => {
+      if (
+        shouldStopFromPromptShortcut({
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey,
+          altKey: event.altKey,
+          key: event.key,
+        })
+      ) {
+        const hasRunningTask = (
+          this.latestState ?? this.plugin.taskEngine.getState()
+        ).tasks.some((task) => task.status === "running")
+        if (hasRunningTask) {
+          event.preventDefault()
+          this.plugin.taskEngine.cancelActiveTask()
+          return
+        }
+      }
+      if (
+        !shouldHandlePromptEnter({
+          isComposing: this.isComposing,
+          eventIsComposing: event.isComposing,
+          keyCode: (event as KeyboardEvent).keyCode,
+        })
+      ) {
+        return
+      }
       if (event.key === "Enter") {
         event.preventDefault()
         this.runPrompt()
+        return
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault()
+        this.navigatePromptHistory("up")
+        return
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault()
+        this.navigatePromptHistory("down")
       }
     })
     this.inlineArtifactsEl = contentEl.createDiv({
@@ -619,7 +725,6 @@ export class TmdTerminalView extends ItemView {
     this.statusEl.setText(terminalStatus(latestTask))
     this.metaLineEl.setText(summarizeTerminalMeta(context, runtimeSummary))
 
-    this.syncProcessLane(latestTask)
     this.syncRows(buildAllRows(state, this.loadingFrame))
     this.syncPrompt(context, tasks, isEditable)
     this.syncInlineArtifacts(latestTask)
@@ -715,56 +820,45 @@ export class TmdTerminalView extends ItemView {
     if (tasks.length === 0) {
       this.editorEl.classList.toggle(
         "tmd-is-empty",
-        this.editorEl.innerText.trim().length === 0,
+        this.getEditorText().length === 0,
       )
     }
   }
 
-  private syncProcessLane(task: TaskRecord | undefined): void {
-    this.processLaneEl.empty()
-    const process = task?.status === "running" ? task.processLane : undefined
-    if (!process) {
-      this.processLaneEl.hide()
+  private getEditorText(): string {
+    return this.editorEl.innerText.replace(/\n/g, " ").trim()
+  }
+
+  private setEditorText(text: string): void {
+    this.editorEl.setText(text)
+    this.editorEl.classList.toggle("tmd-is-empty", text.trim().length === 0)
+    this.moveCaretToEnd()
+  }
+
+  private moveCaretToEnd(): void {
+    const selection = window.getSelection()
+    if (!selection) {
       return
     }
+    const range = document.createRange()
+    range.selectNodeContents(this.editorEl)
+    range.collapse(false)
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }
 
-    this.processLaneEl.show()
-    const shell = this.processLaneEl.createDiv({
-      cls: "tmd-terminal-process-shell",
-    })
-    const header = shell.createDiv({ cls: "tmd-terminal-process-header" })
-    header.createDiv({ cls: "tmd-terminal-process-kicker", text: "Process" })
-    header.createDiv({
-      cls: `tmd-terminal-process-phase tmd-is-${process.phase}`,
-      text: process.phase,
-    })
-
-    shell.createDiv({ cls: "tmd-terminal-process-label", text: process.label })
-    if (process.steps.length === 0) {
-      return
-    }
-
-    const list = shell.createDiv({ cls: "tmd-terminal-process-steps" })
-    for (const step of process.steps) {
-      const row = list.createDiv({
-        cls: `tmd-terminal-process-step tmd-is-${step.status}`,
-      })
-      row.createDiv({
-        cls: "tmd-terminal-process-marker",
-        text:
-          step.status === "completed"
-            ? "■"
-            : step.status === "in_progress"
-              ? "▪"
-              : "□",
-      })
-      row.createDiv({
-        cls: "tmd-terminal-process-step-text",
-        text:
-          step.status === "in_progress"
-            ? (step.activeLabel ?? step.label)
-            : step.label,
-      })
+  private navigatePromptHistory(direction: "up" | "down"): void {
+    const next = computePromptHistoryNavigation(
+      this.promptHistory,
+      this.historyIndex,
+      this.draftPrompt,
+      this.getEditorText(),
+      direction,
+    )
+    this.historyIndex = next.historyIndex
+    this.draftPrompt = next.draftPrompt
+    if (next.nextText !== this.getEditorText()) {
+      this.setEditorText(next.nextText)
     }
   }
 
@@ -842,10 +936,16 @@ export class TmdTerminalView extends ItemView {
   }
 
   private runPrompt(): void {
-    const promptText = this.editorEl.innerText.replace(/\n/g, " ").trim()
+    const promptText = this.getEditorText()
     if (!promptText) {
       return
     }
+    this.promptHistory = [
+      ...this.promptHistory.filter((entry) => entry !== promptText),
+      promptText,
+    ].slice(-50)
+    this.historyIndex = -1
+    this.draftPrompt = ""
 
     const tasks = (
       this.latestState ?? this.plugin.taskEngine.getState()
@@ -869,6 +969,7 @@ export class TmdTerminalView extends ItemView {
       .then(() => {
         this.editorEl.empty()
         this.editorEl.classList.add("tmd-is-empty")
+        this.draftPrompt = ""
       })
       .catch((error) => {
         new Notice(

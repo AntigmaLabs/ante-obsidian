@@ -304,6 +304,16 @@ export class TaskEngine {
               error: result.error,
               endedAt: new Date().toISOString()
             });
+          } else if (result.status === "completed") {
+            const task = this.getTask(request.taskId);
+            if (task.status === "running") {
+              this.patchTask(request.taskId, {
+                pendingApproval: undefined,
+                processLane: undefined,
+                status: task.artifacts.length > 0 ? "awaiting-apply" : "completed",
+                endedAt: new Date().toISOString()
+              });
+            }
           }
           if (this.activeTaskId === request.taskId) {
             this.activeTaskId = null;

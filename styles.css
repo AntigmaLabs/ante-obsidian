@@ -702,6 +702,10 @@ button.tmd-diff-file-main {
   color: color-mix(in srgb, var(--tmd-terminal-muted) 84%, white 16%);
 }
 
+.tmd-terminal-row.tmd-is-process {
+  color: color-mix(in srgb, var(--tmd-terminal-muted) 88%, white 12%);
+}
+
 .tmd-terminal-row.tmd-is-error {
   color: var(--tmd-terminal-fail);
 }
@@ -721,6 +725,10 @@ button.tmd-diff-file-main {
 .tmd-terminal-row.tmd-is-output .tmd-terminal-row-prefix,
 .tmd-terminal-row.tmd-is-streaming .tmd-terminal-row-prefix {
   color: var(--tmd-terminal-agent);
+}
+
+.tmd-terminal-row.tmd-is-process .tmd-terminal-row-prefix {
+  color: color-mix(in srgb, oklch(0.85 0.08 82) 84%, white 16%);
 }
 
 .tmd-terminal-row.tmd-is-streaming .tmd-terminal-row-text {
