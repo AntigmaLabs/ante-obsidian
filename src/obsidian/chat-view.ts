@@ -411,8 +411,13 @@ export class TmdChatView extends ItemView {
       deleteButton.setAttribute("title", `Delete chat ${conversation.title}`);
       deleteButton.addEventListener("click", (event) => {
         event.stopPropagation();
+        if (this.hasRunningTaskForConversation(conversation.id)) {
+          new Notice("Stop the active chat task before deleting this conversation");
+          return;
+        }
         if (window.confirm(`Delete chat "${conversation.title}"?`)) {
-          this.plugin.chatManager.removeConversation(conversation.id);
+          const removedTaskIds = this.plugin.chatManager.removeConversation(conversation.id);
+          this.plugin.taskEngine.clearTasks(removedTaskIds);
         }
       });
       rowEl.createDiv({ cls: "tmd-chat-conversation-meta", text: formatTime(conversation.updatedAt) });
@@ -918,10 +923,7 @@ export class TmdChatView extends ItemView {
     if (!activeConversation) {
       return;
     }
-    const hasRunningTask = (this.latestTaskState ?? this.plugin.taskEngine.getState()).tasks.some(
-      (task) => task.triggerSource === "chat" && task.status === "running"
-    );
-    if (hasRunningTask) {
+    if (this.hasRunningTaskForConversation(activeConversation.id)) {
       new Notice("Stop the active chat task before resetting the conversation");
       return;
     }
@@ -962,5 +964,27 @@ export class TmdChatView extends ItemView {
       return [];
     }
     return state.messagesByConversation[conversation.id] ?? [];
+  }
+
+  private hasRunningTaskForConversation(conversationId: string): boolean {
+    const taskState = this.latestTaskState ?? this.plugin.taskEngine.getState();
+    const chatState = this.latestChatState;
+    if (!chatState) {
+      return false;
+    }
+
+    const taskIds = new Set(
+      (chatState.messagesByConversation[conversationId] ?? [])
+        .map((message) => message.turn?.taskId)
+        .filter((taskId): taskId is string => Boolean(taskId))
+    );
+
+    if (taskIds.size === 0) {
+      return false;
+    }
+
+    return taskState.tasks.some(
+      (task) => task.triggerSource === "chat" && task.status === "running" && taskIds.has(task.id)
+    );
   }
 }
