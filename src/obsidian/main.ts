@@ -6,13 +6,22 @@ import { ObsidianHostAdapter } from "./host-adapter";
 import { populateEditorMenu } from "./editor-menu";
 import { TmdSettingTab } from "./settings-tab";
 import { DEFAULT_SETTINGS, normalizeSettings, type TmdSettings } from "./settings";
-import { AnteServeRuntimeAdapter } from "../runtime/ante-serve-adapter";
+import type { AnteRuntime } from "../runtime/ante-runtime";
+import { createAnteRuntime } from "../runtime/create-ante-runtime";
 import { TMD_DIFF_VIEW_TYPE, TmdDiffView } from "./diff-view";
 import { TMD_CHAT_VIEW_TYPE, TmdChatView } from "./chat-view";
 import { TMD_TERMINAL_VIEW_TYPE, TmdTerminalView } from "./terminal-view";
 import type { TaskRecord } from "../core/types";
 import { readAnteDefaults, type AnteDefaults } from "./ante-defaults";
 import { normalizeEnvVarName, readCommandPathFromLoginShell, readEnvVarFromLoginShell } from "./shell-env";
+import { ChatSessionManager } from "../core/chat-session-manager";
+import type { ChatPersistenceState } from "../core/chat-types";
+import { getResolvedPreset, listResolvedPresets } from "../core/presets";
+
+interface TmdPluginData {
+  settings?: Partial<TmdSettings>;
+  chatState?: ChatPersistenceState | null;
+}
 
 export default class TmdPlugin extends Plugin {
   settings: TmdSettings = DEFAULT_SETTINGS;
@@ -24,8 +33,10 @@ export default class TmdPlugin extends Plugin {
   resolvedAnteCommand = "";
   hostAdapter!: ObsidianHostAdapter;
   taskEngine!: TaskEngine;
+  chatManager!: ChatSessionManager;
   mentionTrigger!: MentionTriggerService;
-  private runtime!: AnteServeRuntimeAdapter;
+  private runtime!: AnteRuntime;
+  private pluginData: TmdPluginData = {};
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -33,7 +44,7 @@ export default class TmdPlugin extends Plugin {
     await this.loadShellEnv();
 
     this.hostAdapter = new ObsidianHostAdapter(this.app);
-    this.runtime = new AnteServeRuntimeAdapter(() => {
+    this.runtime = createAnteRuntime(() => {
       const resolved = this.getResolvedAnteTarget();
       const geminiEnvKey = normalizeEnvVarName(this.settings.geminiApiKeyEnvKey);
       const geminiApiKey =
@@ -41,9 +52,11 @@ export default class TmdPlugin extends Plugin {
         (geminiEnvKey ? this.shellEnv[geminiEnvKey]?.trim() ?? "" : "") ||
         (geminiEnvKey ? process.env[geminiEnvKey]?.trim() ?? "" : "");
       return {
+        connectionMode: this.settings.connectionMode,
         command: this.getResolvedAnteCommand(),
         argsJson: this.settings.argsJson,
         cwd: this.settings.cwd,
+        wsAddress: this.settings.wsAddress,
         model: resolved.model,
         provider: resolved.provider,
         autoApproveTools: this.settings.autoApproveAnteTools,
@@ -53,7 +66,11 @@ export default class TmdPlugin extends Plugin {
             : {}
       };
     });
-    this.taskEngine = new TaskEngine(this.runtime, this.hostAdapter);
+    this.taskEngine = new TaskEngine(this.runtime, this.hostAdapter, (presetId) => this.getPresetById(presetId));
+    this.chatManager = new ChatSessionManager(this, this.pluginData.chatState);
+    this.taskEngine.subscribe((state) => {
+      this.chatManager.syncFromTaskState(state);
+    });
     this.mentionTrigger = new MentionTriggerService(this.app, this, () => this.settings.mentionTriggerDebug);
 
     this.registerView(TMD_DIFF_VIEW_TYPE, (leaf) => new TmdDiffView(leaf, this));
@@ -68,6 +85,7 @@ export default class TmdPlugin extends Plugin {
 
   async onunload(): Promise<void> {
     this.mentionTrigger?.destroy();
+    this.chatManager?.dispose();
     this.runtime?.dispose();
     this.app.workspace.detachLeavesOfType(TMD_DIFF_VIEW_TYPE);
     this.app.workspace.detachLeavesOfType(TMD_CHAT_VIEW_TYPE);
@@ -76,12 +94,29 @@ export default class TmdPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.loadShellEnv();
-    await this.saveData(this.settings);
+    this.pluginData = {
+      ...this.pluginData,
+      settings: this.settings
+    };
+    await this.saveData(this.pluginData);
   }
 
   async loadSettings(): Promise<void> {
     const stored = await this.loadData();
-    this.settings = normalizeSettings(stored as Partial<TmdSettings> | null | undefined);
+    this.pluginData = (stored as TmdPluginData | null | undefined) ?? {};
+    const legacySettings =
+      this.pluginData.settings ??
+      (stored && !("settings" in (stored as Record<string, unknown>)) ? (stored as Partial<TmdSettings>) : undefined);
+    this.settings = normalizeSettings(legacySettings);
+  }
+
+  async saveChatState(chatState: ChatPersistenceState): Promise<void> {
+    this.pluginData = {
+      ...this.pluginData,
+      settings: this.settings,
+      chatState
+    };
+    await this.saveData(this.pluginData);
   }
 
   async loadAnteDefaults(): Promise<void> {
@@ -261,6 +296,34 @@ export default class TmdPlugin extends Plugin {
       return this.resolvedAnteCommand || DEFAULT_SETTINGS.command;
     }
     return configured;
+  }
+
+  getAvailablePresets() {
+    return listResolvedPresets(this.settings);
+  }
+
+  getVisiblePresets() {
+    return this.getAvailablePresets().filter((preset) => preset.enabled !== false);
+  }
+
+  getPresetById(presetId: PresetId) {
+    return getResolvedPreset(this.settings, presetId);
+  }
+
+  getPresetIcon(presetId: PresetId): string {
+    if (presetId === "default") {
+      return "bot";
+    }
+    if (presetId === "research") {
+      return "search";
+    }
+    if (presetId === "plan") {
+      return "list-todo";
+    }
+    if (presetId === "summary") {
+      return "scroll-text";
+    }
+    return "wand-sparkles";
   }
 
   private registerCommands(): void {

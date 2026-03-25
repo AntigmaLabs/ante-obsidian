@@ -12,7 +12,12 @@ Tmd is an Obsidian desktop plugin focused on Ante-powered terminal Markdown work
 
 ## Runtime
 
-Tmd talks only to `ante serve --stdio`. It does not use PTY, `xterm`, or other terminal emulation.
+Tmd talks to `ante serve` using one of two transports:
+
+- `stdio`: `ante serve --stdio` over stdin/stdout
+- `websocket`: `ante serve --ws <ADDR>` plus a WebSocket client connection
+
+It does not use PTY, `xterm`, or other terminal emulation.
 
 The plugin asks Ante to return one JSON object:
 
@@ -47,6 +52,12 @@ npm run smoke
 npm run probe
 ```
 
+WebSocket smoke test example:
+
+```bash
+ANTE_TRANSPORT=websocket ANTE_WS_ADDRESS=127.0.0.1:8765 npm run smoke
+```
+
 ## Portable Config
 
 The repository itself no longer depends on machine-specific absolute paths.
@@ -57,6 +68,8 @@ Runtime scripts resolve Ante like this:
 - `ANTE_CWD`: optional working directory for Ante. Defaults to the repository root.
 - `ANTE_MODEL`: optional model override for probe and smoke scripts. Defaults to `gpt-5.4`.
 - `ANTE_PROVIDER`: optional provider override for probe and smoke scripts. Defaults to `openai-subscription`.
+- `ANTE_TRANSPORT`: optional transport for smoke/probe scripts. `stdio` by default, or `websocket`.
+- `ANTE_WS_ADDRESS`: socket address for `ANTE_TRANSPORT=websocket`. Defaults to `127.0.0.1:8765`.
 - `GEMINI_API_KEY`: used by Ante when `ANTE_PROVIDER=gemini`.
 
 Example:
@@ -99,7 +112,7 @@ That creates `.release/tmd-<version>.zip`, which expands to a `tmd/` folder cont
 After installation:
 
 1. Enable `Tmd` in `Settings -> Community plugins`.
-2. Confirm the local Ante command/provider/model settings if needed.
+2. Confirm the local Ante command and connection mode settings if needed.
 3. By default, Tmd follows `~/.ante/settings.json` for provider and model.
 4. If you switch Tmd to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.
 
@@ -109,6 +122,8 @@ Current defaults that are still opinionated but not machine-bound:
 
 - Plugin default command: `ante`
 - Plugin default args: `["serve","--stdio","--yolo"]`
+- Plugin default connection mode: `stdio`
+- Plugin default WebSocket address: `127.0.0.1:8765`
 - Plugin default model: `gpt-5.4`
 - Plugin default provider: `openai-subscription`
 

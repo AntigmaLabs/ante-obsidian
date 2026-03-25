@@ -168,8 +168,10 @@ Besides editing workflows, Tmd also gives you several runtime settings for conne
 
 ### Available Settings
 
+- Ante connection mode (`stdio` or `websocket`)
 - Ante executable command
 - Ante launch arguments
+- Ante WebSocket address
 - Working directory
 - Auto-approve Ante tool calls
 - Whether to use provider and model from `~/.ante/settings.json`
@@ -180,6 +182,7 @@ Besides editing workflows, Tmd also gives you several runtime settings for conne
 ### Why These Settings Matter
 
 - You can reuse your existing Ante configuration.
+- You can choose between a local stdin/stdout connection and a WebSocket transport.
 - You can override the provider and model inside the plugin.
 - You can adapt Tmd to different local runtime setups.
 

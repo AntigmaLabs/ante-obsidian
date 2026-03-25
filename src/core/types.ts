@@ -1,4 +1,4 @@
-export type PresetId = "default" | "research" | "plan" | "summary";
+export type PresetId = string;
 export type TaskTriggerSource = "mention" | "context-menu" | "command" | "chat" | "terminal";
 export type TaskKind = "document" | "chat" | "terminal";
 export type TaskStatus =
@@ -38,6 +38,10 @@ export interface PresetDefinition {
   label: string;
   goal: string;
   systemInstructions: string;
+  source?: "builtin" | "custom";
+  enabled?: boolean;
+  sortOrder?: number;
+  interactionMode?: "inline" | "panel";
 }
 
 export interface LogEntry {

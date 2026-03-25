@@ -1,8 +1,10 @@
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import type TmdPlugin from "./main";
+import type { ChatConversationRecord, ChatMessageRecord, ChatStateSnapshot } from "../core/chat-types";
 import type {
   ContextSnapshot,
   RuntimeApprovalDecision,
+  RuntimeProcessLane,
   TaskRecord,
   TmdState
 } from "../core/types";
@@ -19,6 +21,10 @@ export const TMD_CHAT_VIEW_TYPE = "tmd-chat-view";
 
 const MAX_CHAT_PREVIEW_CHARS = 12000;
 const MAX_CHAT_PREVIEW_LINES = 160;
+const MESSAGE_WINDOW_SIZE = 80;
+const SIDEBAR_OPEN_ICON = "☰";
+const SIDEBAR_CLOSE_ICON = "←";
+const DELETE_ICON = "×";
 
 const hashText = (value: string): string => {
   let hash = 2166136261;
@@ -29,79 +35,6 @@ const hashText = (value: string): string => {
   return (hash >>> 0).toString(36);
 };
 
-const parseJsonPayload = (value: string): unknown | null => {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
-  const candidate = fenced ? fenced[1] : trimmed;
-  try {
-    return JSON.parse(candidate) as unknown;
-  } catch {
-    return null;
-  }
-};
-
-const extractStreamingJsonPreview = (value: string): string => {
-  const candidates = [
-    /"summary"\s*:\s*"((?:\\.|[^"])*)"/s,
-    /"title"\s*:\s*"((?:\\.|[^"])*)"/s,
-    /"afterText"\s*:\s*"((?:\\.|[^"])*)"/s,
-  ];
-
-  for (const pattern of candidates) {
-    const match = pattern.exec(value);
-    const raw = match?.[1];
-    if (!raw) {
-      continue;
-    }
-    const normalized = raw
-      .replace(/\\"/g, '"')
-      .replace(/\\n/g, "\n")
-      .replace(/\\t/g, "\t")
-      .replace(/\\\\/g, "\\")
-      .trim();
-    if (normalized) {
-      return normalized;
-    }
-  }
-
-  return "";
-};
-
-const extractPartialJsonPreview = (value: string): string => {
-  const normalized = value
-    .replace(/\r/g, "")
-    .replace(/\\n/g, "\n")
-    .replace(/\\"/g, '"')
-    .replace(/\\t/g, "\t")
-    .replace(/\\\\/g, "\\")
-    .trim();
-
-  if (!normalized) {
-    return "";
-  }
-
-  const afterTextMatch = /"afterText"\s*:\s*"([\s\S]*)$/s.exec(normalized);
-  if (afterTextMatch?.[1]) {
-    return afterTextMatch[1].trim();
-  }
-
-  const summaryMatch = /"summary"\s*:\s*"([\s\S]*)$/s.exec(normalized);
-  if (summaryMatch?.[1]) {
-    return summaryMatch[1].trim();
-  }
-
-  const titleMatch = /"title"\s*:\s*"([\s\S]*)$/s.exec(normalized);
-  if (titleMatch?.[1]) {
-    return titleMatch[1].trim();
-  }
-
-  return normalized;
-};
-
 const clampPreview = (value: string): string => {
   const normalized = value.replace(/\r/g, "");
   if (!normalized) {
@@ -109,10 +42,7 @@ const clampPreview = (value: string): string => {
   }
 
   const lines = normalized.split("\n");
-  const tailLines =
-    lines.length > MAX_CHAT_PREVIEW_LINES
-      ? lines.slice(-MAX_CHAT_PREVIEW_LINES)
-      : lines;
+  const tailLines = lines.length > MAX_CHAT_PREVIEW_LINES ? lines.slice(-MAX_CHAT_PREVIEW_LINES) : lines;
   let preview = tailLines.join("\n");
 
   if (preview.length > MAX_CHAT_PREVIEW_CHARS) {
@@ -126,57 +56,6 @@ const clampPreview = (value: string): string => {
   }
 
   return preview.trim();
-};
-
-const analyzeOutput = (task: TaskRecord): string => {
-  const primaryText = task.textResult?.text.trim()
-    ? task.textResult.text.trim()
-    : task.stdoutText.trim();
-
-  if (!primaryText) {
-    return "";
-  }
-
-  const parsed = parseJsonPayload(primaryText);
-  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-    const record = parsed as Record<string, unknown>;
-    if (
-      (record.type === "text" || record.type === "terminal") &&
-      typeof record.text === "string"
-    ) {
-      return record.text.trim();
-    }
-    if (record.type === "change") {
-      const summary =
-        typeof record.summary === "string" ? record.summary.trim() : "";
-      const title = typeof record.title === "string" ? record.title.trim() : "";
-      return summary || title || "Prepared a Markdown change.";
-    }
-    if (record.type === "changes" && Array.isArray(record.changes)) {
-      return `${record.changes.length} Markdown changes ready to review.`;
-    }
-  }
-
-  return clampPreview(primaryText);
-};
-
-const buildStreamingPreview = (task: TaskRecord): string => {
-  const combined = task.stdoutText;
-  if (!combined.trim()) {
-    return "";
-  }
-  if (
-    /"type"\s*:\s*"change"/.test(combined) ||
-    /"type"\s*:\s*"changes"/.test(combined)
-  ) {
-    return clampPreview(
-      extractStreamingJsonPreview(combined) ||
-        extractPartialJsonPreview(combined) ||
-        "Preparing Markdown change..."
-    );
-  }
-
-  return clampPreview(combined.replace(/\\n/g, "\n").trim());
 };
 
 const summarizeContext = (context: ContextSnapshot | null): string => {
@@ -199,44 +78,14 @@ const formatTime = (timestamp: string): string =>
     minute: "2-digit"
   });
 
-const hasContextDispatchLog = (task: TaskRecord): boolean =>
-  task.logs.some(
-    (log) =>
-      log.stream === "system" &&
-      (/^Sending Markdown context\b/.test(log.text) ||
-        /^Sending context reference\b/.test(log.text))
-  );
-
-const hasTurnActivityLog = (task: TaskRecord): boolean =>
-  task.logs.some(
-    (log) =>
-      log.stream === "system" &&
-      (/^Ante TurnStart\b/.test(log.text) ||
-        /^Ante ToolStart\b/.test(log.text) ||
-        /^Ante ToolUpdate\b/.test(log.text) ||
-        /^Ante ToolEnd\b/.test(log.text) ||
-        /^Ante TurnPause\b/.test(log.text))
-  );
-
-const hasStdoutLog = (task: TaskRecord): boolean =>
-  task.stdoutText.trim().length > 0;
-
-const loadingLabelForTask = (task: TaskRecord, loadingFrame: number): string => {
-  if (!task.runtimeSession?.sessionId) {
+const loadingLabelForMessage = (message: ChatMessageRecord, loadingFrame: number): string => {
+  if (!message.turn?.runtimeSessionId) {
     return "booting ante";
   }
-  if (
-    hasContextDispatchLog(task) &&
-    !hasTurnActivityLog(task) &&
-    !hasStdoutLog(task)
-  ) {
-    return "sending context";
-  }
-  return formatLoadingLabel(task.id, loadingFrame);
+  return formatLoadingLabel(message.id, loadingFrame);
 };
 
-const buildProcessStatusLines = (task: TaskRecord): string[] => {
-  const process = task.status === "running" ? task.processLane : undefined;
+const buildProcessStatusLines = (process: RuntimeProcessLane | undefined): string[] => {
   if (!process) {
     return [];
   }
@@ -269,56 +118,56 @@ interface ChatContextElements {
   snippetEl: HTMLDivElement | null;
 }
 
-interface ChatTaskPairElements {
-  userEl: HTMLDivElement;
-  assistantEl: HTMLDivElement;
-}
-
 interface ChatMessageElements {
   rootEl: HTMLDivElement;
   bubbleEl: HTMLDivElement;
   roleEl: HTMLDivElement;
   stampEl: HTMLDivElement;
   textEl: HTMLPreElement | null;
-  textSignature: string | null;
+  textValue: string | null;
   loadingEl: HTMLDivElement | null;
-  loadingSignature: string | null;
+  loadingValue: string | null;
   processEl: HTMLDivElement | null;
-  processSignature: string | null;
+  processValue: string | null;
   artifactsHostEl: HTMLDivElement | null;
-  artifactsSignature: string | null;
+  artifactsValue: string | null;
   approvalHostEl: HTMLDivElement | null;
-  approvalSignature: string | null;
+  approvalValue: string | null;
   errorEl: HTMLDivElement | null;
+  errorValue: string | null;
 }
 
 export class TmdChatView extends ItemView {
-  private unsubscribe: (() => void) | null = null;
+  private unsubscribeTaskState: (() => void) | null = null;
+  private unsubscribeChatState: (() => void) | null = null;
   private loadingTimer: number | null = null;
   private loadingFrame = 0;
-  private renderVersion = 0;
-  private latestState: TmdState | null = null;
+  private latestTaskState: TmdState | null = null;
+  private latestChatState: ChatStateSnapshot | null = null;
   private liveContext: ContextSnapshot | null = null;
+  private visibleMessageCount = MESSAGE_WINDOW_SIZE;
   private readonly expandedArtifactIds = new Set<string>();
   private readonly resolvedArtifactsCache = new Map<
     string,
     { signature: string; diffs: ResolvedArtifactDiff[] }
   >();
-  private expandedStateTaskId: string | null = null;
-  private composerEl!: HTMLTextAreaElement;
-  private isComposing = false;
-  private shellEl!: HTMLDivElement;
-  private timelineEl!: HTMLDivElement;
+  private readonly sidebarRowEls = new Map<string, HTMLDivElement>();
+  private readonly messageEls = new Map<string, ChatMessageElements>();
+  private readonly messageOrder = new Set<string>();
+  private sidebarEl!: HTMLDivElement;
+  private sidebarToggleEl!: HTMLButtonElement;
   private contextEl!: HTMLDivElement;
+  private contextNodes: ChatContextElements | null = null;
+  private shellEl!: HTMLDivElement;
+  private conversationListEl!: HTMLDivElement;
+  private timelineEl!: HTMLDivElement;
+  private emptyStateEl: HTMLDivElement | null = null;
   private stopButtonEl!: HTMLButtonElement;
   private resetButtonEl!: HTMLButtonElement;
-  private emptyStateEl: HTMLDivElement | null = null;
-  private contextNodes: ChatContextElements | null = null;
-  private readonly taskPairEls = new Map<string, ChatTaskPairElements>();
-  private readonly messageEls = new WeakMap<HTMLElement, ChatMessageElements>();
-  private lastRenderedTasks: TaskRecord[] = [];
-  private readonly outputPreviewCache = new Map<string, { signature: string; text: string }>();
-  private readonly streamingPreviewCache = new Map<string, { signature: string; text: string }>();
+  private composerEl!: HTMLTextAreaElement;
+  private loadMoreButtonEl: HTMLButtonElement | null = null;
+  private isComposing = false;
+  private isSidebarCollapsed = true;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: TmdPlugin) {
     super(leaf);
@@ -346,16 +195,27 @@ export class TmdChatView extends ItemView {
         void this.refreshLiveContext();
       })
     );
-    this.unsubscribe = this.plugin.taskEngine.subscribe((state) => {
-      this.latestState = state;
-      this.syncLoadingTimer(state);
-      void this.render(state);
+    this.unsubscribeTaskState = this.plugin.taskEngine.subscribe((state) => {
+      this.latestTaskState = state;
+      this.syncLoadingTimer();
+      void this.render();
+    });
+    this.unsubscribeChatState = this.plugin.chatManager.subscribe((state) => {
+      const previousActiveId = this.latestChatState?.activeConversationId;
+      this.latestChatState = state;
+      if (previousActiveId !== state.activeConversationId) {
+        this.visibleMessageCount = MESSAGE_WINDOW_SIZE;
+      }
+      this.syncLoadingTimer();
+      void this.render();
     });
   }
 
   async onClose(): Promise<void> {
-    this.unsubscribe?.();
-    this.unsubscribe = null;
+    this.unsubscribeTaskState?.();
+    this.unsubscribeTaskState = null;
+    this.unsubscribeChatState?.();
+    this.unsubscribeChatState = null;
     if (this.loadingTimer != null) {
       window.clearInterval(this.loadingTimer);
       this.loadingTimer = null;
@@ -364,29 +224,46 @@ export class TmdChatView extends ItemView {
   }
 
   private buildShell(): void {
-    const { contentEl } = this;
-    contentEl.empty();
+    this.contentEl.empty();
+    this.shellEl = this.contentEl.createDiv({ cls: "tmd-chat-shell" });
 
-    this.shellEl = contentEl.createDiv({ cls: "tmd-chat-shell" });
-    const titleRow = this.shellEl.createDiv({ cls: "tmd-title-row tmd-chat-header" });
+    this.sidebarEl = this.shellEl.createDiv({ cls: "tmd-chat-sidebar" });
+    const sidebarHeader = this.sidebarEl.createDiv({ cls: "tmd-chat-sidebar-header" });
+    this.sidebarToggleEl = sidebarHeader.createEl("button", {
+      cls: "tmd-chat-sidebar-toggle"
+    });
+    this.sidebarToggleEl.addEventListener("click", () => {
+      this.isSidebarCollapsed = !this.isSidebarCollapsed;
+      this.syncSidebarCollapsedState();
+    });
+    sidebarHeader.createEl("h2", { text: "Chats" });
+    const newChatButton = sidebarHeader.createEl("button", { text: "New" });
+    newChatButton.addEventListener("click", () => {
+      this.plugin.chatManager.createConversation({ context: this.liveContext });
+    });
+    this.conversationListEl = this.sidebarEl.createDiv({ cls: "tmd-chat-sidebar-list" });
+    this.syncSidebarCollapsedState();
+
+    const main = this.shellEl.createDiv({ cls: "tmd-chat-main" });
+    const titleRow = main.createDiv({ cls: "tmd-title-row tmd-chat-header" });
     titleRow.createEl("h2", { text: "Chat with Ante" });
     const headerActions = titleRow.createDiv({ cls: "tmd-chat-header-actions" });
     this.resetButtonEl = headerActions.createEl("button", { text: "Reset" });
-    this.resetButtonEl.addEventListener("click", () => this.resetChatHistory());
+    this.resetButtonEl.addEventListener("click", () => this.resetActiveConversation());
     this.stopButtonEl = headerActions.createEl("button", { text: "Stop" });
     this.stopButtonEl.addEventListener("click", () => this.plugin.taskEngine.cancelActiveTask());
 
-    this.contextEl = this.shellEl.createDiv({ cls: "tmd-chat-contextbar" });
+    this.contextEl = main.createDiv({ cls: "tmd-chat-contextbar" });
     this.contextNodes = {
       titleEl: this.contextEl.createDiv({ cls: "tmd-chat-context-title" }),
       valueEl: this.contextEl.createDiv({ cls: "tmd-chat-context-value" }),
       snippetEl: null
     };
     this.contextNodes.titleEl.setText("Current context");
-    const body = this.shellEl.createDiv({ cls: "tmd-chat-body" });
-    this.timelineEl = body.createDiv({ cls: "tmd-chat-timeline" });
 
-    const composer = this.shellEl.createDiv({ cls: "tmd-chat-composer" });
+    this.timelineEl = main.createDiv({ cls: "tmd-chat-timeline" });
+
+    const composer = main.createDiv({ cls: "tmd-chat-composer" });
     this.composerEl = composer.createEl("textarea", { cls: "tmd-chat-input" });
     this.composerEl.placeholder = "Ask about the current note, rewrite selected text, or plan next steps.";
     this.composerEl.addEventListener("compositionstart", () => {
@@ -412,30 +289,49 @@ export class TmdChatView extends ItemView {
     });
 
     const actions = composer.createDiv({ cls: "tmd-chat-composer-actions" });
-    actions.createDiv({
-      cls: "tmd-meta",
-      text: "Enter to send · Shift+Enter for newline"
-    });
+    actions.createDiv({ cls: "tmd-meta", text: "Enter to send · Shift+Enter for newline" });
     const sendButton = actions.createEl("button", { text: "Send" });
     sendButton.addEventListener("click", () => this.runPrompt());
   }
 
-  private async refreshLiveContext(): Promise<void> {
-    this.liveContext = await this.plugin.hostAdapter.capturePreferredContext();
-    if (this.latestState) {
-      void this.render(this.latestState);
-    }
+  private syncSidebarCollapsedState(): void {
+    this.shellEl.classList.toggle("tmd-chat-sidebar-collapsed", this.isSidebarCollapsed);
+    this.sidebarEl.classList.toggle("tmd-is-collapsed", this.isSidebarCollapsed);
+    this.sidebarToggleEl.setText(this.isSidebarCollapsed ? SIDEBAR_OPEN_ICON : SIDEBAR_CLOSE_ICON);
+    this.sidebarToggleEl.setAttribute("aria-label", this.isSidebarCollapsed ? "Expand chat list" : "Collapse chat list");
+    this.sidebarToggleEl.setAttribute("title", this.isSidebarCollapsed ? "Expand chat list" : "Collapse chat list");
+    this.sidebarToggleEl.setAttribute("aria-expanded", String(!this.isSidebarCollapsed));
   }
 
-  private async render(state: TmdState): Promise<void> {
-    const tasks = [...state.tasks.filter((task) => task.triggerSource === "chat")].reverse();
-    const renderVersion = ++this.renderVersion;
+  private async refreshLiveContext(): Promise<void> {
+    this.liveContext = await this.plugin.hostAdapter.capturePreferredContext();
+    void this.render();
+  }
+
+  private async render(): Promise<void> {
+    const chatState = this.latestChatState;
+    if (!chatState) {
+      return;
+    }
     const shouldStickToBottom = this.shouldStickToBottom();
+    const activeConversation = this.getActiveConversation(chatState);
+    const messages = activeConversation ? chatState.messagesByConversation[activeConversation.id] ?? [] : [];
+    const visibleMessages = messages.slice(-this.visibleMessageCount);
+    const visibleTaskIds = visibleMessages
+      .map((message) => message.turn?.taskId)
+      .filter((taskId): taskId is string => Boolean(taskId));
+    const taskLookup = new Map<string, TaskRecord>();
+    for (const task of this.latestTaskState?.tasks ?? []) {
+      taskLookup.set(task.id, task);
+    }
 
     const diffsByTask = new Map<string, ResolvedArtifactDiff[]>();
-    const artifactTasks = tasks.filter((task) => task.artifacts.length > 0);
     await Promise.all(
-      artifactTasks.map(async (task) => {
+      visibleTaskIds.map(async (taskId) => {
+        const task = taskLookup.get(taskId);
+        if (!task || task.artifacts.length === 0) {
+          return;
+        }
         const signature = this.buildArtifactResolutionSignature(task);
         const cached = this.resolvedArtifactsCache.get(task.id);
         if (cached?.signature === signature) {
@@ -448,34 +344,91 @@ export class TmdChatView extends ItemView {
       })
     );
 
-    if (renderVersion !== this.renderVersion) {
-      return;
-    }
-
-    const latestTask = state.tasks.find((task) => task.triggerSource === "chat");
-    const context =
-      this.liveContext ??
-      latestTask?.context ??
-      state.tasks.find((task) => task.context?.filePath)?.context ??
-      null;
-
-    this.syncContext(context);
-    const hasRunningTask = state.tasks.some((task) => task.status === "running");
+    this.syncConversationSidebar(chatState, activeConversation?.id ?? null);
+    this.syncContext(activeConversation?.pinnedContext ?? this.liveContext);
+    const hasRunningTask = (this.latestTaskState?.tasks ?? []).some((task) => task.triggerSource === "chat" && task.status === "running");
     this.stopButtonEl.disabled = !hasRunningTask;
-    this.resetButtonEl.disabled = hasRunningTask || tasks.length === 0;
+    this.resetButtonEl.disabled = hasRunningTask || !activeConversation || messages.length === 0;
 
-    if (tasks.length === 0) {
+    if (!activeConversation || messages.length === 0) {
+      this.syncLoadMore(null, 0);
       this.syncEmptyState(true);
-      this.pruneTaskPairs([]);
+      this.pruneMessageEls([]);
       return;
     }
 
     this.syncEmptyState(false);
-    this.syncTaskPairs(tasks, diffsByTask);
-
-    this.pruneResolvedArtifactCache(tasks);
+    this.syncLoadMore(activeConversation.id, messages.length - visibleMessages.length);
+    this.syncMessages(visibleMessages, taskLookup, diffsByTask);
+    this.pruneResolvedArtifactCache(visibleTaskIds);
     if (shouldStickToBottom) {
       this.timelineEl.scrollTop = this.timelineEl.scrollHeight;
+    }
+  }
+
+  private syncConversationSidebar(chatState: ChatStateSnapshot, activeConversationId: string | null): void {
+    const nextIds = new Set(chatState.conversations.map((conversation) => conversation.id));
+    for (const [conversationId, rowEl] of [...this.sidebarRowEls.entries()]) {
+      if (nextIds.has(conversationId)) {
+        continue;
+      }
+      rowEl.remove();
+      this.sidebarRowEls.delete(conversationId);
+    }
+
+    let previousEl: HTMLElement | null = null;
+    for (const conversation of chatState.conversations) {
+      let rowEl = this.sidebarRowEls.get(conversation.id);
+      if (!rowEl) {
+        rowEl = this.conversationListEl.createDiv({ cls: "tmd-chat-conversation" });
+        rowEl.tabIndex = 0;
+        rowEl.setAttribute("role", "button");
+        rowEl.addEventListener("click", () => {
+          this.plugin.chatManager.setActiveConversation(conversation.id);
+        });
+        rowEl.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") {
+            return;
+          }
+          event.preventDefault();
+          this.plugin.chatManager.setActiveConversation(conversation.id);
+        });
+        rowEl.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          this.handleConversationContextMenu(conversation);
+        });
+        this.sidebarRowEls.set(conversation.id, rowEl);
+      }
+      rowEl.classList.toggle("tmd-is-active", conversation.id === activeConversationId);
+      rowEl.empty();
+      const titleRow = rowEl.createDiv({ cls: "tmd-chat-conversation-row" });
+      titleRow.createDiv({ cls: "tmd-chat-conversation-title", text: conversation.title });
+      const deleteButton = titleRow.createEl("button", {
+        cls: "tmd-chat-conversation-delete",
+        text: DELETE_ICON
+      });
+      deleteButton.setAttribute("aria-label", `Delete chat ${conversation.title}`);
+      deleteButton.setAttribute("title", `Delete chat ${conversation.title}`);
+      deleteButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (window.confirm(`Delete chat "${conversation.title}"?`)) {
+          this.plugin.chatManager.removeConversation(conversation.id);
+        }
+      });
+      rowEl.createDiv({ cls: "tmd-chat-conversation-meta", text: formatTime(conversation.updatedAt) });
+
+      const anchor: ChildNode | null = previousEl ? previousEl.nextSibling : this.conversationListEl.firstChild;
+      if (rowEl !== anchor) {
+        this.conversationListEl.insertBefore(rowEl, anchor);
+      }
+      previousEl = rowEl;
+    }
+  }
+
+  private handleConversationContextMenu(conversation: ChatConversationRecord): void {
+    const nextTitle = window.prompt("Rename chat", conversation.title);
+    if (nextTitle && nextTitle.trim()) {
+      this.plugin.chatManager.renameConversation(conversation.id, nextTitle);
     }
   }
 
@@ -483,7 +436,6 @@ export class TmdChatView extends ItemView {
     if (!this.contextNodes) {
       return;
     }
-
     const summary = summarizeContext(context);
     if (this.contextNodes.valueEl.dataset.value !== summary) {
       this.contextNodes.valueEl.dataset.value = summary;
@@ -498,16 +450,30 @@ export class TmdChatView extends ItemView {
       return;
     }
 
-    const snippetEl =
-      existingSnippetEl ??
-      this.contextEl.createDiv({
-        cls: "tmd-chat-context-snippet"
-      });
+    const snippetEl = existingSnippetEl ?? this.contextEl.createDiv({ cls: "tmd-chat-context-snippet" });
     if (snippetEl.dataset.value !== snippet) {
       snippetEl.dataset.value = snippet;
       snippetEl.setText(snippet);
     }
     this.contextNodes.snippetEl = snippetEl;
+  }
+
+  private syncLoadMore(conversationId: string | null, hiddenCount: number): void {
+    if (!conversationId || hiddenCount <= 0) {
+      this.loadMoreButtonEl?.remove();
+      this.loadMoreButtonEl = null;
+      return;
+    }
+    const button = this.loadMoreButtonEl ?? this.timelineEl.createEl("button", { cls: "tmd-chat-load-more" });
+    button.setText(`Load ${Math.min(hiddenCount, MESSAGE_WINDOW_SIZE)} earlier messages`);
+    button.onclick = () => {
+      this.visibleMessageCount += MESSAGE_WINDOW_SIZE;
+      void this.render();
+    };
+    if (this.timelineEl.firstChild !== button) {
+      this.timelineEl.insertBefore(button, this.timelineEl.firstChild);
+    }
+    this.loadMoreButtonEl = button;
   }
 
   private syncEmptyState(isEmpty: boolean): void {
@@ -516,187 +482,148 @@ export class TmdChatView extends ItemView {
       this.emptyStateEl = null;
       return;
     }
-
-    this.pruneTaskPairs([]);
     if (this.emptyStateEl) {
       return;
     }
-
     const empty = this.timelineEl.createDiv({ cls: "tmd-empty tmd-chat-empty" });
     empty.createEl("p", { text: "No messages yet." });
-    empty.createEl("p", {
-      cls: "tmd-meta",
-      text: "Use the current note as context and start chatting with Ante."
-    });
+    empty.createEl("p", { cls: "tmd-meta", text: "Use the current note as context and start chatting with Ante." });
     this.emptyStateEl = empty;
   }
 
-  private syncTaskPairs(
-    tasks: TaskRecord[],
+  private syncMessages(
+    messages: ChatMessageRecord[],
+    taskLookup: Map<string, TaskRecord>,
     diffsByTask: Map<string, ResolvedArtifactDiff[]>
   ): void {
-    this.lastRenderedTasks = tasks;
-    let previousEl: HTMLElement | null = null;
-    for (const task of tasks) {
-      const pair = this.syncTaskPair(task, diffsByTask.get(task.id) ?? []);
-      for (const element of [pair.userEl, pair.assistantEl]) {
-        const anchor: ChildNode | null = previousEl
-          ? previousEl.nextSibling
-          : this.timelineEl.firstChild;
-        if (element !== anchor) {
-          this.timelineEl.insertBefore(element, anchor);
-        }
-        previousEl = element;
+    let previousEl: HTMLElement | null = this.loadMoreButtonEl;
+    const visibleIds: string[] = [];
+    for (const message of messages) {
+      visibleIds.push(message.id);
+      const messageEl = this.syncMessage(message, taskLookup.get(message.turn?.taskId ?? ""), diffsByTask);
+      const anchor: ChildNode | null = previousEl ? previousEl.nextSibling : this.timelineEl.firstChild;
+      if (messageEl !== anchor) {
+        this.timelineEl.insertBefore(messageEl, anchor);
       }
+      previousEl = messageEl;
     }
-
-    this.pruneTaskPairs(tasks);
+    this.pruneMessageEls(visibleIds);
   }
 
-  private syncTaskPair(task: TaskRecord, resolvedArtifacts: ResolvedArtifactDiff[]): ChatTaskPairElements {
-    let pair = this.taskPairEls.get(task.id);
-    if (!pair) {
-      pair = {
-        userEl: this.createMessageElement("user"),
-        assistantEl: this.createMessageElement("assistant")
+  private syncMessage(
+    message: ChatMessageRecord,
+    task: TaskRecord | undefined,
+    diffsByTask: Map<string, ResolvedArtifactDiff[]>
+  ): HTMLDivElement {
+    let elements = this.messageEls.get(message.id);
+    if (!elements) {
+      const rootEl = createDiv({
+        cls: `tmd-chat-message ${message.role === "user" ? "tmd-is-user" : "tmd-is-assistant"}`
+      });
+      const bubbleEl = rootEl.createDiv({ cls: "tmd-chat-bubble" });
+      const metaEl = bubbleEl.createDiv({ cls: "tmd-chat-meta" });
+      const roleEl = metaEl.createDiv({ cls: "tmd-chat-role" });
+      const stampEl = metaEl.createDiv({ cls: "tmd-chat-stamp" });
+      elements = {
+        rootEl,
+        bubbleEl,
+        roleEl,
+        stampEl,
+        textEl: null,
+        textValue: null,
+        loadingEl: null,
+        loadingValue: null,
+        processEl: null,
+        processValue: null,
+        artifactsHostEl: null,
+        artifactsValue: null,
+        approvalHostEl: null,
+        approvalValue: null,
+        errorEl: null,
+        errorValue: null
       };
-      this.taskPairEls.set(task.id, pair);
+      this.messageEls.set(message.id, elements);
     }
 
-    this.syncUserMessage(pair.userEl, task);
-    this.syncAssistantMessage(pair.assistantEl, task, resolvedArtifacts);
-    return pair;
-  }
+    elements.rootEl.classList.toggle("tmd-is-user", message.role === "user");
+    elements.rootEl.classList.toggle("tmd-is-assistant", message.role === "assistant");
+    this.setText(elements.roleEl, message.role === "user" ? "You" : message.status === "streaming" ? "Ante is thinking" : "Ante");
+    this.setText(elements.stampEl, formatTime(message.updatedAt || message.createdAt));
 
-  private pruneTaskPairs(tasks: TaskRecord[]): void {
-    const activeTaskIds = new Set(tasks.map((task) => task.id));
-    this.lastRenderedTasks = this.lastRenderedTasks.filter((task) => activeTaskIds.has(task.id));
-    for (const [taskId, pair] of Array.from(this.taskPairEls.entries())) {
-      if (activeTaskIds.has(taskId)) {
-        continue;
-      }
-      pair.userEl.remove();
-      pair.assistantEl.remove();
-      this.taskPairEls.delete(taskId);
-    }
-  }
-
-  private createMessageElement(kind: "user" | "assistant"): HTMLDivElement {
-    const rootEl = createDiv({
-      cls: `tmd-chat-message ${kind === "user" ? "tmd-is-user" : "tmd-is-assistant"}`
-    });
-    const bubbleEl = rootEl.createDiv({ cls: "tmd-chat-bubble" });
-    const metaEl = bubbleEl.createDiv({ cls: "tmd-chat-meta" });
-    const roleEl = metaEl.createDiv({ cls: "tmd-chat-role" });
-    const stampEl = metaEl.createDiv({ cls: "tmd-chat-stamp" });
-    this.messageEls.set(rootEl, {
-      rootEl,
-      bubbleEl,
-      roleEl,
-      stampEl,
-      textEl: null,
-      textSignature: null,
-      loadingEl: null,
-      loadingSignature: null,
-      processEl: null,
-      processSignature: null,
-      artifactsHostEl: null,
-      artifactsSignature: null,
-      approvalHostEl: null,
-      approvalSignature: null,
-      errorEl: null
-    });
-    return rootEl;
-  }
-
-  private syncUserMessage(messageEl: HTMLDivElement, task: TaskRecord): void {
-    const elements = this.getMessageElements(messageEl);
-    this.setTextIfChanged(elements.roleEl, "You");
-    this.setTextIfChanged(elements.stampEl, formatTime(task.startedAt));
-    const text = task.inlineInstruction || "(empty prompt)";
-    this.syncMessageText(elements, text, `user:${text}`);
-  }
-
-  private syncAssistantMessage(
-    messageEl: HTMLDivElement,
-    task: TaskRecord,
-    resolvedArtifacts: ResolvedArtifactDiff[]
-  ): void {
-    const elements = this.getMessageElements(messageEl);
-    this.setTextIfChanged(elements.roleEl, task.status === "running" ? "Ante is thinking" : "Ante");
-    this.setTextIfChanged(elements.stampEl, formatTime(task.endedAt ?? task.startedAt));
-    const text = task.status === "running" ? this.getStreamingPreview(task) : this.getAnalyzedOutput(task);
-    if (text) {
-      this.syncMessageText(elements, text, `${task.status}:${text}`);
+    const previewText = clampPreview(message.text);
+    if (previewText) {
+      this.syncMessageText(elements, previewText);
       this.removeLoading(elements);
-    } else if (task.status === "running") {
+    } else if (message.status === "streaming") {
       this.removeText(elements);
-      this.syncLoading(elements, loadingLabelForTask(task, this.loadingFrame));
+      this.syncLoading(elements, loadingLabelForMessage(message, this.loadingFrame));
     } else {
       this.removeText(elements);
       this.removeLoading(elements);
     }
 
-    if (task.status === "running") {
-      const processLines = buildProcessStatusLines(task);
-      this.syncProcessLines(elements, processLines);
-    } else {
-      this.removeProcess(elements);
-    }
+    const processLines = buildProcessStatusLines(message.runtime?.processLane);
+    this.syncProcessLines(elements, processLines);
 
+    const resolvedArtifacts = task ? diffsByTask.get(task.id) ?? [] : [];
     if (resolvedArtifacts.length > 0) {
-      this.syncArtifacts(elements, task, resolvedArtifacts);
+      this.syncArtifacts(elements, task as TaskRecord, resolvedArtifacts);
     } else {
       this.removeArtifacts(elements);
     }
 
-    if (task.pendingApproval) {
-      this.syncApproval(elements, task);
+    if (message.runtime?.approval && task) {
+      this.syncApproval(elements, task, message.runtime.approval);
     } else {
       this.removeApproval(elements);
     }
 
-    if (task.error) {
-      this.syncError(elements, task.error);
+    if (message.runtime?.error) {
+      this.syncError(elements, message.runtime.error);
     } else {
       this.removeError(elements);
     }
+
+    return elements.rootEl;
   }
 
-  private syncMessageText(elements: ChatMessageElements, text: string, signature: string): void {
-    if (elements.textEl && elements.textSignature === signature) {
-      return;
+  private pruneMessageEls(visibleIds: string[]): void {
+    const visible = new Set(visibleIds);
+    for (const [messageId, elements] of [...this.messageEls.entries()]) {
+      if (visible.has(messageId)) {
+        continue;
+      }
+      elements.rootEl.remove();
+      this.messageEls.delete(messageId);
     }
-    const textEl =
-      elements.textEl ??
-      elements.bubbleEl.createEl("pre", { cls: "tmd-chat-text tmd-chat-pre" });
-    this.setTextIfChanged(textEl, text);
+    this.messageOrder.clear();
+    for (const messageId of visibleIds) {
+      this.messageOrder.add(messageId);
+    }
+  }
+
+  private syncMessageText(elements: ChatMessageElements, text: string): void {
+    const textEl = elements.textEl ?? elements.bubbleEl.createEl("pre", { cls: "tmd-chat-text tmd-chat-pre" });
+    this.setText(textEl, text, "textValue", elements);
     elements.textEl = textEl;
-    elements.textSignature = signature;
   }
 
   private removeText(elements: ChatMessageElements): void {
     elements.textEl?.remove();
     elements.textEl = null;
-    elements.textSignature = null;
+    elements.textValue = null;
   }
 
   private syncLoading(elements: ChatMessageElements, text: string): void {
-    if (elements.loadingEl && elements.loadingSignature === text) {
-      return;
-    }
-    const loadingEl =
-      elements.loadingEl ??
-      elements.bubbleEl.createDiv({ cls: "tmd-chat-loading" });
-    this.setTextIfChanged(loadingEl, text);
+    const loadingEl = elements.loadingEl ?? elements.bubbleEl.createDiv({ cls: "tmd-chat-loading" });
+    this.setText(loadingEl, text, "loadingValue", elements);
     elements.loadingEl = loadingEl;
-    elements.loadingSignature = text;
   }
 
   private removeLoading(elements: ChatMessageElements): void {
     elements.loadingEl?.remove();
     elements.loadingEl = null;
-    elements.loadingSignature = null;
+    elements.loadingValue = null;
   }
 
   private syncProcessLines(elements: ChatMessageElements, lines: string[]): void {
@@ -704,50 +631,24 @@ export class TmdChatView extends ItemView {
       this.removeProcess(elements);
       return;
     }
-
     const signature = lines.join("\n");
-    if (elements.processEl && elements.processSignature === signature) {
+    if (elements.processEl && elements.processValue === signature) {
       return;
     }
 
-    const processEl =
-      elements.processEl ??
-      elements.bubbleEl.createDiv({ cls: "tmd-chat-process" });
-    const nextKeys = new Set(lines.map((_, index) => String(index)));
-    const existing = new Map<string, HTMLDivElement>();
-    Array.from(processEl.children).forEach((child, index) => {
-      if (child instanceof HTMLDivElement) {
-        existing.set(String(index), child);
-      }
-    });
-
-    for (const [key, lineEl] of existing.entries()) {
-      if (!nextKeys.has(key)) {
-        lineEl.remove();
-      }
+    const processEl = elements.processEl ?? elements.bubbleEl.createDiv({ cls: "tmd-chat-process" });
+    processEl.empty();
+    for (const line of lines) {
+      processEl.createDiv({ cls: "tmd-chat-process-line", text: line });
     }
-
-    let previousEl: HTMLElement | null = null;
-    for (const [index, line] of lines.entries()) {
-      const key = String(index);
-      let lineEl = existing.get(key);
-      if (!lineEl) {
-        lineEl = processEl.createDiv({ cls: "tmd-chat-process-line" });
-      }
-      this.setTextIfChanged(lineEl, line);
-      const anchor: ChildNode | null = previousEl ? previousEl.nextSibling : processEl.firstChild;
-      processEl.insertBefore(lineEl, anchor);
-      previousEl = lineEl;
-    }
-
     elements.processEl = processEl;
-    elements.processSignature = signature;
+    elements.processValue = signature;
   }
 
   private removeProcess(elements: ChatMessageElements): void {
     elements.processEl?.remove();
     elements.processEl = null;
-    elements.processSignature = null;
+    elements.processValue = null;
   }
 
   private syncArtifacts(
@@ -756,27 +657,23 @@ export class TmdChatView extends ItemView {
     resolvedArtifacts: ResolvedArtifactDiff[]
   ): void {
     const signature = this.buildArtifactsSignature(task, resolvedArtifacts);
-    if (elements.artifactsHostEl && elements.artifactsSignature === signature) {
+    if (elements.artifactsHostEl && elements.artifactsValue === signature) {
       return;
     }
-
-    const host =
-      elements.artifactsHostEl ??
-      elements.bubbleEl.createDiv({ cls: "tmd-chat-artifacts-host" });
+    const host = elements.artifactsHostEl ?? elements.bubbleEl.createDiv({ cls: "tmd-chat-artifacts-host" });
     host.empty();
     this.renderArtifacts(host, task, resolvedArtifacts);
     elements.artifactsHostEl = host;
-    elements.artifactsSignature = signature;
+    elements.artifactsValue = signature;
   }
 
   private removeArtifacts(elements: ChatMessageElements): void {
     elements.artifactsHostEl?.remove();
     elements.artifactsHostEl = null;
-    elements.artifactsSignature = null;
+    elements.artifactsValue = null;
   }
 
   private renderArtifacts(container: HTMLElement, task: TaskRecord, resolvedArtifacts: ResolvedArtifactDiff[]): void {
-    this.ensureExpandedArtifacts(task);
     const diffList = renderDiffSummary(container, resolvedArtifacts, {
       actionLabel: "Apply all",
       isActionDisabled: resolvedArtifacts.every(
@@ -790,16 +687,13 @@ export class TmdChatView extends ItemView {
     });
 
     for (const resolvedArtifact of resolvedArtifacts) {
-      const { artifact } = resolvedArtifact;
       renderArtifactDiff(diffList, this.plugin, task, resolvedArtifact, this.expandedArtifactIds, () => {
-        if (this.expandedArtifactIds.has(artifact.id)) {
-          this.expandedArtifactIds.delete(artifact.id);
+        if (this.expandedArtifactIds.has(resolvedArtifact.artifact.id)) {
+          this.expandedArtifactIds.delete(resolvedArtifact.artifact.id);
         } else {
-          this.expandedArtifactIds.add(artifact.id);
+          this.expandedArtifactIds.add(resolvedArtifact.artifact.id);
         }
-        if (this.latestState) {
-          void this.render(this.latestState);
-        }
+        void this.render();
       });
     }
 
@@ -812,119 +706,77 @@ export class TmdChatView extends ItemView {
     });
   }
 
-  private ensureExpandedArtifacts(task: TaskRecord): void {
-    const artifactIds = new Set(task.artifacts.map((artifact) => artifact.id));
-    for (const expandedId of Array.from(this.expandedArtifactIds)) {
-      if (!artifactIds.has(expandedId)) {
-        this.expandedArtifactIds.delete(expandedId);
-      }
-    }
-
-    if (this.expandedStateTaskId !== task.id) {
-      this.expandedStateTaskId = task.id;
-      this.expandedArtifactIds.clear();
-      const firstArtifactId = task.artifacts[0]?.id;
-      if (firstArtifactId) {
-        this.expandedArtifactIds.add(firstArtifactId);
-      }
-    }
-  }
-
-  private syncApproval(elements: ChatMessageElements, task: TaskRecord): void {
-    const approval = task.pendingApproval;
-    if (!approval) {
-      this.removeApproval(elements);
-      return;
-    }
-
+  private syncApproval(
+    elements: ChatMessageElements,
+    task: TaskRecord,
+    approval: NonNullable<ChatMessageRecord["runtime"]>["approval"]
+  ): void {
     const signature = [
-      approval.turnId,
-      approval.message,
-      ...approval.tools.map((tool) => `${tool.id}:${tool.name}:${tool.argsText ?? ""}`)
+      approval?.turnId ?? "",
+      approval?.message ?? "",
+      ...(approval?.tools ?? []).map((tool) => `${tool.id}:${tool.name}:${tool.argsText ?? ""}`)
     ].join("|");
-    if (elements.approvalHostEl && elements.approvalSignature === signature) {
+    if (elements.approvalHostEl && elements.approvalValue === signature) {
       return;
     }
 
-    const host =
-      elements.approvalHostEl ??
-      elements.bubbleEl.createDiv({ cls: "tmd-chat-approval-host" });
+    const host = elements.approvalHostEl ?? elements.bubbleEl.createDiv({ cls: "tmd-chat-approval-host" });
     host.empty();
-    this.renderApproval(host, task);
+    if (approval) {
+      const approvalCard = host.createDiv({ cls: "tmd-terminal-approval" });
+      approvalCard.createDiv({ cls: "tmd-terminal-approval-title", text: "Tool approval required" });
+      approvalCard.createDiv({ cls: "tmd-terminal-approval-message", text: approval.message });
+      for (const tool of approval.tools) {
+        const toolRow = approvalCard.createDiv({ cls: "tmd-terminal-approval-tool" });
+        toolRow.createDiv({ cls: "tmd-terminal-approval-tool-name", text: `${tool.name} · ${tool.id}` });
+        if (tool.argsText) {
+          toolRow.createDiv({ cls: "tmd-terminal-approval-tool-args", text: tool.argsText });
+        }
+      }
+      const actionRow = approvalCard.createDiv({ cls: "tmd-terminal-approval-actions" });
+      this.renderApprovalAction(actionRow, task.id, "Approve once", "Accept", "tmd-is-approve");
+      this.renderApprovalAction(actionRow, task.id, "Allow session", "AcceptForSession", "tmd-is-approve-session");
+      this.renderApprovalAction(actionRow, task.id, "Deny", "Skip", "tmd-is-deny");
+    }
     elements.approvalHostEl = host;
-    elements.approvalSignature = signature;
+    elements.approvalValue = signature;
   }
 
   private removeApproval(elements: ChatMessageElements): void {
     elements.approvalHostEl?.remove();
     elements.approvalHostEl = null;
-    elements.approvalSignature = null;
-  }
-
-  private renderApproval(container: HTMLElement, task: TaskRecord): void {
-    const approval = task.pendingApproval;
-    if (!approval) {
-      return;
-    }
-
-    const approvalCard = container.createDiv({ cls: "tmd-terminal-approval" });
-    approvalCard.createDiv({
-      cls: "tmd-terminal-approval-title",
-      text: "Tool approval required"
-    });
-    approvalCard.createDiv({
-      cls: "tmd-terminal-approval-message",
-      text: approval.message
-    });
-
-    for (const tool of approval.tools) {
-      const toolRow = approvalCard.createDiv({ cls: "tmd-terminal-approval-tool" });
-      toolRow.createDiv({
-        cls: "tmd-terminal-approval-tool-name",
-        text: `${tool.name} · ${tool.id}`
-      });
-      if (tool.argsText) {
-        toolRow.createDiv({
-          cls: "tmd-terminal-approval-tool-args",
-          text: tool.argsText
-        });
-      }
-    }
-
-    const actionRow = approvalCard.createDiv({
-      cls: "tmd-terminal-approval-actions"
-    });
-    this.renderApprovalAction(actionRow, task.id, "Approve once", "Accept", "tmd-is-approve");
-    this.renderApprovalAction(actionRow, task.id, "Allow session", "AcceptForSession", "tmd-is-approve-session");
-    this.renderApprovalAction(actionRow, task.id, "Deny", "Skip", "tmd-is-deny");
+    elements.approvalValue = null;
   }
 
   private syncError(elements: ChatMessageElements, error: string): void {
-    const errorEl =
-      elements.errorEl ??
-      elements.bubbleEl.createDiv({ cls: "tmd-error" });
-    this.setTextIfChanged(errorEl, error);
+    const errorEl = elements.errorEl ?? elements.bubbleEl.createDiv({ cls: "tmd-error" });
+    this.setText(errorEl, error, "errorValue", elements);
     elements.errorEl = errorEl;
   }
 
   private removeError(elements: ChatMessageElements): void {
     elements.errorEl?.remove();
     elements.errorEl = null;
+    elements.errorValue = null;
   }
 
-  private getMessageElements(messageEl: HTMLDivElement): ChatMessageElements {
-    const elements = this.messageEls.get(messageEl);
-    if (!elements) {
-      throw new Error("Missing chat message elements");
-    }
-    return elements;
-  }
-
-  private setTextIfChanged(el: HTMLElement, text: string): void {
-    if (el.dataset.value === text) {
+  private setText(
+    el: HTMLElement,
+    text: string,
+    field?: "textValue" | "loadingValue" | "errorValue",
+    elements?: ChatMessageElements
+  ): void {
+    if (field && elements && elements[field] === text) {
       return;
     }
-    el.dataset.value = text;
+    if (!field && el.dataset.value === text) {
+      return;
+    }
+    if (field && elements) {
+      elements[field] = text;
+    } else {
+      el.dataset.value = text;
+    }
     el.setText(text);
   }
 
@@ -946,7 +798,6 @@ export class TmdChatView extends ItemView {
   private buildArtifactsSignature(task: TaskRecord, resolvedArtifacts: ResolvedArtifactDiff[]): string {
     return [
       task.id,
-      this.expandedStateTaskId === task.id ? "active" : "inactive",
       ...resolvedArtifacts.map(({ artifact, hunks, stats }) =>
         [
           artifact.id,
@@ -959,33 +810,6 @@ export class TmdChatView extends ItemView {
         ].join(":")
       )
     ].join("|");
-  }
-
-  private getAnalyzedOutput(task: TaskRecord): string {
-    const signature = [
-      task.textResult?.text ?? "",
-      task.stdoutText,
-      task.status,
-      task.artifacts.length
-    ].join("|");
-    const cached = this.outputPreviewCache.get(task.id);
-    if (cached?.signature === signature) {
-      return cached.text;
-    }
-    const text = analyzeOutput(task);
-    this.outputPreviewCache.set(task.id, { signature, text });
-    return text;
-  }
-
-  private getStreamingPreview(task: TaskRecord): string {
-    const signature = `${task.status}:${task.stdoutText}`;
-    const cached = this.streamingPreviewCache.get(task.id);
-    if (cached?.signature === signature) {
-      return cached.text;
-    }
-    const text = buildStreamingPreview(task);
-    this.streamingPreviewCache.set(task.id, { signature, text });
-    return text;
   }
 
   private renderApprovalAction(
@@ -1014,15 +838,36 @@ export class TmdChatView extends ItemView {
       return;
     }
 
-    const latestConsoleSession = (this.latestState ?? this.plugin.taskEngine.getState()).tasks.find(
-      (task) => task.triggerSource === "chat" && task.runtimeSession?.sessionId
-    )?.runtimeSession;
+    const activeConversation = this.getActiveConversation(this.latestChatState);
+    const followUpSessionId = activeConversation
+      ? this.plugin.chatManager.getConversationRuntimeSessionId(activeConversation.id)
+      : null;
 
     void this.plugin.hostAdapter
       .capturePreferredContext()
-      .then((contextSnapshot) => {
+      .then(async (contextSnapshot) => {
         this.liveContext = contextSnapshot;
-        return this.plugin.taskEngine.startChatTask(prompt, Boolean(latestConsoleSession), contextSnapshot);
+        const taskId = crypto.randomUUID();
+        const pendingSend = this.plugin.chatManager.appendUserPrompt(prompt, contextSnapshot);
+        this.plugin.chatManager.createAssistantTurn(pendingSend.conversation.id, taskId);
+        try {
+          await this.plugin.taskEngine.queueChatTask(
+            taskId,
+            prompt,
+            Boolean(followUpSessionId),
+            contextSnapshot,
+            followUpSessionId
+          );
+        } catch (error) {
+          const removedTaskIds = this.plugin.chatManager.rollbackPendingSend(
+            pendingSend.conversation.id,
+            pendingSend.userMessageId,
+            taskId,
+            pendingSend.createdConversation
+          );
+          this.plugin.taskEngine.clearTasks(removedTaskIds);
+          throw error;
+        }
       })
       .then(() => {
         this.composerEl.value = "";
@@ -1032,11 +877,9 @@ export class TmdChatView extends ItemView {
       });
   }
 
-  private syncLoadingTimer(state: TmdState): void {
-    const chatTasks = state.tasks.filter((task) => task.triggerSource === "chat");
-    const shouldAnimate = chatTasks
-      .filter((task) => task.status === "running")
-      .some((task) => !buildStreamingPreview(task) && !task.pendingApproval);
+  private syncLoadingTimer(): void {
+    const activeMessages = this.getActiveConversationMessages().filter((message) => message.status === "streaming");
+    const shouldAnimate = activeMessages.some((message) => !message.text.trim() && !message.runtime?.approval);
 
     if (shouldAnimate && this.loadingTimer == null) {
       this.loadingTimer = window.setInterval(() => {
@@ -1054,62 +897,70 @@ export class TmdChatView extends ItemView {
   }
 
   private refreshLoadingIndicators(): void {
-    for (const task of this.lastRenderedTasks) {
-      if (task.status !== "running") {
+    for (const message of this.getActiveConversationMessages()) {
+      if (message.status !== "streaming") {
         continue;
       }
-      const pair = this.taskPairEls.get(task.id);
-      if (!pair) {
+      const elements = this.messageEls.get(message.id);
+      if (!elements) {
         continue;
       }
-      const elements = this.getMessageElements(pair.assistantEl);
-      const hasStreamingPreview = Boolean(this.getStreamingPreview(task));
-      if (hasStreamingPreview || task.pendingApproval) {
+      if (message.text.trim() || message.runtime?.approval) {
         this.removeLoading(elements);
         continue;
       }
-      this.syncLoading(elements, loadingLabelForTask(task, this.loadingFrame));
+      this.syncLoading(elements, loadingLabelForMessage(message, this.loadingFrame));
     }
   }
 
-  private resetChatHistory(): void {
-    const hasRunningTask = (this.latestState ?? this.plugin.taskEngine.getState()).tasks.some(
+  private resetActiveConversation(): void {
+    const activeConversation = this.getActiveConversation(this.latestChatState);
+    if (!activeConversation) {
+      return;
+    }
+    const hasRunningTask = (this.latestTaskState ?? this.plugin.taskEngine.getState()).tasks.some(
       (task) => task.triggerSource === "chat" && task.status === "running"
     );
     if (hasRunningTask) {
       new Notice("Stop the active chat task before resetting the conversation");
       return;
     }
-
-    this.plugin.taskEngine.clearTasksByTriggerSource("chat");
+    const removedTaskIds = this.plugin.chatManager.removeConversation(activeConversation.id);
+    this.plugin.taskEngine.clearTasks(removedTaskIds);
     this.expandedArtifactIds.clear();
-    this.expandedStateTaskId = null;
   }
 
   private shouldStickToBottom(): boolean {
     const threshold = 24;
-    return (
-      this.timelineEl.scrollTop + this.timelineEl.clientHeight >=
-      this.timelineEl.scrollHeight - threshold
-    );
+    return this.timelineEl.scrollTop + this.timelineEl.clientHeight >= this.timelineEl.scrollHeight - threshold;
   }
 
-  private pruneResolvedArtifactCache(tasks: TaskRecord[]): void {
-    const activeTaskIds = new Set(tasks.map((task) => task.id));
-    for (const taskId of Array.from(this.resolvedArtifactsCache.keys())) {
-      if (!activeTaskIds.has(taskId)) {
+  private pruneResolvedArtifactCache(activeTaskIds: string[]): void {
+    const active = new Set(activeTaskIds);
+    for (const taskId of [...this.resolvedArtifactsCache.keys()]) {
+      if (!active.has(taskId)) {
         this.resolvedArtifactsCache.delete(taskId);
       }
     }
-    for (const taskId of Array.from(this.outputPreviewCache.keys())) {
-      if (!activeTaskIds.has(taskId)) {
-        this.outputPreviewCache.delete(taskId);
-      }
+  }
+
+  private getActiveConversation(chatState: ChatStateSnapshot | null): ChatConversationRecord | null {
+    if (!chatState) {
+      return null;
     }
-    for (const taskId of Array.from(this.streamingPreviewCache.keys())) {
-      if (!activeTaskIds.has(taskId)) {
-        this.streamingPreviewCache.delete(taskId);
-      }
+    return (
+      chatState.conversations.find((conversation) => conversation.id === chatState.activeConversationId) ??
+      chatState.conversations[0] ??
+      null
+    );
+  }
+
+  private getActiveConversationMessages(): ChatMessageRecord[] {
+    const state = this.latestChatState;
+    const conversation = this.getActiveConversation(state);
+    if (!state || !conversation) {
+      return [];
     }
+    return state.messagesByConversation[conversation.id] ?? [];
   }
 }

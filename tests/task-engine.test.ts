@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TaskEngine } from "../src/core/task-engine";
+import { BUILTIN_PRESETS } from "../src/core/presets";
 import type {
   ContextSnapshot,
   DocumentChangeArtifact,
+  PresetId,
   RuntimeApprovalDecision,
   RuntimeEvent,
   TaskRequest
@@ -59,6 +61,8 @@ class HostStub {
   async revealDocumentChange(_change: DocumentChangeArtifact): Promise<void> {}
 }
 
+const resolvePresetById = (presetId: PresetId) => BUILTIN_PRESETS[presetId];
+
 test("batched changes for the same file collapse into one file artifact", async () => {
   const runtime = new RuntimeStub((_request, onEvent) => {
     onEvent({
@@ -83,7 +87,7 @@ test("batched changes for the same file collapse into one file artifact", async 
     onEvent({ type: "session.completed", summary: "done" });
   });
 
-  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
   await engine.startDocumentTask({
     presetId: "default",
     triggerSource: "mention",
@@ -111,7 +115,7 @@ test("stdout chunks are aggregated outside the visible log list", async () => {
     onEvent({ type: "session.completed", summary: "done" });
   });
 
-  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
   await engine.startDocumentTask({
     presetId: "default",
     triggerSource: "mention",
@@ -142,7 +146,7 @@ test("context-menu tasks can keep change suggestions inline without generating a
     onEvent({ type: "session.completed", summary: "done" });
   });
 
-  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
   await engine.startDocumentTask({
     presetId: "summary",
     triggerSource: "context-menu",
@@ -174,7 +178,7 @@ test("context-menu tasks still generate artifacts for non-inline file changes", 
     onEvent({ type: "session.completed", summary: "done" });
   });
 
-  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
   await engine.startDocumentTask({
     presetId: "summary",
     triggerSource: "context-menu",
@@ -199,7 +203,7 @@ test("stdout preview buffer is capped", async () => {
     onEvent({ type: "session.completed", summary: "done" });
   });
 
-  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
   await engine.startDocumentTask({
     presetId: "default",
     triggerSource: "mention",
@@ -221,7 +225,7 @@ test("startChatTask creates a chat task with chat trigger source", async () => {
     onEvent({ type: "session.completed", summary: "done" });
   });
 
-  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
   await engine.startChatTask("Start a chat");
 
   assert.ok(capturedRequest);
@@ -251,7 +255,7 @@ test("startChatTask follow-up reuses the latest chat session id", async () => {
     onEvent({ type: "session.completed", summary: "done" });
   });
 
-  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
   await engine.startChatTask("First turn");
   await engine.startChatTask("Second turn", true);
 
@@ -269,7 +273,7 @@ test("clearTasksByTriggerSource removes only chat tasks", async () => {
     onEvent({ type: "session.completed", summary: "done" });
   });
 
-  const engine = new TaskEngine(runtime as never, new HostStub() as never);
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
   await engine.startChatTask("Chat turn");
   await engine.startTerminalTask("Terminal turn");
 
@@ -279,4 +283,38 @@ test("clearTasksByTriggerSource removes only chat tasks", async () => {
   assert.equal(tasks.length, 1);
   assert.equal(tasks[0]?.triggerSource, "terminal");
   assert.equal(tasks[0]?.inlineInstruction, "Terminal turn");
+});
+
+test("startDocumentTask accepts a custom preset resolved at runtime", async () => {
+  let capturedRequest: TaskRequest | null = null;
+  const runtime = new RuntimeStub((request, onEvent) => {
+    capturedRequest = request;
+    onEvent({ type: "result.text", text: "done" });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, (presetId) =>
+    presetId === "custom-1"
+      ? {
+          id: "custom-1",
+          label: "Custom 1",
+          goal: "Execute a custom preset.",
+          systemInstructions: "Rewrite the content more clearly.",
+          source: "custom",
+          enabled: true,
+          sortOrder: 4,
+          interactionMode: "inline"
+        }
+      : BUILTIN_PRESETS[presetId]
+  );
+
+  await engine.startDocumentTask({
+    presetId: "custom-1",
+    triggerSource: "context-menu",
+    context,
+    inlineInstruction: "Use the custom preset"
+  });
+
+  assert.equal(capturedRequest?.preset.id, "custom-1");
+  assert.equal(capturedRequest?.preset.systemInstructions, "Rewrite the content more clearly.");
 });

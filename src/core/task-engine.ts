@@ -1,10 +1,10 @@
 import type { HostAdapter } from "../obsidian/host-adapter";
-import type { AnteServeRuntimeAdapter } from "../runtime/ante-serve-adapter";
+import type { AnteRuntime } from "../runtime/ante-runtime";
 import { getArtifactTargetPath, toDocumentChangeArtifact } from "./artifacts";
-import { getPreset } from "./presets";
 import type {
   ContextSnapshot,
   DocumentChangeArtifact,
+  PresetDefinition,
   RuntimeChangeSuggestion,
   RuntimeApprovalDecision,
   RuntimeEvent,
@@ -71,8 +71,9 @@ export class TaskEngine {
   private readonly pendingStdout = new Map<string, { chunks: string[]; timer: ReturnType<typeof setTimeout> | null }>();
 
   constructor(
-    private readonly runtime: AnteServeRuntimeAdapter,
-    private readonly host: HostAdapter
+    private readonly runtime: AnteRuntime,
+    private readonly host: HostAdapter,
+    private readonly resolvePresetById: (presetId: PresetId) => PresetDefinition
   ) {}
 
   getState(): TmdState {
@@ -95,7 +96,7 @@ export class TaskEngine {
       taskId: crypto.randomUUID(),
       kind: "document",
       triggerSource: input.triggerSource,
-      preset: getPreset(input.presetId),
+      preset: this.resolvePresetById(input.presetId),
       context,
       inlineInstruction: input.inlineInstruction?.trim() ?? "",
       captureChangesAsArtifacts: input.captureChangesAsArtifacts ?? true
@@ -106,6 +107,35 @@ export class TaskEngine {
 
   async startChatTask(prompt: string, followUp = false, contextOverride?: ContextSnapshot | null): Promise<string> {
     return this.startInteractiveTask("chat", prompt, followUp, contextOverride);
+  }
+
+  async queueChatTask(
+    taskId: string,
+    prompt: string,
+    followUp = false,
+    contextOverride?: ContextSnapshot | null,
+    runtimeSessionId?: string | null
+  ): Promise<string> {
+    const context = contextOverride ?? (await this.host.getPreferredContext()) ?? {
+      filePath: null,
+      noteTitle: null,
+      documentText: null,
+      selection: null
+    };
+
+    const request: TaskRequest = {
+      taskId,
+      kind: "chat",
+      triggerSource: "chat",
+      preset: this.resolvePresetById("default"),
+      context,
+      inlineInstruction: prompt.trim(),
+      mode: followUp ? "followup" : "initial",
+      followUpPrompt: followUp ? prompt.trim() : undefined,
+      runtimeSessionId: followUp ? runtimeSessionId ?? undefined : undefined
+    };
+    await this.runTask(request);
+    return request.taskId;
   }
 
   async startTerminalTask(prompt: string, followUp = false, contextOverride?: ContextSnapshot | null): Promise<string> {
@@ -132,7 +162,7 @@ export class TaskEngine {
       taskId: crypto.randomUUID(),
       kind: triggerSource,
       triggerSource,
-      preset: getPreset("default"),
+      preset: this.resolvePresetById("default"),
       context,
       inlineInstruction: prompt.trim(),
       mode: followUp ? "followup" : "initial",
@@ -167,6 +197,38 @@ export class TaskEngine {
       this.state.currentTaskId && removedTaskIds.has(this.state.currentTaskId)
         ? null
         : this.state.currentTaskId;
+
+    this.state = {
+      ...this.state,
+      currentTaskId,
+      tasks: remainingTasks
+    };
+    this.notify();
+  }
+
+  clearTasks(taskIds: string[]): void {
+    if (taskIds.length === 0) {
+      return;
+    }
+    const removedTaskIds = new Set(taskIds);
+    const remainingTasks = this.state.tasks.filter((task) => !removedTaskIds.has(task.id));
+
+    for (const taskId of removedTaskIds) {
+      const pending = this.pendingStdout.get(taskId);
+      if (pending?.timer != null) {
+        clearTimeout(pending.timer);
+      }
+      this.pendingStdout.delete(taskId);
+    }
+
+    const currentTaskId =
+      this.state.currentTaskId && removedTaskIds.has(this.state.currentTaskId)
+        ? null
+        : this.state.currentTaskId;
+
+    if (this.activeTaskId && removedTaskIds.has(this.activeTaskId)) {
+      this.activeTaskId = null;
+    }
 
     this.state = {
       ...this.state,
@@ -359,6 +421,7 @@ export class TaskEngine {
       if (this.activeTaskId === request.taskId) {
         this.activeTaskId = null;
       }
+      throw error;
     }
   }
 
