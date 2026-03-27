@@ -14,6 +14,7 @@ const MAX_CONVERSATION_TITLE_CHARS = 60;
 const cloneContext = (context: ContextSnapshot | null | undefined): ContextSnapshot | null =>
   context
     ? {
+        vaultPath: context.vaultPath,
         filePath: context.filePath,
         noteTitle: context.noteTitle,
         documentText: context.documentText,

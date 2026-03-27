@@ -5,6 +5,7 @@ import type { ContextSnapshot, RuntimeChangeSuggestion } from "../src/core/types
 
 test("replace-selection can overwrite a trailing @ante trigger outside selection text", () => {
   const context: ContextSnapshot = {
+    vaultPath: "/vaults/test",
     filePath: "Note.md",
     noteTitle: "Note",
     documentText: "Old draft @ante rewrite this",

@@ -14,6 +14,7 @@ const terminalRequest = (overrides: Partial<TaskRequest> = {}): TaskRequest => (
     systemInstructions: "Prefer a direct document edit when the requested outcome is concrete."
   },
   context: {
+    vaultPath: "/vaults/workspace",
     filePath: "20260321 list.md",
     noteTitle: "20260321 list",
     documentText: "# Tasks\n\n- clean desk\n- empty trash\n",
@@ -34,6 +35,7 @@ const chatRequest = (overrides: Partial<TaskRequest> = {}): TaskRequest => ({
     systemInstructions: "Prefer answering directly unless the user asks for file changes."
   },
   context: {
+    vaultPath: "/vaults/personal",
     filePath: "Inbox.md",
     noteTitle: "Inbox",
     documentText: "# Inbox\n\n- follow up with design team\n",
@@ -50,6 +52,8 @@ test("terminal prompt prioritizes provided note context over workspace search", 
   assert.match(prompt, /primary source of truth/i);
   assert.match(prompt, /Do not search the workspace/i);
   assert.match(prompt, /summarize only the current note content shown below/i);
+  assert.match(prompt, /Current Obsidian vault path: \/vaults\/workspace/);
+  assert.match(prompt, /analyze the document in relation to the surrounding vault structure/i);
   assert.match(prompt, /20260321 list\.md/);
   assert.match(prompt, /clean desk/);
 });
@@ -68,6 +72,8 @@ test("chat prompt uses the chat-specific framing and includes note context", () 
   assert.match(prompt, /Chat with Ante in an Obsidian vault/i);
   assert.match(prompt, /Preset: @ante/);
   assert.match(prompt, /User instruction:\nWhat should I do next\?/);
+  assert.match(prompt, /Current Obsidian vault path: \/vaults\/personal/);
+  assert.match(prompt, /folder organization, and nearby documentation context/i);
   assert.match(prompt, /Current note path: Inbox\.md/);
   assert.match(prompt, /follow up with design team/);
 });

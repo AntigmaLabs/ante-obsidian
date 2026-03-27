@@ -1,4 +1,4 @@
-import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
+import { Component, ItemView, MarkdownRenderer, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import type TmdPlugin from "./main";
 import type { ChatConversationRecord, ChatMessageRecord, ChatStateSnapshot } from "../core/chat-types";
 import type {
@@ -119,8 +119,11 @@ interface ChatMessageElements {
   bubbleEl: HTMLDivElement;
   roleEl: HTMLDivElement;
   stampEl: HTMLDivElement;
-  textEl: HTMLPreElement | null;
+  textEl: HTMLElement | null;
   textValue: string | null;
+  textMode: "plain" | "markdown" | null;
+  textRenderToken: number;
+  textComponent: Component | null;
   loadingEl: HTMLDivElement | null;
   loadingValue: string | null;
   processEl: HTMLDivElement | null;
@@ -161,6 +164,8 @@ export class TmdChatView extends ItemView {
   private composerActionButtonEl!: HTMLButtonElement;
   private composerEl!: HTMLTextAreaElement;
   private loadMoreButtonEl: HTMLButtonElement | null = null;
+  private lastRenderedConversationId: string | null = null;
+  private shouldAutoScrollToBottom = true;
   private isComposing = false;
   private isSidebarCollapsed = true;
 
@@ -318,8 +323,11 @@ export class TmdChatView extends ItemView {
     if (!chatState) {
       return;
     }
-    const shouldStickToBottom = this.shouldStickToBottom();
     const activeConversation = this.getActiveConversation(chatState);
+    const activeConversationId = activeConversation?.id ?? null;
+    const shouldStickToBottom = this.shouldStickToBottom();
+    const shouldForceScrollToBottom =
+      this.shouldAutoScrollToBottom || (activeConversationId !== null && activeConversationId !== this.lastRenderedConversationId);
     const messages = activeConversation ? chatState.messagesByConversation[activeConversation.id] ?? [] : [];
     const visibleMessages = messages.slice(-this.visibleMessageCount);
     const visibleTaskIds = visibleMessages
@@ -358,6 +366,7 @@ export class TmdChatView extends ItemView {
       this.syncLoadMore(null, 0);
       this.syncEmptyState(true);
       this.pruneMessageEls([]);
+      this.lastRenderedConversationId = activeConversationId;
       return;
     }
 
@@ -365,8 +374,10 @@ export class TmdChatView extends ItemView {
     this.syncLoadMore(activeConversation.id, messages.length - visibleMessages.length);
     this.syncMessages(visibleMessages, taskLookup, diffsByTask);
     this.pruneResolvedArtifactCache(visibleTaskIds);
-    if (shouldStickToBottom) {
-      this.timelineEl.scrollTop = this.timelineEl.scrollHeight;
+    this.lastRenderedConversationId = activeConversationId;
+    if (shouldForceScrollToBottom || shouldStickToBottom) {
+      this.scrollToBottom();
+      this.shouldAutoScrollToBottom = false;
     }
   }
 
@@ -475,6 +486,7 @@ export class TmdChatView extends ItemView {
     const button = this.loadMoreButtonEl ?? this.timelineEl.createEl("button", { cls: "tmd-chat-load-more" });
     button.setText(`Load ${Math.min(hiddenCount, MESSAGE_WINDOW_SIZE)} earlier messages`);
     button.onclick = () => {
+      this.shouldAutoScrollToBottom = false;
       this.visibleMessageCount += MESSAGE_WINDOW_SIZE;
       void this.render();
     };
@@ -539,6 +551,9 @@ export class TmdChatView extends ItemView {
         stampEl,
         textEl: null,
         textValue: null,
+        textMode: null,
+        textRenderToken: 0,
+        textComponent: null,
         loadingEl: null,
         loadingValue: null,
         processEl: null,
@@ -560,7 +575,7 @@ export class TmdChatView extends ItemView {
 
     const previewText = clampPreview(message.text);
     if (previewText) {
-      this.syncMessageText(elements, previewText);
+      this.syncMessageText(elements, message, previewText);
       this.removeLoading(elements);
     } else if (message.status === "streaming") {
       this.removeText(elements);
@@ -601,6 +616,7 @@ export class TmdChatView extends ItemView {
       if (visible.has(messageId)) {
         continue;
       }
+      this.disposeMessageTextComponent(elements);
       elements.rootEl.remove();
       this.messageEls.delete(messageId);
     }
@@ -610,16 +626,101 @@ export class TmdChatView extends ItemView {
     }
   }
 
-  private syncMessageText(elements: ChatMessageElements, text: string): void {
-    const textEl = elements.textEl ?? elements.bubbleEl.createEl("pre", { cls: "tmd-chat-text tmd-chat-pre" });
+  private syncMessageText(elements: ChatMessageElements, message: ChatMessageRecord, text: string): void {
+    if (message.role === "assistant" && message.status !== "streaming") {
+      this.syncMarkdownMessageText(elements, message, text);
+      return;
+    }
+
+    const textEl = this.ensureMessageTextEl(elements, "plain");
     this.setText(textEl, text, "textValue", elements);
+  }
+
+  private syncMarkdownMessageText(elements: ChatMessageElements, message: ChatMessageRecord, text: string): void {
+    const textEl = this.ensureMessageTextEl(elements, "markdown");
+    if (elements.textValue === text) {
+      return;
+    }
+
+    elements.textValue = text;
+    const renderToken = elements.textRenderToken + 1;
+    elements.textRenderToken = renderToken;
+    textEl.empty();
+    textEl.removeClass("tmd-chat-pre");
+    textEl.addClass("markdown-rendered");
+
+    const sourcePath = message.context?.filePath ?? this.liveContext?.filePath ?? "";
+    const renderComponent = elements.textComponent ?? this;
+
+    void MarkdownRenderer.render(this.app, text, textEl, sourcePath, renderComponent)
+      .then(() => {
+        if (elements.textRenderToken !== renderToken || elements.textEl !== textEl || elements.textMode !== "markdown") {
+          return;
+        }
+        if (this.shouldAutoScrollToBottom || this.shouldStickToBottom()) {
+          this.scrollToBottom();
+          this.shouldAutoScrollToBottom = false;
+        }
+      })
+      .catch(() => {
+        if (elements.textRenderToken !== renderToken || elements.textEl !== textEl || elements.textMode !== "markdown") {
+          return;
+        }
+        this.fallbackToPlainText(textEl, text);
+        if (this.shouldAutoScrollToBottom || this.shouldStickToBottom()) {
+          this.scrollToBottom();
+          this.shouldAutoScrollToBottom = false;
+        }
+      });
+  }
+
+  private ensureMessageTextEl(elements: ChatMessageElements, mode: "plain" | "markdown"): HTMLElement {
+    if (elements.textEl && elements.textMode === mode) {
+      return elements.textEl;
+    }
+
+    this.disposeMessageTextComponent(elements);
+    elements.textEl?.remove();
+
+    const textEl =
+      mode === "markdown"
+        ? elements.bubbleEl.createDiv({ cls: "tmd-chat-text markdown-rendered" })
+        : elements.bubbleEl.createEl("pre", { cls: "tmd-chat-text tmd-chat-pre" });
+
     elements.textEl = textEl;
+    elements.textMode = mode;
+    elements.textValue = null;
+    elements.textRenderToken += 1;
+
+    if (mode === "markdown") {
+      elements.textComponent = this.addChild(new Component());
+    }
+
+    return textEl;
+  }
+
+  private disposeMessageTextComponent(elements: ChatMessageElements): void {
+    if (!elements.textComponent) {
+      return;
+    }
+    this.removeChild(elements.textComponent);
+    elements.textComponent = null;
+  }
+
+  private fallbackToPlainText(container: HTMLElement, text: string): void {
+    container.empty();
+    container.removeClass("markdown-rendered");
+    container.addClass("tmd-chat-pre");
+    container.setText(text);
   }
 
   private removeText(elements: ChatMessageElements): void {
+    this.disposeMessageTextComponent(elements);
     elements.textEl?.remove();
     elements.textEl = null;
     elements.textValue = null;
+    elements.textMode = null;
+    elements.textRenderToken += 1;
   }
 
   private syncLoading(elements: ChatMessageElements, text: string): void {
@@ -845,6 +946,7 @@ export class TmdChatView extends ItemView {
     if (!prompt) {
       return;
     }
+    this.shouldAutoScrollToBottom = true;
 
     const activeConversation = this.getActiveConversation(this.latestChatState);
     const followUpSessionId = activeConversation
@@ -962,6 +1064,10 @@ export class TmdChatView extends ItemView {
   private shouldStickToBottom(): boolean {
     const threshold = 24;
     return this.timelineEl.scrollTop + this.timelineEl.clientHeight >= this.timelineEl.scrollHeight - threshold;
+  }
+
+  private scrollToBottom(): void {
+    this.timelineEl.scrollTop = this.timelineEl.scrollHeight;
   }
 
   private pruneResolvedArtifactCache(activeTaskIds: string[]): void {

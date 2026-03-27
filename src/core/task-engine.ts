@@ -117,6 +117,7 @@ export class TaskEngine {
     runtimeSessionId?: string | null
   ): Promise<string> {
     const context = contextOverride ?? (await this.host.getPreferredContext()) ?? {
+      vaultPath: null,
       filePath: null,
       noteTitle: null,
       documentText: null,
@@ -149,6 +150,7 @@ export class TaskEngine {
     contextOverride?: ContextSnapshot | null
   ): Promise<string> {
     const context = contextOverride ?? (await this.host.getPreferredContext()) ?? {
+      vaultPath: null,
       filePath: null,
       noteTitle: null,
       documentText: null,

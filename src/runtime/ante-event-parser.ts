@@ -281,11 +281,82 @@ const parseJsonPayload = (value: string): unknown | null => {
   }
 
   const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
-  const candidate = fenced ? fenced[1] : trimmed;
+  const candidate = (fenced ? fenced[1] : trimmed).replace(/\s*\[end_turn\]\s*$/i, "").trim();
   try {
     return JSON.parse(candidate) as unknown;
   } catch {
     return null;
+  }
+};
+
+const extractTopLevelJsonObject = (value: string, startIndex = 0): string | null => {
+  const normalized = value.replace(/\s*\[end_turn\]\s*$/i, "").trim();
+  const start = normalized.indexOf("{", startIndex);
+  if (start < 0) {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < normalized.length; index += 1) {
+    const char = normalized[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) {
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return normalized.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
+};
+
+const extractStructuredTextFallback = (message: string): string | null => {
+  let searchFrom = 0;
+  while (true) {
+    const candidate = extractTopLevelJsonObject(message, searchFrom);
+    if (!candidate) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const record = parsed as Record<string, unknown>;
+        if (record.type === "text" && typeof record.text === "string") {
+          return record.text;
+        }
+      }
+    } catch {
+      // Keep scanning later brace-delimited objects.
+    }
+
+    const nextSearchStart = message.indexOf(candidate, searchFrom);
+    if (nextSearchStart < 0) {
+      return null;
+    }
+    searchFrom = nextSearchStart + candidate.length;
   }
 };
 
@@ -333,6 +404,11 @@ export const parseAssistantMessage = (message: string): RuntimeEvent[] => {
         return [{ type: "result.changes", changes }];
       }
     }
+  }
+
+  const fallbackText = extractStructuredTextFallback(message);
+  if (fallbackText != null) {
+    return [{ type: "result.text", text: fallbackText }];
   }
 
   return [{ type: "result.text", text: message.trim() }];

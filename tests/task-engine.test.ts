@@ -12,6 +12,7 @@ import type {
 } from "../src/core/types";
 
 const context: ContextSnapshot = {
+  vaultPath: "/vaults/test",
   filePath: "Note.md",
   noteTitle: "Note",
   documentText: "alpha\n",

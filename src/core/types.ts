@@ -27,6 +27,7 @@ export interface SelectionSnapshot {
 }
 
 export interface ContextSnapshot {
+  vaultPath: string | null;
   filePath: string | null;
   noteTitle: string | null;
   documentText: string | null;

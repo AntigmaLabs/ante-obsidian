@@ -16,6 +16,7 @@ const request: TaskRequest = {
     systemInstructions: ""
   },
   context: {
+    vaultPath: "/vaults/test",
     filePath: "Note.md",
     noteTitle: "Note",
     documentText: "hello",

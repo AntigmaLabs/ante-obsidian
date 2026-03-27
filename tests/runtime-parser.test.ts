@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { homedir } from "node:os";
-import { extractErrorMessage, extractTurnPauseApproval, extractTurnStatus } from "../src/runtime/ante-event-parser";
+import {
+  extractErrorMessage,
+  extractTurnPauseApproval,
+  extractTurnStatus,
+  parseAssistantMessage
+} from "../src/runtime/ante-event-parser";
 import { resolveCommandPath } from "../src/runtime/transport/ante-stdio-transport";
 
 test("nested TurnEnd error status is parsed as failed with message", () => {
@@ -52,6 +57,38 @@ test("TurnPause approval payload is parsed into tools and turn id", () => {
       }
     ]
   });
+});
+
+test("parseAssistantMessage strips trailing end_turn marker from text payload", () => {
+  const events = parseAssistantMessage(`{"type":"text","text":"hello\\nworld"}[end_turn]`);
+
+  assert.deepEqual(events, [{ type: "result.text", text: "hello\nworld" }]);
+});
+
+test("parseAssistantMessage falls back to extracting only the text field", () => {
+  const events = parseAssistantMessage(`{
+    "type": "text",
+    "text": "only this should render",
+    "meta": {"ignored": true}
+  } trailing noise`);
+
+  assert.deepEqual(events, [{ type: "result.text", text: "only this should render" }]);
+});
+
+test("parseAssistantMessage fallback only accepts top-level text payload", () => {
+  const events = parseAssistantMessage(`prefix {
+    "type": "text",
+    "meta": {"text": "ignore this nested value"},
+    "text": "use the top-level text"
+  } suffix`);
+
+  assert.deepEqual(events, [{ type: "result.text", text: "use the top-level text" }]);
+});
+
+test("parseAssistantMessage fallback skips earlier non-text objects", () => {
+  const events = parseAssistantMessage(`noise {"meta":{"kind":"debug"}} middle {"type":"text","text":"final payload"} tail`);
+
+  assert.deepEqual(events, [{ type: "result.text", text: "final payload" }]);
 });
 
 test("resolveCommandPath falls back to ~/.ante/bin for bare ante command", () => {

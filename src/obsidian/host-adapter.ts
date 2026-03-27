@@ -1,6 +1,7 @@
 import {
   App,
   Editor,
+  FileSystemAdapter,
   MarkdownView,
   Notice,
   TFile,
@@ -126,6 +127,7 @@ export class ObsidianHostAdapter implements HostAdapter {
     const editor = view.editor;
     const selectionText = editor.getSelection();
     const context: ContextSnapshot = {
+      vaultPath: this.getVaultPath(),
       filePath: view.file.path,
       noteTitle: view.file.basename,
       documentText: editor.getValue(),
@@ -140,6 +142,11 @@ export class ObsidianHostAdapter implements HostAdapter {
 
     this.lastKnownContext = context;
     return context;
+  }
+
+  private getVaultPath(): string | null {
+    const adapter = this.app.vault.adapter;
+    return adapter instanceof FileSystemAdapter ? adapter.getBasePath() : null;
   }
 
   private requireFile(path: string): TFile {

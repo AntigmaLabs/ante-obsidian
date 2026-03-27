@@ -1,16 +1,24 @@
 import type { TaskRequest } from "./types";
 
 const buildContextBlock = (request: TaskRequest): string => {
+  const vaultPath = request.context.vaultPath?.trim() ?? "";
   const selection = request.context.selection?.text?.trim() ?? "";
   const documentText = request.context.documentText?.trim() ?? "";
   const notePath = request.context.filePath ?? "Untitled.md";
 
   return [
+    vaultPath ? `Current Obsidian vault path: ${vaultPath}` : "Current Obsidian vault path: <unknown>",
     `Current note path: ${notePath}`,
     selection ? `Selected text:\n${selection}` : "Selected text: <none>",
     documentText ? `Current note content:\n${documentText}` : "Current note content: <empty>"
   ].join("\n\n");
 };
+
+const buildVaultAnalysisBlock = (): string =>
+  [
+    "You may use the current Obsidian vault path and note path to analyze the document in relation to the surrounding vault structure.",
+    "When useful, infer how this note fits within the vault, folder organization, and nearby documentation context based on those paths."
+  ].join("\n");
 
 const buildSchemaBlock = (): string =>
   [
@@ -66,6 +74,11 @@ const buildTerminalContextBlock = (request: TaskRequest): string => {
   }
 
   const lines: string[] = [];
+  if (request.context.vaultPath) {
+    lines.push(`Current Obsidian vault path: ${request.context.vaultPath}`);
+  } else {
+    lines.push("Current Obsidian vault path: <unknown>");
+  }
   if (request.context.filePath) {
     lines.push(`Current note path: ${request.context.filePath}`);
   }
@@ -98,7 +111,7 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
   }
 
   if (request.kind === "terminal") {
-    return [inlineInstruction, "", buildTerminalPriorityBlock(), "", buildTerminalContextBlock(request), "", buildTerminalSchemaBlock()]
+    return [inlineInstruction, "", buildTerminalPriorityBlock(), "", buildVaultAnalysisBlock(), "", buildTerminalContextBlock(request), "", buildTerminalSchemaBlock()]
       .filter(Boolean)
       .join("\n\n");
   }
@@ -111,6 +124,7 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
     `Goal: ${request.preset.goal}`,
     request.preset.systemInstructions ? `Execution instructions:\n${request.preset.systemInstructions}` : "",
     inlineInstruction ? `User instruction:\n${inlineInstruction}` : "",
+    buildVaultAnalysisBlock(),
     buildContextBlock(request),
     buildSchemaBlock()
   ]

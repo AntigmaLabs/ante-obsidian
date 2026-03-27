@@ -740,6 +740,11 @@ button.tmd-diff-file-main {
 
 .tmd-chat-view button {
   box-shadow: none !important;
+  cursor: pointer;
+}
+
+.tmd-chat-view button:disabled {
+  cursor: default;
 }
 
 .tmd-chat-shell {
@@ -801,7 +806,7 @@ button.tmd-diff-file-main {
   flex-direction: column;
   align-items: stretch;
   gap: 14px;
-  padding: 16px 16px 8px;
+  padding: 8px 16px 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--tmd-chat-line) 55%, transparent);
 }
 
@@ -941,6 +946,7 @@ button.tmd-diff-file-main {
   line-height: 0;
   border-radius: 0;
   opacity: 0;
+  cursor: pointer;
   transition:
     opacity 140ms ease,
     color 140ms ease,
@@ -1029,12 +1035,15 @@ button.tmd-diff-file-main {
   min-height: 0;
   overflow-y: auto;
   padding: 22px 20px 28px;
+  user-select: text;
+  -webkit-user-select: text;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--text-muted) 38%, transparent) transparent;
 }
 
 .tmd-chat-load-more {
   align-self: center;
+  cursor: pointer;
 }
 
 .tmd-chat-timeline::-webkit-scrollbar {
@@ -1057,6 +1066,7 @@ button.tmd-diff-file-main {
 .tmd-chat-message {
   display: flex;
   align-items: flex-start;
+  min-width: 0;
 }
 
 .tmd-chat-message.tmd-is-user {
@@ -1073,6 +1083,7 @@ button.tmd-diff-file-main {
   flex-direction: column;
   gap: 10px;
   width: min(100%, 760px);
+  min-width: 0;
   padding: 14px 16px 15px;
   border-radius: 22px;
   box-shadow: none;
@@ -1124,6 +1135,46 @@ button.tmd-diff-file-main {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.tmd-chat-text.markdown-rendered {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.tmd-chat-text.markdown-rendered :is(p, ul, ol, li, blockquote) {
+  white-space: normal;
+}
+
+.tmd-chat-text.markdown-rendered :is(ul, ol) {
+  margin-block: 0.35em;
+  padding-inline-start: 1.4em;
+}
+
+.tmd-chat-text.markdown-rendered li + li {
+  margin-top: 0.2em;
+}
+
+.tmd-chat-text.markdown-rendered li > p {
+  margin-block: 0.2em;
+}
+
+.tmd-chat-text.markdown-rendered > :first-child {
+  margin-top: 0;
+}
+
+.tmd-chat-text.markdown-rendered > :last-child {
+  margin-bottom: 0;
+}
+
+.tmd-chat-text * {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .tmd-chat-message.tmd-is-assistant .tmd-chat-text {
@@ -1167,6 +1218,7 @@ button.tmd-diff-file-main {
 .tmd-chat-secondary-action {
   align-self: flex-start;
   box-shadow: none !important;
+  cursor: pointer;
 }
 
 .tmd-chat-composer {
@@ -1180,7 +1232,7 @@ button.tmd-diff-file-main {
 .tmd-chat-input {
   width: 100%;
   min-height: 112px;
-  padding: 14px 68px 56px 16px;
+  padding: 14px 60px 16px 16px;
   border: 1px solid var(--tmd-chat-line);
   border-radius: 18px;
   background: color-mix(in srgb, var(--tmd-chat-paper) 98%, white 2%);
@@ -1196,20 +1248,21 @@ button.tmd-diff-file-main {
 
 .tmd-chat-primary-action {
   position: absolute;
-  right: 14px;
-  bottom: 30px;
+  right: 16px;
+  bottom: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
   padding: 0;
   border: 0 !important;
   border-radius: 999px;
   background: #111111 !important;
   color: #ffffff !important;
   box-shadow: none !important;
+  cursor: pointer;
   transition:
     background-color 140ms ease,
     color 140ms ease,
@@ -1230,8 +1283,8 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-primary-action svg {
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
 }
 
 .tmd-chat-empty {
