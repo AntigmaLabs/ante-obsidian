@@ -1,14 +1,22 @@
 # Tmd
 
-Tmd is an Obsidian desktop plugin focused on Ante-powered terminal Markdown workflows.
+Tmd is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to note editing, review, and chat flows inside Obsidian.
 
 ## Features
 
 - Trigger document tasks from Markdown with `@ante`
-- Run `@ante`, `@ante research`, and `@ante plan` from the editor right-click menu
-- Open `Chat with Ante` from the editor menu or command palette
-- Preview Markdown changes as unified diffs before applying them
-- Support both edits to existing `.md` files and creation of new Markdown files
+- Run visible presets from the editor right-click menu, including built-ins such as `@ante`, `@ante research`, `@ante plan`, and `@ante summary`
+- Create custom presets in settings, then reorder or hide built-in and custom presets with drag and drop
+- Open `Chat with Ante` from the editor menu or command palette for multi-turn note-aware conversations
+- Use `Ante Terminal` for a more terminal-style prompt flow when you want streaming output and approval controls
+- Preview Markdown changes as unified diffs in `Tmd Results`, including multi-file changes, before applying them
+- Support edits to existing `.md` files and creation of new Markdown files
+
+## Main Views
+
+- `Tmd Results`: review text output, diff summaries, and apply generated Markdown changes
+- `Chat with Ante`: keep conversation history, switch between conversations from the sidebar, reuse note context, and render Markdown replies
+- `Ante Terminal`: send terminal-style prompts, inspect runtime logs, and approve or deny tool calls when needed
 
 ## Runtime
 
@@ -19,7 +27,7 @@ Tmd talks to `ante serve` using one of two transports:
 
 It does not use PTY, `xterm`, or other terminal emulation.
 
-The plugin asks Ante to return one JSON object:
+For note editing and chat tasks, the plugin asks Ante to return one JSON object:
 
 ```json
 {"type":"text","text":"..."}
@@ -31,6 +39,12 @@ or
 {"type":"change","operation":"replace-selection","afterText":"..."}
 ```
 
+or
+
+```json
+{"type":"changes","changes":[{"operation":"append-block","afterText":"..."},{"operation":"create-file","targetPath":"Notes/New.md","afterText":"..."}]}
+```
+
 Supported change operations are:
 
 - `replace-selection`
@@ -39,6 +53,7 @@ Supported change operations are:
 - `create-file`
 
 For `create-file`, Ante must return an explicit `targetPath`.
+For multiple edits, Ante should return one `changes` object containing every Markdown change.
 
 ## Development
 
@@ -114,7 +129,8 @@ After installation:
 1. Enable `Tmd` in `Settings -> Community plugins`.
 2. Confirm the local Ante command and connection mode settings if needed.
 3. By default, Tmd follows `~/.ante/settings.json` for provider and model.
-4. If you switch Tmd to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.
+4. Review preset visibility and ordering in `Tmd Settings -> Presets` if you want to customize the editor menu.
+5. If you switch Tmd to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.
 
 The Obsidian plugin still stores local machine settings in its own plugin data file at runtime. That is expected user-local configuration, not repository configuration.
 
@@ -126,6 +142,13 @@ Current defaults that are still opinionated but not machine-bound:
 - Plugin default WebSocket address: `127.0.0.1:8765`
 - Plugin default model: `gpt-5.4`
 - Plugin default provider: `openai-subscription`
+
+Built-in presets currently included by default:
+
+- `@ante`
+- `@ante research`
+- `@ante plan`
+- `@ante summary`
 
 ## Version Sync
 

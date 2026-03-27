@@ -1,21 +1,22 @@
 # Tmd User Guide
 
-Tmd is an Obsidian desktop plugin for Ante-powered terminal Markdown workflows. It connects your local Ante runtime to your note editing flow so you can rewrite, expand, plan, and inspect Markdown directly inside Obsidian.
+Tmd is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to note editing, diff review, chat, and terminal-style interaction inside Obsidian.
 
-This guide is written for end users. It focuses on what Tmd can do, where each feature is triggered, and where the results appear.
+This guide is written for end users. It focuses on what Tmd can do today, where each feature is triggered, and where the results appear.
 
 ## What The Plugin Does
 
-Tmd currently provides 6 main user-facing capabilities:
+Tmd currently provides 7 main user-facing capabilities:
 
-1. Trigger AI actions directly inside notes with `@ante`.
-2. Run built-in presets from the editor context menu or command palette.
-3. Review Markdown changes and diffs in `Tmd Results`.
-4. Ask free-form follow-up questions in `Chat with Ante`.
-5. Use a terminal-style interaction flow in `Ante Terminal`.
+1. Trigger inline note actions with `@ante`.
+2. Run built-in or custom presets from the editor context menu.
+3. Review text output and Markdown diffs in `Tmd Results`.
+4. Ask follow-up questions in `Chat with Ante`.
+5. Use `Ante Terminal` for a more terminal-style prompt flow.
 6. Configure the local Ante runtime, provider, model, and credentials from plugin settings.
+7. Manage preset visibility, ordering, and custom preset definitions from plugin settings.
 
-## Feature 1: Inline Triggers Inside Notes
+## Feature 1: Inline Trigger Inside Notes
 
 You can type this trigger directly in a Markdown note:
 
@@ -23,10 +24,9 @@ You can type this trigger directly in a Markdown note:
 
 ### What It's For
 
-- `@ante`
-  Best for direct work on the current paragraph, selection, or note content, such as rewriting, polishing, completing, or restructuring.
+`@ante` is best for direct work on the current paragraph, selection, or note content, such as rewriting, polishing, completing, or restructuring.
 
-For research or planning tasks, please use the context menu or command palette instead.
+For more structured research, planning, or summarization, use presets from the context menu or command palette.
 
 ### What Happens After Triggering
 
@@ -34,30 +34,39 @@ For research or planning tasks, please use the context menu or command palette i
 - If there is no selection, Tmd tries to use the current paragraph around the cursor.
 - The plugin inserts a temporary running placeholder into the note.
 - If Ante returns plain text, the placeholder is replaced with the final content.
-- If Ante returns document changes, Tmd applies the changes directly and leaves a success message in the note.
+- If Ante returns inline Markdown changes, Tmd applies the changes directly and leaves a success message in the note.
+- If Ante returns file-level or multi-file changes, Tmd applies them directly and you can open `Tmd Results` afterward if you want to inspect or revert the diff.
 
 ### Typical Uses
 
 - Add `@ante` after a rough paragraph to rewrite it.
-- Use the context menu `@ante research` action under a topic heading to generate research notes.
-- Use the context menu `@ante plan` action from a meeting note or idea draft to turn it into an execution plan.
+- Select a checklist or draft section and ask Tmd to clean up the wording.
+- Use presets when the task already fits a repeatable pattern.
 
-## Feature 2: Editor Context Menu Actions
+## Feature 2: Editor Context Menu Presets
 
-When you right-click in the Obsidian editor, Tmd adds these entries:
+When you right-click in the Obsidian editor with text selected, Tmd adds visible presets to the menu.
+
+By default, the built-in presets are:
 
 - `@ante`
 - `@ante research`
 - `@ante plan`
+- `@ante summary`
+
+Your custom presets can also appear here if they are enabled in settings.
+
+The same menu also includes:
+
 - `Chat with Ante`
 - `Open Ante Terminal`
 
 ### Why This Matters
 
-- You do not need to type the trigger text manually.
-- It is a faster way to run a preset on the current note or current selection.
-- If a task returns Markdown changes, Tmd tries to apply them automatically.
-- If auto-apply fails, or if you want to inspect the change, open `Tmd Results`.
+- You do not need to type trigger text manually.
+- Built-in presets cover common Markdown workflows such as research, plan drafting, and summary generation.
+- Custom presets let you encode your own repeatable prompt instructions.
+- The menu order follows your preset order from settings.
 
 ## Feature 3: Command Palette Commands
 
@@ -69,16 +78,17 @@ Tmd also registers these commands in the Obsidian command palette:
 - `Run @ante on current note`
 - `Run @ante research on current note`
 - `Run @ante plan on current note`
+- `Run @ante summary on current note`
 
 ### Good Use Cases
 
 - You prefer keyboard-driven workflows.
-- You want to reopen the results, console, or terminal panel quickly.
-- You repeatedly run the same preset on the current note.
+- You want to reopen the results, chat, or terminal panel quickly.
+- You repeatedly run the same built-in preset on the current note.
 
 ## Feature 4: Tmd Results
 
-`Tmd Results` is the main panel for reviewing task output. It can show plain text output and Markdown diffs.
+`Tmd Results` is the main panel for reviewing task output. It can show plain text output, diff summaries, and full Markdown diffs.
 
 ### What You Can See There
 
@@ -87,12 +97,7 @@ Tmd also registers these commands in the Obsidian command palette:
 - The target file or selection location for each change
 - Addition and removal counts
 - Unified diff previews
-
-### What It Helps With
-
-- Understanding exactly what Ante changed
-- Verifying whether the edit matches your expectation
-- Distinguishing between selection replacement, block append, whole-file replacement, and file creation
+- Apply actions for pending changes
 
 ### Supported Change Types
 
@@ -103,44 +108,50 @@ Tmd currently supports these Markdown change operations:
 - `replace-file`
 - `create-file`
 
+Tmd can also display a grouped `changes` result when Ante returns multiple Markdown edits in one response.
+
 ### Why The Results Panel Matters
 
-When Ante returns structured document edits instead of just text, `Tmd Results` is the primary place to inspect the scope, target, and effect of the change.
+When Ante returns structured document edits instead of plain text, `Tmd Results` is the primary place to inspect scope, target, and effect before or while applying changes.
 
 ## Feature 5: Chat with Ante
 
-`Chat with Ante` is a chat-style prompt panel. It is useful when you want to talk to Ante first instead of editing the document immediately.
+`Chat with Ante` is a note-aware multi-turn conversation panel. It is useful when you want to discuss a note, ask follow-up questions, or inspect generated changes without immediately editing the document inline.
 
 ### Main Capabilities
 
-- Send arbitrary prompts
-- Reuse the most recent note context automatically
-- Keep a chat timeline
-- Continue follow-up prompts in an existing session
-- Show text results, logs, and change summaries
+- Start a new conversation from the sidebar
+- Switch between saved conversations
+- Rename or delete conversations
+- Reuse the current note context automatically
+- Continue follow-up prompts in the same conversation
+- Render Markdown replies
+- Show runtime progress, tool approval cards, and generated change summaries
 
 ### Good Use Cases
 
 - Explore ideas before changing a note
 - Ask follow-up questions after a previous task
-- Brainstorm additional angles or missing sections
+- Discuss the current note in relation to its vault path and nearby documentation structure
+- Review generated diff summaries inside the conversation flow
 
-### Difference From Inline Triggers
+### Context Behavior
 
-- Inline triggers are for acting directly inside the note.
-- Chat is for exploratory interaction first, document changes second.
+- The active note or selection is captured as chat context when useful.
+- Chat can reuse pinned context from the current conversation.
+- Recent updates added richer vault-aware context, so note path and vault path are available to Ante during chat tasks.
 
 ## Feature 6: Ante Terminal
 
-`Ante Terminal` provides a more terminal-like interaction model. It shows prompts, streamed output previews, system logs, task status, and tool approval controls when needed.
+`Ante Terminal` provides a more terminal-like interaction model. It shows prompts, streamed output previews, system logs, task status, and tool approval controls.
 
 ### Main Capabilities
 
 - Send prompts in a terminal-style flow
-- View streaming output previews while the task is running
+- View streaming output while the task is running
 - Inspect system messages and errors
 - Approve or deny Ante tool calls when required
-- Open `Tmd Results` after the task prepares Markdown changes
+- Open `Tmd Results` when a task produces Markdown artifacts
 
 ### Tool Approval
 
@@ -150,21 +161,9 @@ If Ante asks to use tools during a run, the terminal view can show an approval c
 - `Allow session`
 - `Deny`
 
-This gives users more control in workflows where safety or runtime visibility matters.
+## Feature 7: Settings And Preset Management
 
-## How Context Is Chosen
-
-Tmd tries to infer the right Markdown context from your current editing state:
-
-- If text is selected, the selection is preferred.
-- If nothing is selected, Tmd may use the current paragraph.
-- In Chat with Ante and Terminal, Tmd prefers the most recently captured note context.
-
-In practice, this means you usually do not need to copy and paste note content manually. Put the cursor in the right place or select the target text first.
-
-## Configuration Features
-
-Besides editing workflows, Tmd also gives you several runtime settings for connecting to your local Ante setup.
+Besides runtime configuration, Tmd now includes a dedicated preset management section in settings.
 
 ### Available Settings
 
@@ -178,22 +177,27 @@ Besides editing workflows, Tmd also gives you several runtime settings for conne
 - Manual provider and model selection
 - Gemini API key or its environment variable name
 - Mention trigger debug notices
+- Preset visibility controls
+- Drag-and-drop preset reordering
+- Create, edit, and delete custom presets
 
 ### Why These Settings Matter
 
 - You can reuse your existing Ante configuration.
 - You can choose between a local stdin/stdout connection and a WebSocket transport.
-- You can override the provider and model inside the plugin.
-- You can adapt Tmd to different local runtime setups.
+- You can override provider and model inside the plugin.
+- You can simplify the editor menu to only show the presets you actually use.
+- You can add team- or workflow-specific presets without changing code.
 
 ## A Typical Workflow
 
 1. Open a Markdown note.
 2. Select text or place the cursor in the target paragraph.
-3. Trigger Tmd with `@ante`, the context menu, or the command palette.
-4. If the result is plain text, it appears in the note or results panel.
-5. If the result is a document change, inspect it in `Tmd Results`.
-6. If you need follow-up interaction, continue in `Chat with Ante` or `Ante Terminal`.
+3. Trigger Tmd with `@ante`, a preset from the context menu, or a command palette action.
+4. If the result is inline text, it appears in the note.
+5. If the result is plain text or a file diff, inspect it in `Tmd Results`.
+6. If you need follow-up discussion, continue in `Chat with Ante`.
+7. If you want a more runtime-focused flow, use `Ante Terminal`.
 
 ## Requirements
 
@@ -212,10 +216,11 @@ If Ante is not available, Tmd will not work.
 
 In one sentence, Tmd is:
 
-"Ante-powered terminal Markdown workflows inside Obsidian, so you can trigger AI actions inside notes, inspect diffs, apply changes, and continue follow-up interactions."
+"Ante-powered Markdown workflows inside Obsidian, so you can trigger AI actions in notes, inspect diffs, manage reusable presets, and continue follow-up interactions in chat or terminal views."
 
-For day-to-day use, the three most important things to learn first are:
+For day-to-day use, the most important things to learn first are:
 
-- `@ante` for inline note actions, plus `@ante research` / `@ante plan` from the context menu or command palette
-- `Tmd Results` for inspecting changes
-- `Chat with Ante` and `Ante Terminal` for follow-up interaction
+- `@ante` for quick inline edits
+- Built-in and custom presets from the context menu
+- `Tmd Results` for reviewing generated changes
+- `Chat with Ante` for note-aware follow-up conversations
