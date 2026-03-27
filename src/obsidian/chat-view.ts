@@ -1,4 +1,4 @@
-import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import type TmdPlugin from "./main";
 import type { ChatConversationRecord, ChatMessageRecord, ChatStateSnapshot } from "../core/chat-types";
 import type {
@@ -22,10 +22,6 @@ export const TMD_CHAT_VIEW_TYPE = "tmd-chat-view";
 const MAX_CHAT_PREVIEW_CHARS = 12000;
 const MAX_CHAT_PREVIEW_LINES = 160;
 const MESSAGE_WINDOW_SIZE = 80;
-const SIDEBAR_OPEN_ICON = "☰";
-const SIDEBAR_CLOSE_ICON = "←";
-const DELETE_ICON = "×";
-
 const hashText = (value: string): string => {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -232,12 +228,19 @@ export class TmdChatView extends ItemView {
     this.sidebarToggleEl = sidebarHeader.createEl("button", {
       cls: "tmd-chat-sidebar-toggle"
     });
+    setIcon(this.sidebarToggleEl, "menu");
     this.sidebarToggleEl.addEventListener("click", () => {
       this.isSidebarCollapsed = !this.isSidebarCollapsed;
       this.syncSidebarCollapsedState();
     });
-    sidebarHeader.createEl("h2", { text: "Chats" });
-    const newChatButton = sidebarHeader.createEl("button", { text: "New" });
+
+    const newChatButton = sidebarHeader.createEl("button", {
+      cls: "tmd-chat-sidebar-new",
+      text: "发起新对话"
+    });
+    const newChatIcon = newChatButton.createSpan({ cls: "tmd-chat-sidebar-new-icon" });
+    setIcon(newChatIcon, "square-pen");
+    newChatButton.prepend(newChatIcon);
     newChatButton.addEventListener("click", () => {
       this.plugin.chatManager.createConversation({ context: this.liveContext });
     });
@@ -297,7 +300,6 @@ export class TmdChatView extends ItemView {
   private syncSidebarCollapsedState(): void {
     this.shellEl.classList.toggle("tmd-chat-sidebar-collapsed", this.isSidebarCollapsed);
     this.sidebarEl.classList.toggle("tmd-is-collapsed", this.isSidebarCollapsed);
-    this.sidebarToggleEl.setText(this.isSidebarCollapsed ? SIDEBAR_OPEN_ICON : SIDEBAR_CLOSE_ICON);
     this.sidebarToggleEl.setAttribute("aria-label", this.isSidebarCollapsed ? "Expand chat list" : "Collapse chat list");
     this.sidebarToggleEl.setAttribute("title", this.isSidebarCollapsed ? "Expand chat list" : "Collapse chat list");
     this.sidebarToggleEl.setAttribute("aria-expanded", String(!this.isSidebarCollapsed));
@@ -404,9 +406,9 @@ export class TmdChatView extends ItemView {
       const titleRow = rowEl.createDiv({ cls: "tmd-chat-conversation-row" });
       titleRow.createDiv({ cls: "tmd-chat-conversation-title", text: conversation.title });
       const deleteButton = titleRow.createEl("button", {
-        cls: "tmd-chat-conversation-delete",
-        text: DELETE_ICON
+        cls: "tmd-chat-conversation-delete"
       });
+      setIcon(deleteButton, "trash-2");
       deleteButton.setAttribute("aria-label", `Delete chat ${conversation.title}`);
       deleteButton.setAttribute("title", `Delete chat ${conversation.title}`);
       deleteButton.addEventListener("click", (event) => {
@@ -420,7 +422,6 @@ export class TmdChatView extends ItemView {
           this.plugin.taskEngine.clearTasks(removedTaskIds);
         }
       });
-      rowEl.createDiv({ cls: "tmd-chat-conversation-meta", text: formatTime(conversation.updatedAt) });
 
       const anchor: ChildNode | null = previousEl ? previousEl.nextSibling : this.conversationListEl.firstChild;
       if (rowEl !== anchor) {

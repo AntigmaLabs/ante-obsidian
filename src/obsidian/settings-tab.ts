@@ -1,4 +1,4 @@
-import { DropdownComponent, Modal, Notice, PluginSettingTab, Setting } from "obsidian";
+import { DropdownComponent, Modal, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
 import { listResolvedPresets } from "../core/presets";
 import type TmdPlugin from "./main";
 import {
@@ -12,6 +12,8 @@ import {
 } from "./settings";
 
 export class TmdSettingTab extends PluginSettingTab {
+  private draggingPresetId: string | null = null;
+
   constructor(private readonly pluginRef: TmdPlugin) {
     super(pluginRef.app, pluginRef);
   }
@@ -186,68 +188,120 @@ export class TmdSettingTab extends PluginSettingTab {
   }
 
   private renderPresetSection(containerEl: HTMLElement): void {
-    const headerRow = containerEl.createDiv({ cls: "tmd-preset-header" });
-    headerRow.createEl("h3", { text: "Presets" });
+    const sectionEl = containerEl.createDiv({ cls: "tmd-preset-section" });
+    const headerRow = sectionEl.createDiv({ cls: "tmd-preset-toolbar" });
+    const titleGroup = headerRow.createDiv({ cls: "tmd-preset-toolbar-copy" });
+    titleGroup.createEl("h3", { text: "Presets", cls: "tmd-preset-title" });
 
-    const summary = containerEl.createEl("p", { cls: "tmd-preset-summary" });
+    const summary = titleGroup.createEl("p", { cls: "tmd-preset-summary" });
     summary.setText("Visible presets appear in the editor context menu. Built-in presets can be reordered or hidden.");
 
-    new Setting(containerEl)
-      .setName("Custom preset")
-      .setDesc("Add a new preset with a name and instruction.")
-      .addButton((button) =>
-        button.setButtonText("New preset").setCta().onClick(() => {
-          new CustomPresetModal(this.pluginRef, () => this.display()).open();
-        })
-      );
+    const newPresetButton = headerRow.createEl("button", { text: "New preset", cls: "mod-cta" });
+    newPresetButton.addClass("tmd-preset-new-button");
+    newPresetButton.addEventListener("click", () => {
+      new CustomPresetModal(this.pluginRef, () => this.display()).open();
+    });
 
     const presets = listResolvedPresets(this.pluginRef.settings);
+    const listEl = sectionEl.createDiv({ cls: "tmd-preset-list" });
+
     for (const preset of presets) {
       const isBuiltin = preset.source === "builtin";
       const typeLabel = isBuiltin ? "Built-in" : "Custom";
       const statusLabel = preset.enabled !== false ? "Visible" : "Hidden";
-      const setting = new Setting(containerEl)
-        .setName(preset.label)
-        .setDesc(`${typeLabel} · ${statusLabel}`)
-        .addToggle((toggle) =>
-          toggle.setValue(preset.enabled !== false).onChange(async (value) => {
-            await this.setPresetEnabled(preset.id, value, isBuiltin);
-          })
-        )
-        .addButton((button) =>
-          button.setButtonText("↑").setTooltip("Move up").setDisabled((preset.sortOrder ?? 0) === 0).onClick(async () => {
-            await this.movePreset(preset.id, -1);
-          })
-        )
-        .addButton((button) =>
-          button.setButtonText("↓").setTooltip("Move down").setDisabled((preset.sortOrder ?? 0) >= presets.length - 1).onClick(async () => {
-            await this.movePreset(preset.id, 1);
-          })
-        )
-        .addExtraButton((button) => {
-          if (isBuiltin) {
-            button.setIcon("lock").setTooltip("Built-in preset content is fixed").setDisabled(true);
-            return;
-          }
-          button.setIcon("pencil").setTooltip("Edit preset").onClick(() => {
-            new CustomPresetModal(
-              this.pluginRef,
-              () => this.display(),
-              this.pluginRef.settings.customPresets.find((entry) => entry.id === preset.id) ?? null
-            ).open();
-          });
-        })
-        .addExtraButton((button) => {
-          if (isBuiltin) {
-            button.setIcon("minus").setTooltip("Built-in preset cannot be deleted").setDisabled(true);
-            return;
-          }
-          button.setIcon("trash").setTooltip("Delete preset").onClick(async () => {
-            await this.deleteCustomPreset(preset.id);
-          });
-        });
+      const rowEl = listEl.createDiv({ cls: "tmd-preset-row" });
+      rowEl.dataset.presetId = preset.id;
+      const handleEl = rowEl.createDiv({ cls: "tmd-preset-handle" });
+      handleEl.setAttribute("aria-label", `Drag to reorder ${preset.label}`);
+      handleEl.draggable = true;
+      for (let index = 0; index < 9; index += 1) {
+        handleEl.createSpan({ cls: "tmd-preset-handle-dot" });
+      }
 
-      setting.settingEl.addClass("tmd-preset-setting");
+      handleEl.addEventListener("dragstart", (event) => {
+        this.draggingPresetId = preset.id;
+        rowEl.addClass("is-dragging");
+        event.dataTransfer?.setData("text/plain", preset.id);
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+        }
+      });
+
+      handleEl.addEventListener("dragend", () => {
+        this.draggingPresetId = null;
+        this.clearPresetDragStyles(listEl);
+      });
+
+      rowEl.addEventListener("dragover", (event) => {
+        if (!this.draggingPresetId || this.draggingPresetId === preset.id) {
+          return;
+        }
+        event.preventDefault();
+        this.clearPresetDragStyles(listEl);
+        rowEl.addClass("is-drop-target");
+        const rect = rowEl.getBoundingClientRect();
+        rowEl.toggleClass("is-drop-after", event.clientY >= rect.top + rect.height / 2);
+      });
+
+      rowEl.addEventListener("dragleave", () => {
+        rowEl.removeClass("is-drop-target", "is-drop-after");
+      });
+
+      rowEl.addEventListener("drop", async (event) => {
+        if (!this.draggingPresetId || this.draggingPresetId === preset.id) {
+          return;
+        }
+        event.preventDefault();
+        const rect = rowEl.getBoundingClientRect();
+        const insertAfter = event.clientY >= rect.top + rect.height / 2;
+        await this.reorderPreset(this.draggingPresetId, preset.id, insertAfter);
+      });
+
+      const contentEl = rowEl.createDiv({ cls: "tmd-preset-content" });
+      const copyEl = contentEl.createDiv({ cls: "tmd-preset-copy" });
+      copyEl.createDiv({ cls: "tmd-preset-name", text: preset.label });
+      copyEl.createDiv({ cls: "tmd-preset-meta", text: `${typeLabel} · ${statusLabel}` });
+
+      const controlsEl = contentEl.createDiv({ cls: "tmd-preset-controls" });
+      const toggleSetting = new Setting(controlsEl);
+      toggleSetting.settingEl.addClass("tmd-preset-toggle-setting");
+      toggleSetting.addToggle((toggle) =>
+        toggle.setValue(preset.enabled !== false).onChange(async (value) => {
+          await this.setPresetEnabled(preset.id, value, isBuiltin);
+        })
+      );
+
+      const editButton = controlsEl.createEl("button", { cls: "clickable-icon" });
+      editButton.addClass("tmd-preset-icon-button");
+      if (isBuiltin) {
+        editButton.disabled = true;
+        editButton.setAttribute("aria-label", "Built-in preset content is fixed");
+        setIcon(editButton, "lock");
+      } else {
+        editButton.setAttribute("aria-label", `Edit ${preset.label}`);
+        setIcon(editButton, "pencil");
+        editButton.addEventListener("click", () => {
+          new CustomPresetModal(
+            this.pluginRef,
+            () => this.display(),
+            this.pluginRef.settings.customPresets.find((entry) => entry.id === preset.id) ?? null
+          ).open();
+        });
+      }
+
+      const deleteButton = controlsEl.createEl("button", { cls: "clickable-icon" });
+      deleteButton.addClass("tmd-preset-icon-button");
+      if (isBuiltin) {
+        deleteButton.disabled = true;
+        deleteButton.setAttribute("aria-label", "Built-in preset cannot be deleted");
+        setIcon(deleteButton, "minus");
+      } else {
+        deleteButton.setAttribute("aria-label", `Delete ${preset.label}`);
+        setIcon(deleteButton, "trash");
+        deleteButton.addEventListener("click", async () => {
+          await this.deleteCustomPreset(preset.id);
+        });
+      }
     }
   }
 
@@ -267,33 +321,22 @@ export class TmdSettingTab extends PluginSettingTab {
     this.display();
   }
 
-  private async movePreset(presetId: string, direction: -1 | 1): Promise<void> {
+  private async reorderPreset(sourcePresetId: string, targetPresetId: string, insertAfter: boolean): Promise<void> {
     const ordered = listResolvedPresets(this.pluginRef.settings);
-    const index = ordered.findIndex((preset) => preset.id === presetId);
-    const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) {
+    const sourceIndex = ordered.findIndex((preset) => preset.id === sourcePresetId);
+    const targetIndex = ordered.findIndex((preset) => preset.id === targetPresetId);
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
       return;
     }
 
-    const [moved] = ordered.splice(index, 1);
-    ordered.splice(nextIndex, 0, moved);
+    const [moved] = ordered.splice(sourceIndex, 1);
+    const adjustedTargetIndex = ordered.findIndex((preset) => preset.id === targetPresetId);
+    const insertionIndex = insertAfter ? adjustedTargetIndex + 1 : adjustedTargetIndex;
+    ordered.splice(insertionIndex, 0, moved);
 
-    ordered.forEach((preset, sortOrder) => {
-      if (preset.source === "builtin") {
-        const builtin = this.pluginRef.settings.builtinPresetPreferences.find((entry) => entry.id === preset.id);
-        if (builtin) {
-          builtin.sortOrder = sortOrder;
-        }
-      } else {
-        const custom = this.pluginRef.settings.customPresets.find((entry) => entry.id === preset.id);
-        if (custom) {
-          custom.sortOrder = sortOrder;
-        }
-      }
-    });
-
-    this.reindexPresetOrders();
+    this.applyPresetOrder(ordered);
     await this.pluginRef.saveSettings();
+    this.draggingPresetId = null;
     this.display();
   }
 
@@ -305,7 +348,7 @@ export class TmdSettingTab extends PluginSettingTab {
 
     if (!preset.instruction.trim() || window.confirm(`Delete custom preset "${preset.name}"?`)) {
       this.pluginRef.settings.customPresets = this.pluginRef.settings.customPresets.filter((entry) => entry.id !== presetId);
-      this.reindexPresetOrders();
+      this.applyPresetOrder();
       await this.pluginRef.saveSettings();
       this.display();
       return;
@@ -314,8 +357,7 @@ export class TmdSettingTab extends PluginSettingTab {
     new Notice("Deletion cancelled");
   }
 
-  private reindexPresetOrders(): void {
-    const ordered = listResolvedPresets(this.pluginRef.settings);
+  private applyPresetOrder(ordered = listResolvedPresets(this.pluginRef.settings)): void {
     ordered.forEach((preset, sortOrder) => {
       if (preset.source === "builtin") {
         const builtin = this.pluginRef.settings.builtinPresetPreferences.find((entry) => entry.id === preset.id);
@@ -331,6 +373,12 @@ export class TmdSettingTab extends PluginSettingTab {
     });
     this.pluginRef.settings.builtinPresetPreferences.sort((left, right) => left.sortOrder - right.sortOrder);
     this.pluginRef.settings.customPresets.sort((left, right) => left.sortOrder - right.sortOrder);
+  }
+
+  private clearPresetDragStyles(listEl: HTMLElement): void {
+    for (const row of Array.from(listEl.querySelectorAll<HTMLElement>(".tmd-preset-row"))) {
+      row.removeClass("is-dragging", "is-drop-target", "is-drop-after");
+    }
   }
 
   private addModelOptions(dropdown: DropdownComponent): DropdownComponent {
@@ -376,10 +424,14 @@ class CustomPresetModal extends Modal {
 
   onOpen(): void {
     const { contentEl } = this;
+    this.modalEl.addClass("tmd-preset-modal");
     contentEl.empty();
-    contentEl.createEl("h3", { text: this.existingPreset ? "Edit Custom Preset" : "Add Custom Preset" });
+    contentEl.createEl("h3", {
+      text: this.existingPreset ? "Edit Custom Preset" : "Add Custom Preset",
+      cls: "tmd-preset-modal-title"
+    });
 
-    new Setting(contentEl)
+    const nameSetting = new Setting(contentEl)
       .setName("Preset name")
       .setDesc("Shown in the editor context menu.")
       .addText((text) => {
@@ -390,8 +442,9 @@ class CustomPresetModal extends Modal {
           this.nameValue = value;
         });
       });
+    nameSetting.settingEl.addClass("tmd-preset-modal-setting");
 
-    new Setting(contentEl)
+    const instructionSetting = new Setting(contentEl)
       .setName("Instruction")
       .setDesc("Used as the preset execution instructions.")
       .addTextArea((text) =>
@@ -402,8 +455,9 @@ class CustomPresetModal extends Modal {
             this.instructionValue = value;
           })
       );
+    instructionSetting.settingEl.addClass("tmd-preset-modal-setting", "is-textarea");
 
-    new Setting(contentEl)
+    const actionSetting = new Setting(contentEl)
       .addButton((button) =>
         button.setButtonText("Confirm").setCta().onClick(async () => {
           await this.savePreset();
@@ -414,9 +468,11 @@ class CustomPresetModal extends Modal {
           this.close();
         })
       );
+    actionSetting.settingEl.addClass("tmd-preset-modal-actions");
   }
 
   onClose(): void {
+    this.modalEl.removeClass("tmd-preset-modal");
     this.contentEl.empty();
   }
 
