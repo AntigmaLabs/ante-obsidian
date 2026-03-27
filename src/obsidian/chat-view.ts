@@ -158,8 +158,7 @@ export class TmdChatView extends ItemView {
   private conversationListEl!: HTMLDivElement;
   private timelineEl!: HTMLDivElement;
   private emptyStateEl: HTMLDivElement | null = null;
-  private stopButtonEl!: HTMLButtonElement;
-  private resetButtonEl!: HTMLButtonElement;
+  private composerActionButtonEl!: HTMLButtonElement;
   private composerEl!: HTMLTextAreaElement;
   private loadMoreButtonEl: HTMLButtonElement | null = null;
   private isComposing = false;
@@ -250,11 +249,6 @@ export class TmdChatView extends ItemView {
     const main = this.shellEl.createDiv({ cls: "tmd-chat-main" });
     const titleRow = main.createDiv({ cls: "tmd-title-row tmd-chat-header" });
     titleRow.createEl("h2", { text: "Chat with Ante" });
-    const headerActions = titleRow.createDiv({ cls: "tmd-chat-header-actions" });
-    this.resetButtonEl = headerActions.createEl("button", { text: "Reset" });
-    this.resetButtonEl.addEventListener("click", () => this.resetActiveConversation());
-    this.stopButtonEl = headerActions.createEl("button", { text: "Stop" });
-    this.stopButtonEl.addEventListener("click", () => this.plugin.taskEngine.cancelActiveTask());
 
     this.contextEl = main.createDiv({ cls: "tmd-chat-contextbar" });
     this.contextNodes = {
@@ -267,13 +261,17 @@ export class TmdChatView extends ItemView {
     this.timelineEl = main.createDiv({ cls: "tmd-chat-timeline" });
 
     const composer = main.createDiv({ cls: "tmd-chat-composer" });
-    this.composerEl = composer.createEl("textarea", { cls: "tmd-chat-input" });
+    const inputShell = composer.createDiv({ cls: "tmd-chat-input-shell" });
+    this.composerEl = inputShell.createEl("textarea", { cls: "tmd-chat-input" });
     this.composerEl.placeholder = "Ask about the current note, rewrite selected text, or plan next steps.";
     this.composerEl.addEventListener("compositionstart", () => {
       this.isComposing = true;
     });
     this.composerEl.addEventListener("compositionend", () => {
       this.isComposing = false;
+    });
+    this.composerEl.addEventListener("input", () => {
+      this.syncComposerActionButton(this.hasRunningChatTask());
     });
     this.composerEl.addEventListener("keydown", (event) => {
       if (
@@ -291,10 +289,15 @@ export class TmdChatView extends ItemView {
       }
     });
 
-    const actions = composer.createDiv({ cls: "tmd-chat-composer-actions" });
-    actions.createDiv({ cls: "tmd-meta", text: "Enter to send · Shift+Enter for newline" });
-    const sendButton = actions.createEl("button", { text: "Send" });
-    sendButton.addEventListener("click", () => this.runPrompt());
+    this.composerActionButtonEl = inputShell.createEl("button", { cls: "tmd-chat-primary-action" });
+    this.composerActionButtonEl.addEventListener("click", () => {
+      if (this.composerActionButtonEl.dataset.action === "stop") {
+        this.plugin.taskEngine.cancelActiveTask();
+        return;
+      }
+      this.runPrompt();
+    });
+    this.syncComposerActionButton(false);
   }
 
   private syncSidebarCollapsedState(): void {
@@ -348,9 +351,8 @@ export class TmdChatView extends ItemView {
 
     this.syncConversationSidebar(chatState, activeConversation?.id ?? null);
     this.syncContext(activeConversation?.pinnedContext ?? this.liveContext);
-    const hasRunningTask = (this.latestTaskState?.tasks ?? []).some((task) => task.triggerSource === "chat" && task.status === "running");
-    this.stopButtonEl.disabled = !hasRunningTask;
-    this.resetButtonEl.disabled = hasRunningTask || !activeConversation || messages.length === 0;
+    const hasRunningTask = this.hasRunningChatTask();
+    this.syncComposerActionButton(hasRunningTask);
 
     if (!activeConversation || messages.length === 0) {
       this.syncLoadMore(null, 0);
@@ -877,10 +879,34 @@ export class TmdChatView extends ItemView {
       })
       .then(() => {
         this.composerEl.value = "";
+        this.syncComposerActionButton(this.hasRunningChatTask());
       })
       .catch((error) => {
         new Notice(error instanceof Error ? error.message : "Failed to start Ante chat");
       });
+  }
+
+  private hasRunningChatTask(): boolean {
+    return (this.latestTaskState?.tasks ?? []).some((task) => task.triggerSource === "chat" && task.status === "running");
+  }
+
+  private syncComposerActionButton(hasRunningTask: boolean): void {
+    if (!this.composerActionButtonEl) {
+      return;
+    }
+    if (hasRunningTask) {
+      this.composerActionButtonEl.dataset.action = "stop";
+      setIcon(this.composerActionButtonEl, "square");
+      this.composerActionButtonEl.setAttribute("aria-label", "Stop");
+      this.composerActionButtonEl.setAttribute("title", "Stop");
+      this.composerActionButtonEl.disabled = false;
+      return;
+    }
+    this.composerActionButtonEl.dataset.action = "send";
+    setIcon(this.composerActionButtonEl, "arrow-up");
+    this.composerActionButtonEl.setAttribute("aria-label", "Send");
+    this.composerActionButtonEl.setAttribute("title", "Send");
+    this.composerActionButtonEl.disabled = this.composerEl.value.trim().length === 0;
   }
 
   private syncLoadingTimer(): void {

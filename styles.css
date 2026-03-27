@@ -85,7 +85,7 @@
   border: 1px solid color-mix(in srgb, var(--background-modifier-border) 74%, transparent);
   border-radius: 22px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--background-primary) 98%, white 2%), color-mix(in srgb, var(--background-secondary) 96%, var(--background-primary) 4%));
-  box-shadow: 0 12px 30px color-mix(in srgb, black 6%, transparent);
+  box-shadow: none;
 }
 
 .tmd-diff-card-list {
@@ -738,6 +738,10 @@ button.tmd-diff-file-main {
   --tmd-chat-assistant-accent: color-mix(in srgb, oklch(0.8 0.02 90) 22%, var(--background-primary) 78%);
 }
 
+.tmd-chat-view button {
+  box-shadow: none !important;
+}
+
 .tmd-chat-shell {
   display: grid;
   grid-template-columns: var(--tmd-chat-sidebar-panel-width) minmax(0, 1fr);
@@ -882,7 +886,6 @@ button.tmd-diff-file-main {
   outline: none;
   appearance: none;
   transition:
-    padding-left 180ms ease,
     background-color 180ms ease,
     color 180ms ease;
 }
@@ -905,7 +908,6 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-conversation:hover {
-  padding-left: 6px;
   background: color-mix(in srgb, var(--background-modifier-hover) 28%, transparent);
 }
 
@@ -970,8 +972,7 @@ button.tmd-diff-file-main {
 .tmd-chat-header {
   padding: 16px 20px 14px;
   border-bottom: 1px solid var(--tmd-chat-line);
-  background: color-mix(in srgb, var(--tmd-chat-paper) 88%, white 12%);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--tmd-chat-paper) 96%, white 4%);
 }
 
 .tmd-chat-header h2 {
@@ -988,30 +989,30 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-contextbar {
-  padding: 12px 20px 14px;
-  border-bottom: 1px solid var(--tmd-chat-line);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--tmd-chat-panel-strong) 88%, white 12%), color-mix(in srgb, var(--tmd-chat-panel) 94%, white 6%));
+  padding: 10px 20px 12px;
+  background: transparent;
 }
 
 .tmd-chat-context-title {
-  margin-bottom: 4px;
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+  color: color-mix(in srgb, var(--text-muted) 82%, transparent);
+  font-size: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .tmd-chat-context-value {
-  color: var(--text-normal);
-  font-weight: 600;
+  color: color-mix(in srgb, var(--text-muted) 88%, var(--text-normal) 12%);
+  font-size: 0.68rem;
+  font-weight: 400;
 }
 
 .tmd-chat-context-snippet {
-  margin-top: 8px;
-  color: var(--text-muted);
-  font-size: 0.92rem;
-  line-height: 1.5;
+  margin-top: 6px;
+  color: color-mix(in srgb, var(--text-muted) 84%, transparent);
+  font-size: 0.82rem;
+  line-height: 1.45;
   white-space: pre-wrap;
 }
 
@@ -1074,7 +1075,7 @@ button.tmd-diff-file-main {
   width: min(100%, 760px);
   padding: 14px 16px 15px;
   border-radius: 22px;
-  box-shadow: 0 12px 32px color-mix(in srgb, black 6%, transparent);
+  box-shadow: none;
 }
 
 .tmd-chat-message.tmd-is-user .tmd-chat-bubble {
@@ -1165,21 +1166,21 @@ button.tmd-diff-file-main {
 
 .tmd-chat-secondary-action {
   align-self: flex-start;
+  box-shadow: none !important;
 }
 
 .tmd-chat-composer {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   padding: 16px 20px 18px;
-  border-top: 1px solid var(--tmd-chat-line);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--tmd-chat-paper) 90%, white 10%), color-mix(in srgb, var(--tmd-chat-panel) 92%, var(--tmd-chat-paper) 8%));
+}
+
+.tmd-chat-input-shell {
+  position: relative;
 }
 
 .tmd-chat-input {
   width: 100%;
   min-height: 112px;
-  padding: 14px 16px;
+  padding: 14px 68px 56px 16px;
   border: 1px solid var(--tmd-chat-line);
   border-radius: 18px;
   background: color-mix(in srgb, var(--tmd-chat-paper) 98%, white 2%);
@@ -1190,14 +1191,47 @@ button.tmd-diff-file-main {
 
 .tmd-chat-input:focus {
   border-color: color-mix(in srgb, var(--interactive-accent) 48%, var(--tmd-chat-line));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+  box-shadow: none;
 }
 
-.tmd-chat-composer-actions {
-  display: flex;
+.tmd-chat-primary-action {
+  position: absolute;
+  right: 14px;
+  bottom: 30px;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 999px;
+  background: #111111 !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+}
+
+.tmd-chat-primary-action:hover,
+.tmd-chat-primary-action:focus-visible {
+  background: #222222 !important;
+}
+
+.tmd-chat-primary-action:disabled {
+  opacity: 0.46;
+}
+
+.tmd-chat-primary-action .svg-icon {
+  color: #ffffff !important;
+}
+
+.tmd-chat-primary-action svg {
+  width: 18px;
+  height: 18px;
 }
 
 .tmd-chat-empty {
@@ -1205,6 +1239,7 @@ button.tmd-diff-file-main {
   border: 1px dashed var(--tmd-chat-line);
   border-radius: 22px;
   background: color-mix(in srgb, var(--tmd-chat-panel) 78%, transparent);
+  box-shadow: none;
 }
 
 @media (max-width: 900px) {
