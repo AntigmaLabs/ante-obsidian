@@ -1,6 +1,5 @@
-# Tmd
-
-Tmd is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to note editing, review, and chat flows inside Obsidian.
+# Ante Obsidian 
+Ante Obsidian is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to note editing, review, and chat flows inside Obsidian.
 
 ## Features
 
