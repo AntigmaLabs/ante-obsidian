@@ -254,7 +254,7 @@ export default class TmdPlugin extends Plugin {
 
       if (task.artifacts.length > 0) {
         void this.openResultsView();
-        new Notice(`${sourceLabel} Ante diff is ready in Tmd Results`);
+        new Notice(`${sourceLabel} Ante diff is ready in Results`);
         return;
       }
       if (task.error) {
@@ -267,7 +267,7 @@ export default class TmdPlugin extends Plugin {
   private handleNonArtifactTaskCompletion(task: TaskRecord, sourceLabel: string): void {
     if (task.textResult?.text.trim()) {
       void this.openResultsView();
-      new Notice(`${sourceLabel} Ante result is ready in Tmd Results`);
+      new Notice(`${sourceLabel} Ante result is ready in Results`);
       return;
     }
 
@@ -329,7 +329,7 @@ export default class TmdPlugin extends Plugin {
   private registerCommands(): void {
     this.addCommand({
       id: "open-tmd-results",
-      name: "Open Tmd Results",
+      name: "Open Results",
       callback: async () => this.openDiffView()
     });
 

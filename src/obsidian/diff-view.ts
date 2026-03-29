@@ -23,7 +23,7 @@ export class TmdDiffView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "Tmd Results";
+    return "Results";
   }
 
   async onOpen(): Promise<void> {
@@ -49,7 +49,7 @@ export class TmdDiffView extends ItemView {
       }
       const { contentEl } = this;
       contentEl.empty();
-      contentEl.createEl("h2", { text: "Tmd Results" });
+      contentEl.createEl("h2", { text: "Results" });
       contentEl.createDiv({ cls: "tmd-empty", text: "No task has run yet." });
       return;
     }
@@ -65,7 +65,7 @@ export class TmdDiffView extends ItemView {
 
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl("h2", { text: "Tmd Results" });
+    contentEl.createEl("h2", { text: "Results" });
 
     this.renderTaskSummary(contentEl, currentTask);
     this.ensureExpandedArtifacts(currentTask);

@@ -230,7 +230,7 @@ export class MentionTriggerService {
                   this.replacePlaceholderWhole(
                     editor,
                     markers,
-                    `> [!success]\n> \n> Applied directly. Open Tmd Results (via Command Palette) if you want to inspect the diff or revert the change.`
+                    `> [!success]\n> \n> Applied directly. Open Results (via Command Palette) if you want to inspect the diff or revert the change.`
                   );
                 }
               } catch (error) {
@@ -259,7 +259,7 @@ export class MentionTriggerService {
           this.replacePlaceholderWhole(
             editor,
             markers,
-            `> [!success]\n> \n> Applied directly. Open Tmd Results if you want to inspect the diff or revert the change.`
+            `> [!success]\n> \n> Applied directly. Open Results if you want to inspect the diff or revert the change.`
           );
           return;
         }

@@ -818,7 +818,7 @@ export class TmdChatView extends ItemView {
 
     const openResults = container.createEl("button", {
       cls: "tmd-chat-secondary-action",
-      text: "Open Tmd Results"
+      text: "Open Results"
     });
     openResults.addEventListener("click", () => {
       void this.plugin.openResultsView();

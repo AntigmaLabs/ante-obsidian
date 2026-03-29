@@ -8,18 +8,18 @@ Ante Obsidian is an Obsidian desktop plugin for Ante-powered Markdown workflows.
 - Create custom presets in settings, then reorder or hide built-in and custom presets with drag and drop
 - Open `Chat with Ante` from the editor menu or command palette for multi-turn note-aware conversations
 - Use `Ante Terminal` for a more terminal-style prompt flow when you want streaming output and approval controls
-- Preview Markdown changes as unified diffs in `Tmd Results`, including multi-file changes, before applying them
+- Preview Markdown changes as unified diffs in `Results`, including multi-file changes, before applying them
 - Support edits to existing `.md` files and creation of new Markdown files
 
 ## Main Views
 
-- `Tmd Results`: review text output, diff summaries, and apply generated Markdown changes
+- `Results`: review text output, diff summaries, and apply generated Markdown changes
 - `Chat with Ante`: keep conversation history, switch between conversations from the sidebar, reuse note context, and render Markdown replies
 - `Ante Terminal`: send terminal-style prompts, inspect runtime logs, and approve or deny tool calls when needed
 
 ## Runtime
 
-Tmd talks to `ante serve` using one of two transports:
+Ante Obsidian talks to `ante serve` using one of two transports:
 
 - `stdio`: `ante serve --stdio` over stdin/stdout
 - `websocket`: `ante serve --ws <ADDR>` plus a WebSocket client connection
@@ -97,7 +97,7 @@ npm run smoke
 
 ## Obsidian Install
 
-Tmd can be installed in several ways:
+Ante Obsidian can be installed in several ways:
 
 - Obsidian Community Plugins browser, after official review and listing
 - BRAT, for beta distribution before official listing
@@ -125,11 +125,11 @@ That creates `.release/tmd-<version>.zip`, which expands to a `tmd/` folder cont
 
 After installation:
 
-1. Enable `Tmd` in `Settings -> Community plugins`.
+1. Enable `Ante Obsidian` in `Settings -> Community plugins`.
 2. Confirm the local Ante command and connection mode settings if needed.
-3. By default, Tmd follows `~/.ante/settings.json` for provider and model.
-4. Review preset visibility and ordering in `Tmd Settings -> Presets` if you want to customize the editor menu.
-5. If you switch Tmd to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.
+3. By default, Ante Obsidian follows `~/.ante/settings.json` for provider and model.
+4. Review preset visibility and ordering in `Ante Obsidian Settings -> Presets` if you want to customize the editor menu.
+5. If you switch Ante Obsidian to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.
 
 The Obsidian plugin still stores local machine settings in its own plugin data file at runtime. That is expected user-local configuration, not repository configuration.
 
