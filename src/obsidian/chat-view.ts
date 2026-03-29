@@ -12,6 +12,7 @@ import {
   renderArtifactDiff,
   renderDiffSummary,
   resolveArtifactDiffs,
+  resolveArtifactsToDiffs,
   type ResolvedArtifactDiff
 } from "./diff-block";
 import { formatLoadingLabel } from "../core/loading-label";
@@ -340,25 +341,32 @@ export class TmdChatView extends ItemView {
 
     const diffsByTask = new Map<string, ResolvedArtifactDiff[]>();
     await Promise.all(
-      visibleTaskIds.map(async (taskId) => {
+      visibleMessages.map(async (message) => {
+        const taskId = message.turn?.taskId;
+        if (!taskId) {
+          return;
+        }
         const task = taskLookup.get(taskId);
-        if (!task || task.artifacts.length === 0) {
+        const artifacts = task?.artifacts.length
+          ? task.artifacts
+          : (message.runtime?.artifacts ?? []).filter((artifact) => artifact.applyState !== "discarded");
+        if (artifacts.length === 0) {
           return;
         }
-        const signature = this.buildArtifactResolutionSignature(task);
-        const cached = this.resolvedArtifactsCache.get(task.id);
+        const signature = this.buildArtifactResolutionSignature(artifacts, taskId);
+        const cached = this.resolvedArtifactsCache.get(taskId);
         if (cached?.signature === signature) {
-          diffsByTask.set(task.id, cached.diffs);
+          diffsByTask.set(taskId, cached.diffs);
           return;
         }
-        const diffs = await resolveArtifactDiffs(task);
-        this.resolvedArtifactsCache.set(task.id, { signature, diffs });
-        diffsByTask.set(task.id, diffs);
+        const diffs = task ? await resolveArtifactDiffs(task) : await resolveArtifactsToDiffs(artifacts);
+        this.resolvedArtifactsCache.set(taskId, { signature, diffs });
+        diffsByTask.set(taskId, diffs);
       })
     );
 
     this.syncConversationSidebar(chatState, activeConversation?.id ?? null);
-    this.syncContext(activeConversation?.pinnedContext ?? this.liveContext);
+    this.syncContext(this.liveContext);
     const hasRunningTask = this.hasRunningChatTask();
     this.syncComposerActionButton(hasRunningTask);
 
@@ -530,11 +538,7 @@ export class TmdChatView extends ItemView {
     this.pruneMessageEls(visibleIds);
   }
 
-  private syncMessage(
-    message: ChatMessageRecord,
-    task: TaskRecord | undefined,
-    diffsByTask: Map<string, ResolvedArtifactDiff[]>
-  ): HTMLDivElement {
+  private syncMessage(message: ChatMessageRecord, task: TaskRecord | undefined, diffsByTask: Map<string, ResolvedArtifactDiff[]>): HTMLDivElement {
     let elements = this.messageEls.get(message.id);
     if (!elements) {
       const rootEl = createDiv({
@@ -589,8 +593,11 @@ export class TmdChatView extends ItemView {
     this.syncProcessLines(elements, processLines);
 
     const resolvedArtifacts = task ? diffsByTask.get(task.id) ?? [] : [];
-    if (resolvedArtifacts.length > 0) {
-      this.syncArtifacts(elements, task as TaskRecord, resolvedArtifacts);
+    const fallbackResolvedArtifacts =
+      !task && message.turn?.taskId ? diffsByTask.get(message.turn.taskId) ?? [] : [];
+    const artifactDiffs = resolvedArtifacts.length > 0 ? resolvedArtifacts : fallbackResolvedArtifacts;
+    if (artifactDiffs.length > 0) {
+      this.syncArtifacts(elements, task ?? null, artifactDiffs);
     } else {
       this.removeArtifacts(elements);
     }
@@ -762,10 +769,10 @@ export class TmdChatView extends ItemView {
 
   private syncArtifacts(
     elements: ChatMessageElements,
-    task: TaskRecord,
+    task: TaskRecord | null,
     resolvedArtifacts: ResolvedArtifactDiff[]
   ): void {
-    const signature = this.buildArtifactsSignature(task, resolvedArtifacts);
+    const signature = this.buildArtifactsSignature(task?.id ?? "persisted", resolvedArtifacts);
     if (elements.artifactsHostEl && elements.artifactsValue === signature) {
       return;
     }
@@ -782,17 +789,20 @@ export class TmdChatView extends ItemView {
     elements.artifactsValue = null;
   }
 
-  private renderArtifacts(container: HTMLElement, task: TaskRecord, resolvedArtifacts: ResolvedArtifactDiff[]): void {
+  private renderArtifacts(container: HTMLElement, task: TaskRecord | null, resolvedArtifacts: ResolvedArtifactDiff[]): void {
     const diffList = renderDiffSummary(container, resolvedArtifacts, {
       actionLabel: "Apply all",
+      onAction:
+        task
+          ? () => {
+              void this.plugin.taskEngine.applyAllArtifacts(task.id).catch((error) => {
+                new Notice(error instanceof Error ? error.message : "Failed to apply all changes");
+              });
+            }
+          : undefined,
       isActionDisabled: resolvedArtifacts.every(
         ({ artifact }) => artifact.applyState === "applied" || artifact.applyState === "discarded"
-      ),
-      onAction: () => {
-        void this.plugin.taskEngine.applyAllArtifacts(task.id).catch((error) => {
-          new Notice(error instanceof Error ? error.message : "Failed to apply all changes");
-        });
-      }
+      ) || !task
     });
 
     for (const resolvedArtifact of resolvedArtifacts) {
@@ -889,10 +899,10 @@ export class TmdChatView extends ItemView {
     el.setText(text);
   }
 
-  private buildArtifactResolutionSignature(task: TaskRecord): string {
+  private buildArtifactResolutionSignature(artifacts: ResolvedArtifactDiff["artifact"][], taskId: string): string {
     return [
-      task.id,
-      ...task.artifacts.map((artifact) =>
+      taskId,
+      ...artifacts.map((artifact) =>
         [
           artifact.id,
           artifact.applyState,
@@ -904,9 +914,9 @@ export class TmdChatView extends ItemView {
     ].join("|");
   }
 
-  private buildArtifactsSignature(task: TaskRecord, resolvedArtifacts: ResolvedArtifactDiff[]): string {
+  private buildArtifactsSignature(taskId: string, resolvedArtifacts: ResolvedArtifactDiff[]): string {
     return [
-      task.id,
+      taskId,
       ...resolvedArtifacts.map(({ artifact, hunks, stats }) =>
         [
           artifact.id,

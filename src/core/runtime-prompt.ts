@@ -1,15 +1,28 @@
 import type { TaskRequest } from "./types";
 
+const formatCursor = (request: TaskRequest): string | null => {
+  const selection = request.context.selection;
+  if (!selection) {
+    return null;
+  }
+  if (selection.from.line !== selection.to.line || selection.from.ch !== selection.to.ch) {
+    return null;
+  }
+  return `Current cursor position: line ${selection.from.line + 1}, ch ${selection.from.ch + 1}`;
+};
+
 const buildContextBlock = (request: TaskRequest): string => {
   const vaultPath = request.context.vaultPath?.trim() ?? "";
   const selection = request.context.selection?.text?.trim() ?? "";
   const documentText = request.context.documentText?.trim() ?? "";
   const notePath = request.context.filePath ?? "Untitled.md";
+  const cursor = formatCursor(request);
 
   return [
     vaultPath ? `Current Obsidian vault path: ${vaultPath}` : "Current Obsidian vault path: <unknown>",
     `Current note path: ${notePath}`,
     selection ? `Selected text:\n${selection}` : "Selected text: <none>",
+    cursor ?? "",
     documentText ? `Current note content:\n${documentText}` : "Current note content: <empty>"
   ].join("\n\n");
 };
@@ -24,13 +37,17 @@ const buildSchemaBlock = (): string =>
   [
     "Return exactly one JSON object and nothing else.",
     'For a text-only response use: {"type":"text","text":"..."}',
-    'For a document change use: {"type":"change","operation":"replace-selection|append-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","title":"optional","summary":"optional"}',
-    'For multiple document changes use: {"type":"changes","changes":[{"operation":"replace-selection|append-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","title":"optional","summary":"optional"}]}',
+    'For a document change use: {"type":"change","operation":"replace-selection|append-block|insert-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","anchor":{"by":"document-start|document-end|selection|heading|text|paragraph-index","value":"optional"},"placement":"before|after","title":"optional","summary":"optional"}',
+    'For multiple document changes use: {"type":"changes","changes":[{"operation":"replace-selection|append-block|insert-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","anchor":{"by":"document-start|document-end|selection|heading|text|paragraph-index","value":"optional"},"placement":"before|after","title":"optional","summary":"optional"}]}',
     "Rules:",
-    "- replace-selection: afterText is the replacement text for the current selection.",
+    "- replace-selection: afterText replaces the current selection. If the selection is empty, insert at the current cursor position.",
     "- append-block: afterText is the Markdown block to append to the current file unless targetPath is provided.",
+    "- insert-block: afterText is a Markdown block inserted at an anchor in the current file unless targetPath is provided.",
+    "- insert-block anchors: use document-start/document-end for whole-document boundaries, selection for the current cursor or selection, heading/text with a value string, or paragraph-index with a numeric value.",
+    "- insert-block placement: use before or after for heading, text, paragraph-index, or selection anchors. Omit placement for document-start/document-end when it is obvious.",
     "- replace-file: afterText is the full file contents.",
     "- create-file: targetPath is required and afterText is the full new file contents.",
+    "- Never copy the prompt instructions, schema text, or context labels into afterText.",
     "- Do not wrap the JSON in code fences.",
     "- Do not emit explanations before or after the JSON."
   ].join("\n");
@@ -48,8 +65,8 @@ const buildTerminalPriorityBlock = (): string =>
 const buildTerminalSchemaBlock = (): string =>
   [
     "For terminal-style answers, reply with plain terminal text only.",
-    'Only when you intend to modify Markdown, return exactly one JSON object: {"type":"change","operation":"replace-selection|append-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","title":"optional","summary":"optional"}',
-    'For multiple Markdown changes, return exactly one JSON object: {"type":"changes","changes":[{"operation":"replace-selection|append-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","title":"optional","summary":"optional"}]}',
+    'Only when you intend to modify Markdown, return exactly one JSON object: {"type":"change","operation":"replace-selection|append-block|insert-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","anchor":{"by":"document-start|document-end|selection|heading|text|paragraph-index","value":"optional"},"placement":"before|after","title":"optional","summary":"optional"}',
+    'For multiple Markdown changes, return exactly one JSON object: {"type":"changes","changes":[{"operation":"replace-selection|append-block|insert-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","anchor":{"by":"document-start|document-end|selection|heading|text|paragraph-index","value":"optional"},"placement":"before|after","title":"optional","summary":"optional"}]}',
     "Rules:",
     "- Follow the context priority block above before considering anything else.",
     "- If the current note or selection already contains what you need, answer from that context alone.",
@@ -58,8 +75,9 @@ const buildTerminalSchemaBlock = (): string =>
     "- If more than one Markdown file must be created or updated, return a single changes JSON object containing every change.",
     "- Plain terminal text must not be wrapped in JSON or code fences.",
     "- change JSON must not be wrapped in code fences.",
-    "- replace-selection: afterText is the replacement text for the current selection.",
+    "- replace-selection: afterText replaces the current selection. If the selection is empty, insert at the current cursor position.",
     "- append-block: afterText is the Markdown block to append to the current file unless targetPath is provided.",
+    "- insert-block: afterText inserts a Markdown block at an anchor in the current file unless targetPath is provided.",
     "- replace-file: afterText is the full file contents.",
     "- create-file: targetPath is required and afterText is the full new file contents."
   ].join("\n");
@@ -88,6 +106,10 @@ const buildTerminalContextBlock = (request: TaskRequest): string => {
   } else {
     lines.push("Selected text: <none>");
   }
+  const cursor = formatCursor(request);
+  if (cursor) {
+    lines.push(cursor);
+  }
   const documentText = request.context.documentText?.trim();
   if (documentText) {
     lines.push(`Current note content (authoritative for note summaries and note-level questions):\n${documentText}`);
@@ -107,7 +129,18 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
         .filter(Boolean)
         .join("\n\n");
     }
-    return [followUpPrompt, "", buildSchemaBlock()].filter(Boolean).join("\n");
+    return [
+      "You are operating inside Chat with Ante in an Obsidian vault.",
+      `Preset: ${request.preset.label}`,
+      `Goal: ${request.preset.goal}`,
+      request.preset.systemInstructions ? `Execution instructions:\n${request.preset.systemInstructions}` : "",
+      followUpPrompt ? `Follow-up user instruction:\n${followUpPrompt}` : "",
+      buildVaultAnalysisBlock(),
+      buildContextBlock(request),
+      buildSchemaBlock()
+    ]
+      .filter(Boolean)
+      .join("\n\n");
   }
 
   if (request.kind === "terminal") {

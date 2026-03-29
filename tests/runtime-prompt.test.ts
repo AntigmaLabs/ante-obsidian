@@ -77,3 +77,34 @@ test("chat prompt uses the chat-specific framing and includes note context", () 
   assert.match(prompt, /Current note path: Inbox\.md/);
   assert.match(prompt, /follow up with design team/);
 });
+
+test("chat follow-up prompt still includes the latest note context", () => {
+  const prompt = buildInteractivePrompt(
+    chatRequest({
+      mode: "followup",
+      followUpPrompt: "Use the newly opened note instead.",
+      context: {
+        vaultPath: "/vaults/personal",
+        filePath: "Projects/Today.md",
+        noteTitle: "Today",
+        documentText: "# Today\n\n- sync plugin chat context\n",
+        selection: {
+          text: "sync plugin chat context",
+          from: { line: 2, ch: 2 },
+          to: { line: 2, ch: 26 }
+        }
+      }
+    })
+  );
+
+  assert.match(prompt, /Chat with Ante in an Obsidian vault/i);
+  assert.match(prompt, /Preset: @ante/);
+  assert.match(prompt, /Follow-up user instruction:\nUse the newly opened note instead\./);
+  assert.match(prompt, /Use the newly opened note instead\./);
+  assert.match(prompt, /Current Obsidian vault path: \/vaults\/personal/);
+  assert.match(prompt, /Current note path: Projects\/Today\.md/);
+  assert.match(prompt, /Selected text:\nsync plugin chat context/);
+  assert.match(prompt, /Current note content:\n# Today/);
+  assert.match(prompt, /Never copy the prompt instructions, schema text, or context labels into afterText\./);
+  assert.match(prompt, /Return exactly one JSON object and nothing else\./);
+});

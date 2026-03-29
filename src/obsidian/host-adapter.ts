@@ -126,18 +126,18 @@ export class ObsidianHostAdapter implements HostAdapter {
     const startedAt = performance.now();
     const editor = view.editor;
     const selectionText = editor.getSelection();
+    const from = editor.getCursor("from");
+    const to = editor.getCursor("to");
     const context: ContextSnapshot = {
       vaultPath: this.getVaultPath(),
       filePath: view.file.path,
       noteTitle: view.file.basename,
       documentText: editor.getValue(),
-      selection: selectionText
-        ? {
-            text: selectionText,
-            from: editor.getCursor("from"),
-            to: editor.getCursor("to")
-          }
-        : null
+      selection: {
+        text: selectionText,
+        from,
+        to
+      }
     };
 
     this.lastKnownContext = context;

@@ -92,8 +92,11 @@ const collectDiffHunks = (rows: PatchRow[]): DiffHunk[] => {
 };
 
 export const resolveArtifactDiffs = async (task: TaskRecord): Promise<ResolvedArtifactDiff[]> =>
+  resolveArtifactsToDiffs(task.artifacts);
+
+export const resolveArtifactsToDiffs = async (artifacts: DocumentChangeArtifact[]): Promise<ResolvedArtifactDiff[]> =>
   Promise.all(
-    task.artifacts.map(async (artifact) => {
+    artifacts.map(async (artifact) => {
       const rows = normalizeRenderableRows(await buildPatchRows(artifact));
       return {
         artifact,
@@ -159,7 +162,7 @@ export const renderDiffSummary = (
 export const renderArtifactDiff = (
   container: HTMLElement,
   plugin: TmdPlugin,
-  task: TaskRecord,
+  task: TaskRecord | null,
   resolved: ResolvedArtifactDiff,
   expandedArtifactIds: Set<string>,
   onToggleExpanded: () => void
@@ -199,26 +202,32 @@ export const renderArtifactDiff = (
   const actions = body.createDiv({ cls: "tmd-diff-file-actions" });
   const applyButton = actions.createEl("button", { text: artifact.applyState === "applied" ? "Applied" : "Apply" });
   applyButton.disabled =
+    !task ||
     artifact.applyState === "applying" ||
     artifact.applyState === "reverting" ||
     artifact.applyState === "applied" ||
     artifact.applyState === "discarded";
-  applyButton.addEventListener("click", () => {
-    void plugin.taskEngine.applyArtifact(task.id, artifact.id).catch((error) => {
-      new Notice(error instanceof Error ? error.message : "Failed to apply change");
+  if (task) {
+    applyButton.addEventListener("click", () => {
+      void plugin.taskEngine.applyArtifact(task.id, artifact.id).catch((error) => {
+        new Notice(error instanceof Error ? error.message : "Failed to apply change");
+      });
     });
-  });
+  }
 
   const discardButton = actions.createEl("button", { text: "Discard" });
   discardButton.disabled =
+    !task ||
     artifact.applyState === "applying" ||
     artifact.applyState === "reverting" ||
     artifact.applyState === "discarded";
-  discardButton.addEventListener("click", () => {
-    void plugin.taskEngine.discardArtifact(task.id, artifact.id).catch((error) => {
-      new Notice(error instanceof Error ? error.message : "Failed to discard change");
+  if (task) {
+    discardButton.addEventListener("click", () => {
+      void plugin.taskEngine.discardArtifact(task.id, artifact.id).catch((error) => {
+        new Notice(error instanceof Error ? error.message : "Failed to discard change");
+      });
     });
-  });
+  }
 
   if (artifact.applyError) {
     body.createDiv({ cls: "tmd-error", text: artifact.applyError });

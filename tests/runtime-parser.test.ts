@@ -91,6 +91,35 @@ test("parseAssistantMessage fallback skips earlier non-text objects", () => {
   assert.deepEqual(events, [{ type: "result.text", text: "final payload" }]);
 });
 
+test("parseAssistantMessage parses insert-block anchors", () => {
+  const events = parseAssistantMessage(`{
+    "type":"change",
+    "operation":"insert-block",
+    "afterText":"intro",
+    "anchor":{"by":"heading","value":"Next"},
+    "placement":"before"
+  }`);
+
+  assert.deepEqual(events, [
+    {
+      type: "result.change",
+      change: {
+        kind: "change",
+        operation: "insert-block",
+        afterText: "intro",
+        anchor: {
+          by: "heading",
+          value: "Next"
+        },
+        placement: "before",
+        targetPath: undefined,
+        title: undefined,
+        summary: undefined
+      }
+    }
+  ]);
+});
+
 test("resolveCommandPath falls back to ~/.ante/bin for bare ante command", () => {
   const resolved = resolveCommandPath("ante", {});
   assert.equal(resolved, `${homedir()}/.ante/bin/ante`);

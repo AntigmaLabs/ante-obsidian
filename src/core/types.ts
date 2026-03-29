@@ -9,11 +9,12 @@ export type TaskStatus =
   | "awaiting-apply"
   | "applied"
   | "discarded";
-export type DocumentChangeOperation = "replace-selection" | "append-block" | "replace-file" | "create-file";
+export type DocumentChangeOperation = "replace-selection" | "append-block" | "insert-block" | "replace-file" | "create-file";
 export type ApplyState = "pending" | "applying" | "applied" | "reverting" | "reverted" | "failed" | "discarded";
 export type LogStream = "stdout" | "stderr" | "system" | "user";
 export type RuntimeApprovalDecision = "Accept" | "AcceptForSession" | "Skip" | "Abort";
 export type RuntimeProcessStepStatus = "pending" | "in_progress" | "completed";
+export type InsertPlacement = "before" | "after";
 
 export interface TextPosition {
   line: number;
@@ -117,9 +118,16 @@ export interface RuntimeChangeSuggestion {
   operation: DocumentChangeOperation;
   targetPath?: string;
   afterText: string;
+  anchor?: InsertAnchor;
+  placement?: InsertPlacement;
   title?: string;
   summary?: string;
 }
+
+export type InsertAnchor =
+  | { by: "document-start" | "document-end" | "selection" }
+  | { by: "heading" | "text"; value: string }
+  | { by: "paragraph-index"; value: number };
 
 export interface TaskRecord {
   id: string;

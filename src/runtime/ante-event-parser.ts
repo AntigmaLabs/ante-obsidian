@@ -1,4 +1,5 @@
 import type {
+  InsertAnchor,
   RuntimeApprovalRequest,
   RuntimeChangeSuggestion,
   RuntimeEvent,
@@ -6,6 +7,24 @@ import type {
   RuntimeProcessStep,
   RuntimeProcessStepStatus
 } from "../core/types";
+
+const parseInsertAnchor = (value: unknown): InsertAnchor | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const by = typeof record.by === "string" ? record.by.trim() : "";
+  if (by === "document-start" || by === "document-end" || by === "selection") {
+    return { by };
+  }
+  if ((by === "heading" || by === "text") && typeof record.value === "string" && record.value.trim()) {
+    return { by, value: record.value.trim() };
+  }
+  if (by === "paragraph-index" && typeof record.value === "number" && Number.isInteger(record.value)) {
+    return { by, value: record.value };
+  }
+  return undefined;
+};
 
 const getStringField = (value: unknown, keys: string[]): string | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -375,6 +394,8 @@ export const parseAssistantMessage = (message: string): RuntimeEvent[] => {
           operation: record.operation as RuntimeChangeSuggestion["operation"],
           targetPath: typeof record.targetPath === "string" ? record.targetPath : undefined,
           afterText: record.afterText,
+          anchor: parseInsertAnchor(record.anchor),
+          placement: record.placement === "before" || record.placement === "after" ? record.placement : undefined,
           title: typeof record.title === "string" ? record.title : undefined,
           summary: typeof record.summary === "string" ? record.summary : undefined
         }
@@ -395,6 +416,8 @@ export const parseAssistantMessage = (message: string): RuntimeEvent[] => {
             operation: change.operation as RuntimeChangeSuggestion["operation"],
             targetPath: typeof change.targetPath === "string" ? change.targetPath : undefined,
             afterText: change.afterText,
+            anchor: parseInsertAnchor(change.anchor),
+            placement: change.placement === "before" || change.placement === "after" ? change.placement : undefined,
             title: typeof change.title === "string" ? change.title : undefined,
             summary: typeof change.summary === "string" ? change.summary : undefined
           }

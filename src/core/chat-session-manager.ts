@@ -5,7 +5,7 @@ import type {
   ChatPersistenceState,
   ChatStateSnapshot
 } from "./chat-types";
-import type { ContextSnapshot, TaskRecord, TmdState } from "./types";
+import type { ContextSnapshot, DocumentChangeArtifact, TaskRecord, TmdState } from "./types";
 
 type ChatListener = (state: ChatStateSnapshot) => void;
 
@@ -27,6 +27,26 @@ const cloneContext = (context: ContextSnapshot | null | undefined): ContextSnaps
           : null
       }
     : null;
+
+const cloneArtifact = (artifact: DocumentChangeArtifact): DocumentChangeArtifact => ({
+  ...artifact,
+  target:
+    artifact.target.type === "file"
+      ? {
+          type: "file",
+          path: artifact.target.path
+        }
+      : {
+          type: "selection",
+          filePath: artifact.target.filePath,
+          from: { ...artifact.target.from },
+          to: { ...artifact.target.to }
+        },
+  sourceChanges: artifact.sourceChanges.map((change) => ({
+    ...change,
+    anchor: change.anchor ? { ...change.anchor } : undefined
+  }))
+});
 
 const defaultConversationTitle = (prompt: string): string => {
   const normalized = prompt.replace(/\s+/g, " ").trim();
@@ -59,7 +79,8 @@ const cloneMessage = (message: ChatMessageRecord): ChatMessageRecord => ({
             }
           : undefined,
         error: message.runtime.error,
-        artifactIds: [...message.runtime.artifactIds]
+        artifactIds: [...message.runtime.artifactIds],
+        artifacts: message.runtime.artifacts?.map((artifact) => cloneArtifact(artifact))
       }
     : undefined
 });
@@ -346,7 +367,12 @@ export class ChatSessionManager {
       return;
     }
 
-    const nextText = task.status === "running" ? task.stdoutText : task.textResult?.text.trim() || task.stdoutText;
+    const hasStructuredResult =
+      Boolean(task.textResult?.text.trim()) || task.artifacts.length > 0 || Boolean(task.inlineChanges && task.inlineChanges.length > 0);
+    const nextText =
+      task.status === "running"
+        ? task.stdoutText
+        : task.textResult?.text.trim() || (hasStructuredResult ? "" : task.stdoutText);
     const nextStatus =
       task.error ? "failed" : task.status === "awaiting-apply" ? "awaiting-apply" : task.status === "running" ? "streaming" : "completed";
     const nextRuntime = {
@@ -358,7 +384,8 @@ export class ChatSessionManager {
           }
         : undefined,
       error: task.error,
-      artifactIds: task.artifacts.map((artifact) => artifact.id)
+      artifactIds: task.artifacts.map((artifact) => artifact.id),
+      artifacts: task.artifacts.map((artifact) => cloneArtifact(artifact))
     };
     const nextTurn = {
       taskId: task.id,

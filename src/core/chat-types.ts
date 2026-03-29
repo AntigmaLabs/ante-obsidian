@@ -1,5 +1,6 @@
 import type {
   ContextSnapshot,
+  DocumentChangeArtifact,
   RuntimeApprovalRequest,
   RuntimeProcessLane
 } from "./types";
@@ -17,6 +18,7 @@ export interface ChatMessageRuntimeState {
   processLane?: RuntimeProcessLane;
   error?: string;
   artifactIds: string[];
+  artifacts?: DocumentChangeArtifact[];
 }
 
 export interface ChatMessageRecord {
