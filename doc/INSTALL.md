@@ -52,10 +52,10 @@ BRAT is usually the easiest way to distribute test builds before official review
 Use this option if a release is available but you do not want to use BRAT.
 
 1. Open the latest Ante Obsidian release on GitHub.
-2. Download the plugin release archive, such as `ante-obsidian-0.2.0.zip`.
+2. Download the plugin release archive, such as `ante-md-0.2.0.zip`.
    Do not use GitHub's automatically generated `Source code (zip)` or `Source code (tar.gz)` files unless you plan to build the plugin yourself.
 3. Extract the archive.
-   It should expand to an `ante-obsidian/` folder that already contains:
+   It should expand to an `ante-md/` folder that already contains:
    - `manifest.json`
    - `main.js`
    - `styles.css`
@@ -65,10 +65,10 @@ Use this option if a release is available but you do not want to use BRAT.
 <your-vault>/.obsidian/plugins/
 ```
 
-5. Copy the extracted `ante-obsidian/` folder into that directory so the final path is:
+5. Copy the extracted `ante-md/` folder into that directory so the final path is:
 
 ```text
-<your-vault>/.obsidian/plugins/ante-obsidian/
+<your-vault>/.obsidian/plugins/ante-md/
 ```
 
 6. Open Obsidian.
@@ -77,7 +77,7 @@ Use this option if a release is available but you do not want to use BRAT.
 9. Enable `Ante Obsidian`.
 10. Open the Ante Obsidian settings and confirm the Ante command, provider, and model configuration.
 
-If the plugin does not appear, verify that the folder name matches the plugin id in `manifest.json`. For this project, the id is `ante-obsidian`.
+If the plugin does not appear, verify that the folder name matches the plugin id in `manifest.json`. For this project, the id is `ante-md`.
 
 ## Option 4: Local Install From Source
 
@@ -99,7 +99,7 @@ npm run build
 4. Create this folder inside your vault:
 
 ```text
-<your-vault>/.obsidian/plugins/ante-obsidian/
+<your-vault>/.obsidian/plugins/ante-md/
 ```
 
 5. Copy these files from the repository root into that folder:
@@ -138,7 +138,7 @@ Most likely causes:
 
 Check all of the following:
 
-- The folder is exactly `<vault>/.obsidian/plugins/ante-obsidian/`.
+- The folder is exactly `<vault>/.obsidian/plugins/ante-md/`.
 - `manifest.json` is present in that folder.
 - `main.js` is present in that folder.
 - Obsidian community plugins are enabled.

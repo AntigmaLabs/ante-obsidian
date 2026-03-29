@@ -1,7 +1,7 @@
 {
-  "id": "ante-obsidian",
+  "id": "ante-md",
   "name": "Ante Obsidian",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "minAppVersion": "1.6.0",
   "description": "Ante-powered terminal Markdown workflows, diff previews, and Chat with Ante.",
   "author": "fuli.foo",
