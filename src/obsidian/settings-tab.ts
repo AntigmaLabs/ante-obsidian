@@ -21,11 +21,11 @@ export class TmdSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Ante Obsidian Settings" });
+    containerEl.createEl("h2", { text: "Ante md Settings" });
 
     new Setting(containerEl)
       .setName("Ante connection mode")
-      .setDesc("Choose whether Ante Obsidian talks to Ante over stdin/stdout or WebSocket.")
+      .setDesc("Choose whether Ante md talks to Ante over stdin/stdout or WebSocket.")
       .addDropdown((dropdown) =>
         dropdown
           .addOption("stdio", "Local STDIO")
@@ -75,7 +75,7 @@ export class TmdSettingTab extends PluginSettingTab {
 
       new Setting(containerEl)
         .setName("Ante arguments JSON")
-        .setDesc('Additional JSON string array passed to Ante. Transport flags are managed by Ante Obsidian in WebSocket mode, so keep only extras such as `["--yolo"]`.')
+        .setDesc('Additional JSON string array passed to Ante. Transport flags are managed by Ante md in WebSocket mode, so keep only extras such as `["--yolo"]`.')
         .addTextArea((text) =>
           text.setValue(this.pluginRef.settings.argsJson).onChange(async (value) => {
             this.pluginRef.settings.argsJson = value;
@@ -96,7 +96,7 @@ export class TmdSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Auto-approve Ante tools")
-      .setDesc("Automatically approve Ante tool calls inside Ante Obsidian. Default: on.")
+      .setDesc("Automatically approve Ante tool calls inside Ante md. Default: on.")
       .addToggle((toggle) =>
         toggle.setValue(this.pluginRef.settings.autoApproveAnteTools).onChange(async (value) => {
           this.pluginRef.settings.autoApproveAnteTools = value;

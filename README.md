@@ -1,5 +1,5 @@
-# Ante Obsidian 
-Ante Obsidian is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to note editing, review, and chat flows inside Obsidian.
+# Ante md
+Ante md is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to note editing, review, and chat flows inside Obsidian.
 
 ## Features
 
@@ -19,7 +19,7 @@ Ante Obsidian is an Obsidian desktop plugin for Ante-powered Markdown workflows.
 
 ## Runtime
 
-Ante Obsidian talks to `ante serve` using one of two transports:
+Ante md talks to `ante serve` using one of two transports:
 
 - `stdio`: `ante serve --stdio` over stdin/stdout
 - `websocket`: `ante serve --ws <ADDR>` plus a WebSocket client connection
@@ -97,10 +97,9 @@ npm run smoke
 
 ## Obsidian Install
 
-Ante Obsidian can be installed in several ways:
+Ante md can be installed in several ways:
 
 - Obsidian Community Plugins browser, after official review and listing
-- BRAT, for beta distribution before official listing
 - Manual install from a GitHub release
 - Local install from source
 
@@ -125,11 +124,11 @@ That creates `.release/ante-md-<version>.zip`, which expands to an `ante-md/` fo
 
 After installation:
 
-1. Enable `Ante Obsidian` in `Settings -> Community plugins`.
+1. Enable `Ante md` in `Settings -> Community plugins`.
 2. Confirm the local Ante command and connection mode settings if needed.
-3. By default, Ante Obsidian follows `~/.ante/settings.json` for provider and model.
-4. Review preset visibility and ordering in `Ante Obsidian Settings -> Presets` if you want to customize the editor menu.
-5. If you switch Ante Obsidian to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.
+3. By default, Ante md follows `~/.ante/settings.json` for provider and model.
+4. Review preset visibility and ordering in `Ante md Settings -> Presets` if you want to customize the editor menu.
+5. If you switch Ante md to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.
 
 The Obsidian plugin still stores local machine settings in its own plugin data file at runtime. That is expected user-local configuration, not repository configuration.
 

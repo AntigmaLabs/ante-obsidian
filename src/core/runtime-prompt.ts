@@ -71,7 +71,7 @@ const buildTerminalSchemaBlock = (): string =>
     "- Follow the context priority block above before considering anything else.",
     "- If the current note or selection already contains what you need, answer from that context alone.",
     "- Only inspect other files or use tools when the user explicitly asks for that or the provided context is missing and insufficient.",
-    "- When the user asks to create or update Markdown files, do not use Bash, Write, or other tools to modify files directly. Return change JSON instead so Ante Obsidian can show artifacts and git diff.",
+    "- When the user asks to create or update Markdown files, do not use Bash, Write, or other tools to modify files directly. Return change JSON instead so Ante md can show artifacts and git diff.",
     "- If more than one Markdown file must be created or updated, return a single changes JSON object containing every change.",
     "- Plain terminal text must not be wrapped in JSON or code fences.",
     "- change JSON must not be wrapped in code fences.",
