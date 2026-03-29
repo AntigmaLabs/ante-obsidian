@@ -117,7 +117,7 @@ For GitHub Releases, generate a single installable archive with:
 npm run build:release
 ```
 
-That creates `.release/tmd-<version>.zip`, which expands to a `tmd/` folder containing:
+That creates `.release/ante-obsidian-<version>.zip`, which expands to an `ante-obsidian/` folder containing:
 
 - `manifest.json`
 - `main.js`

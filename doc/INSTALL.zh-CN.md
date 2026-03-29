@@ -58,10 +58,10 @@ BRAT 是一个可以直接从 GitHub 仓库安装 Obsidian 插件的社区插件
 如果已有发布版本，但你不想使用 BRAT，可以手动安装。
 
 1. 打开 Ante Obsidian 在 GitHub 上的最新 Release 页面
-2. 下载插件发布压缩包，例如 `tmd-0.2.0.zip`
+2. 下载插件发布压缩包，例如 `ante-obsidian-0.2.0.zip`
    不要直接使用 GitHub 自动生成的 `Source code (zip)` 或 `Source code (tar.gz)`，除非你打算自己构建插件
 3. 解压该压缩包
-   解压后应该直接得到一个 `tmd/` 文件夹，里面包含：
+   解压后应该直接得到一个 `ante-obsidian/` 文件夹，里面包含：
    - `manifest.json`
    - `main.js`
    - `styles.css`
@@ -71,10 +71,10 @@ BRAT 是一个可以直接从 GitHub 仓库安装 Obsidian 插件的社区插件
 <your-vault>/.obsidian/plugins/
 ```
 
-5. 将解压得到的 `tmd/` 文件夹复制到该目录，使最终路径变成：
+5. 将解压得到的 `ante-obsidian/` 文件夹复制到该目录，使最终路径变成：
 
 ```text
-<your-vault>/.obsidian/plugins/tmd/
+<your-vault>/.obsidian/plugins/ante-obsidian/
 ```
 
 6. 打开 Obsidian
@@ -83,7 +83,7 @@ BRAT 是一个可以直接从 GitHub 仓库安装 Obsidian 插件的社区插件
 9. 启用 `Ante Obsidian`
 10. 打开 Ante Obsidian 设置，确认 Ante 命令、provider 和 model 配置
 
-如果插件没有显示，请确认目录名与 `manifest.json` 中的插件 id 一致。本项目的 id 是 `tmd`。
+如果插件没有显示，请确认目录名与 `manifest.json` 中的插件 id 一致。本项目的 id 是 `ante-obsidian`。
 
 ## 方式四：从源码本地安装
 
@@ -105,7 +105,7 @@ npm run build
 4. 在你的 vault 中创建以下目录：
 
 ```text
-<your-vault>/.obsidian/plugins/tmd/
+<your-vault>/.obsidian/plugins/ante-obsidian/
 ```
 
 5. 将仓库根目录中的这些文件复制到该目录：
@@ -144,7 +144,7 @@ npm run build
 
 请检查以下项目：
 
-- 目录路径是否正确：`<vault>/.obsidian/plugins/tmd/`
+- 目录路径是否正确：`<vault>/.obsidian/plugins/ante-obsidian/`
 - 该目录下是否存在 `manifest.json`
 - 该目录下是否存在 `main.js`
 - Obsidian 社区插件功能是否已启用
