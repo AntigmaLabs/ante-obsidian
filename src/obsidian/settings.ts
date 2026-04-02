@@ -37,9 +37,7 @@ export interface BuiltinPresetPreference {
 
 export interface TmdSettings {
   connectionMode: AnteConnectionMode;
-  command: string;
   argsJson: string;
-  cwd: string;
   wsAddress: string;
   useAnteDefaults: boolean;
   anteModel: string;
@@ -54,9 +52,7 @@ export interface TmdSettings {
 
 export const DEFAULT_SETTINGS: TmdSettings = {
   connectionMode: "stdio",
-  command: "ante",
   argsJson: JSON.stringify(["serve", "--stdio", "--yolo"]),
-  cwd: "",
   wsAddress: "127.0.0.1:8765",
   useAnteDefaults: true,
   anteModel: getDefaultModelForProvider(OPENAI_PROVIDER),
@@ -150,9 +146,7 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
 
   return {
     connectionMode,
-    command: typeof raw.command === "string" ? raw.command : DEFAULT_SETTINGS.command,
     argsJson: typeof raw.argsJson === "string" ? raw.argsJson : DEFAULT_SETTINGS.argsJson,
-    cwd: typeof raw.cwd === "string" ? raw.cwd : DEFAULT_SETTINGS.cwd,
     wsAddress:
       typeof raw.wsAddress === "string" && raw.wsAddress.trim()
         ? raw.wsAddress.trim()

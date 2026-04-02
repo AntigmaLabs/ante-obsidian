@@ -17,6 +17,7 @@ import { normalizeEnvVarName, readCommandPathFromLoginShell, readEnvVarFromLogin
 import { ChatSessionManager } from "../core/chat-session-manager";
 import type { ChatPersistenceState } from "../core/chat-types";
 import { getResolvedPreset, listResolvedPresets } from "../core/presets";
+import { AnteUpdater } from "./ante-updater";
 
 interface TmdPluginData {
   settings?: Partial<TmdSettings>;
@@ -35,6 +36,7 @@ export default class TmdPlugin extends Plugin {
   taskEngine!: TaskEngine;
   chatManager!: ChatSessionManager;
   mentionTrigger!: MentionTriggerService;
+  anteUpdater!: AnteUpdater;
   private runtime!: AnteRuntime;
   private pluginData: TmdPluginData = {};
 
@@ -44,6 +46,7 @@ export default class TmdPlugin extends Plugin {
     await this.loadShellEnv();
 
     this.hostAdapter = new ObsidianHostAdapter(this.app);
+    this.anteUpdater = new AnteUpdater();
     this.runtime = createAnteRuntime(() => {
       const resolved = this.getResolvedAnteTarget();
       const geminiEnvKey = normalizeEnvVarName(this.settings.geminiApiKeyEnvKey);
@@ -53,9 +56,9 @@ export default class TmdPlugin extends Plugin {
         (geminiEnvKey ? process.env[geminiEnvKey]?.trim() ?? "" : "");
       return {
         connectionMode: this.settings.connectionMode,
-        command: this.getResolvedAnteCommand(),
+        command: "ante",
         argsJson: this.settings.argsJson,
-        cwd: this.settings.cwd,
+        cwd: "",
         wsAddress: this.settings.wsAddress,
         model: resolved.model,
         provider: resolved.provider,
@@ -128,14 +131,18 @@ export default class TmdPlugin extends Plugin {
 
   async loadShellEnv(): Promise<void> {
     const envKey = normalizeEnvVarName(this.settings.geminiApiKeyEnvKey);
-    const commandValue = this.settings.command.trim();
-    this.resolvedAnteCommand = !commandValue || commandValue === DEFAULT_SETTINGS.command ? await readCommandPathFromLoginShell("ante") : "";
+    this.resolvedAnteCommand = await readCommandPathFromLoginShell("ante");
     if (!envKey) {
       this.shellEnv = {};
       return;
     }
     const value = await readEnvVarFromLoginShell(envKey);
     this.shellEnv = value ? { [envKey]: value } : {};
+  }
+
+  async refreshAnteEnvironment(): Promise<void> {
+    await this.loadShellEnv();
+    await this.loadAnteDefaults();
   }
 
   async runPresetFromContextMenu(presetId: PresetId): Promise<void> {
@@ -288,14 +295,6 @@ export default class TmdPlugin extends Plugin {
       provider: this.settings.anteProvider,
       model: this.settings.anteModel
     };
-  }
-
-  getResolvedAnteCommand(): string {
-    const configured = this.settings.command.trim();
-    if (!configured || configured === DEFAULT_SETTINGS.command) {
-      return this.resolvedAnteCommand || DEFAULT_SETTINGS.command;
-    }
-    return configured;
   }
 
   getAvailablePresets() {

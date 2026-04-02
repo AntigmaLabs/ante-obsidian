@@ -1,6 +1,7 @@
 import { DropdownComponent, Modal, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
 import { listResolvedPresets } from "../core/presets";
 import type TmdPlugin from "./main";
+import type { AnteVersionCheckResult } from "./ante-updater";
 import {
   type AnteConnectionMode,
   ANTHROPIC_PROVIDER,
@@ -13,6 +14,9 @@ import {
 
 export class TmdSettingTab extends PluginSettingTab {
   private draggingPresetId: string | null = null;
+  private anteVersionState: AnteVersionCheckResult | null = null;
+  private checkingAnteVersion = false;
+  private upgradingAnte = false;
 
   constructor(private readonly pluginRef: TmdPlugin) {
     super(pluginRef.app, pluginRef);
@@ -22,6 +26,8 @@ export class TmdSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Ante md Settings" });
+
+    this.renderAnteUpdateSection(containerEl);
 
     new Setting(containerEl)
       .setName("Ante connection mode")
@@ -36,20 +42,6 @@ export class TmdSettingTab extends PluginSettingTab {
             await this.pluginRef.saveSettings();
             this.display();
           })
-      );
-
-    new Setting(containerEl)
-      .setName("Ante command")
-      .setDesc(
-        this.pluginRef.resolvedAnteCommand
-          ? `Executable used to launch Ante. Default: \`ante\`. Auto-detected current path: \`${this.pluginRef.resolvedAnteCommand}\`.`
-          : 'Executable used to launch Ante. Default: `ante`.'
-      )
-      .addText((text) =>
-        text.setValue(this.pluginRef.settings.command).onChange(async (value) => {
-          this.pluginRef.settings.command = value.trim();
-          await this.pluginRef.saveSettings();
-        })
       );
 
     if (this.pluginRef.settings.connectionMode === "stdio") {
@@ -83,16 +75,6 @@ export class TmdSettingTab extends PluginSettingTab {
           })
         );
     }
-
-    new Setting(containerEl)
-      .setName("Working directory")
-      .setDesc("Optional working directory used when launching Ante. Leave empty to inherit the current environment.")
-      .addText((text) =>
-        text.setValue(this.pluginRef.settings.cwd).onChange(async (value) => {
-          this.pluginRef.settings.cwd = value;
-          await this.pluginRef.saveSettings();
-        })
-      );
 
     new Setting(containerEl)
       .setName("Auto-approve Ante tools")
@@ -150,28 +132,32 @@ export class TmdSettingTab extends PluginSettingTab {
     }
 
     if ((this.pluginRef.settings.useAnteDefaults ? resolvedAnteTarget.provider : this.pluginRef.settings.anteProvider) === GEMINI_PROVIDER) {
-      new Setting(containerEl)
-        .setName("Gemini env key")
-        .setDesc("Ante expects Gemini auth via header `x-goog-api-key` sourced from this environment variable. Default: `GEMINI_API_KEY`.")
-        .addText((text) =>
-          text.setPlaceholder("GEMINI_API_KEY").setValue(this.pluginRef.settings.geminiApiKeyEnvKey).onChange(async (value) => {
-            this.pluginRef.settings.geminiApiKeyEnvKey = value.trim() || "GEMINI_API_KEY";
-            await this.pluginRef.saveSettings();
-          })
-        );
+      const geminiSetting = new Setting(containerEl)
+        .setName("Gemini credentials")
+        .setDesc("Configure the env var name Ante reads for `x-goog-api-key`, and optionally override the Gemini API key locally.");
 
-      new Setting(containerEl)
-        .setName("Gemini API key")
-        .setDesc("Optional local override. Leave empty to reuse the key already available to Ante in your environment.")
-        .addText((text) => {
-          text.inputEl.type = "password";
-          text.setPlaceholder("AIza...");
-          text.setValue(this.pluginRef.settings.geminiApiKey);
-          text.onChange(async (value) => {
-            this.pluginRef.settings.geminiApiKey = value.trim();
-            await this.pluginRef.saveSettings();
-          });
+      geminiSetting.controlEl.addClass("tmd-gemini-setting");
+
+      const envFieldEl = geminiSetting.controlEl.createDiv({ cls: "tmd-gemini-field" });
+      envFieldEl.createSpan({ text: "Env key", cls: "tmd-gemini-field-label" });
+      new Setting(envFieldEl).addText((text) => {
+        text.inputEl.addClass("tmd-gemini-field-input");
+        text.setPlaceholder("GEMINI_API_KEY").setValue(this.pluginRef.settings.geminiApiKeyEnvKey).onChange(async (value) => {
+          this.pluginRef.settings.geminiApiKeyEnvKey = value.trim() || "GEMINI_API_KEY";
+          await this.pluginRef.saveSettings();
         });
+      });
+
+      const keyFieldEl = geminiSetting.controlEl.createDiv({ cls: "tmd-gemini-field" });
+      keyFieldEl.createSpan({ text: "API key", cls: "tmd-gemini-field-label" });
+      new Setting(keyFieldEl).addText((text) => {
+        text.inputEl.type = "password";
+        text.inputEl.addClass("tmd-gemini-field-input");
+        text.setPlaceholder("AIza...").setValue(this.pluginRef.settings.geminiApiKey).onChange(async (value) => {
+          this.pluginRef.settings.geminiApiKey = value.trim();
+          await this.pluginRef.saveSettings();
+        });
+      });
     }
 
     this.renderPresetSection(containerEl);
@@ -185,6 +171,190 @@ export class TmdSettingTab extends PluginSettingTab {
           await this.pluginRef.saveSettings();
         })
       );
+  }
+
+  private renderAnteUpdateSection(containerEl: HTMLElement): void {
+    const sectionEl = containerEl.createDiv({ cls: "tmd-ante-update-section" });
+    sectionEl.createEl("h3", { text: "Ante Runtime Update", cls: "tmd-ante-update-title" });
+    sectionEl.createEl("p", {
+      text: "Check the local Ante CLI version and run the official updater when a newer release is available.",
+      cls: "tmd-ante-update-summary"
+    });
+
+    const contentRowEl = sectionEl.createDiv({ cls: "tmd-ante-update-layout" });
+    const statusCardEl = sectionEl.createDiv({ cls: "tmd-ante-update-card" });
+    const localVersion = this.anteVersionState?.localVersion ?? "Checking...";
+    const latestVersion = this.anteVersionState?.latestVersion ?? "Checking...";
+    const statusLabel = this.getAnteUpdateStatusLabel();
+
+    contentRowEl.appendChild(statusCardEl);
+
+    this.createAnteUpdateRow(statusCardEl, "check-circle", "is-local", "Local version", localVersion);
+    this.createAnteUpdateRow(statusCardEl, "cloud-download", "is-remote", "Latest version", latestVersion);
+    this.createAnteUpdateRow(statusCardEl, this.getAnteStatusIcon(), this.getAnteStatusTone(), "Status", statusLabel);
+
+    if (this.anteVersionState?.error) {
+      statusCardEl.createEl("p", {
+        text: this.anteVersionState.error,
+        cls: "tmd-ante-update-error"
+      });
+    }
+
+    const actionRowEl = contentRowEl.createDiv({ cls: "tmd-ante-update-actions" });
+    const checkButton = actionRowEl.createEl("button");
+    checkButton.addClass("tmd-ante-update-button");
+    this.decorateAnteActionButton(checkButton, this.checkingAnteVersion ? "loader-circle" : "refresh-cw", this.checkingAnteVersion ? "Checking..." : "Check again");
+    checkButton.disabled = this.checkingAnteVersion || this.upgradingAnte;
+    checkButton.addEventListener("click", () => {
+      void this.refreshAnteVersionState();
+    });
+
+    if (this.anteVersionState?.updateAvailable || (!this.anteVersionState?.localVersion && !!this.anteVersionState?.latestVersion)) {
+      const upgradeButton = actionRowEl.createEl("button", { cls: "mod-cta" });
+      upgradeButton.addClass("tmd-ante-update-button");
+      this.decorateAnteActionButton(
+        upgradeButton,
+        this.upgradingAnte ? "loader-circle" : this.anteVersionState?.localVersion ? "arrow-up-circle" : "download",
+        this.upgradingAnte ? "Upgrading..." : this.anteVersionState?.localVersion ? "Upgrade Ante" : "Install Ante"
+      );
+      upgradeButton.disabled = this.checkingAnteVersion || this.upgradingAnte;
+      upgradeButton.addEventListener("click", () => {
+        void this.handleAnteUpgrade();
+      });
+    }
+
+    if (!this.anteVersionState && !this.checkingAnteVersion) {
+      void this.refreshAnteVersionState();
+    }
+  }
+
+  private createAnteUpdateRow(containerEl: HTMLElement, icon: string, toneClass: string, label: string, value: string): void {
+    const rowEl = containerEl.createDiv({ cls: `tmd-ante-update-row ${toneClass}` });
+    const labelWrapEl = rowEl.createDiv({ cls: "tmd-ante-update-label-wrap" });
+    const iconEl = labelWrapEl.createSpan({ cls: "tmd-ante-update-icon" });
+    setIcon(iconEl, icon);
+    labelWrapEl.createSpan({ text: label, cls: "tmd-ante-update-label" });
+    rowEl.createSpan({ text: value, cls: "tmd-ante-update-value" });
+  }
+
+  private decorateAnteActionButton(buttonEl: HTMLButtonElement, icon: string, label: string): void {
+    const iconEl = buttonEl.createSpan({ cls: "tmd-ante-update-button-icon" });
+    setIcon(iconEl, icon);
+    buttonEl.createSpan({ text: label, cls: "tmd-ante-update-button-label" });
+  }
+
+  private getAnteUpdateStatusLabel(): string {
+    if (this.upgradingAnte) {
+      return "Upgrading...";
+    }
+    if (this.checkingAnteVersion) {
+      return "Checking...";
+    }
+    if (!this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
+      return "Not installed";
+    }
+    if (this.anteVersionState?.error) {
+      return "Check failed";
+    }
+    if (this.anteVersionState?.updateAvailable) {
+      return "Update available";
+    }
+    if (this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
+      return "Up to date";
+    }
+    return "Checking...";
+  }
+
+  private getAnteStatusTone(): string {
+    if (this.upgradingAnte) {
+      return "is-progress";
+    }
+    if (this.checkingAnteVersion) {
+      return "is-progress";
+    }
+    if (!this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
+      return "is-warning";
+    }
+    if (this.anteVersionState?.error) {
+      return "is-error";
+    }
+    if (this.anteVersionState?.updateAvailable) {
+      return "is-warning";
+    }
+    if (this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
+      return "is-success";
+    }
+    return "is-progress";
+  }
+
+  private getAnteStatusIcon(): string {
+    if (this.upgradingAnte) {
+      return "loader-circle";
+    }
+    if (this.checkingAnteVersion) {
+      return "refresh-cw";
+    }
+    if (!this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
+      return "download";
+    }
+    if (this.anteVersionState?.error) {
+      return "alert-triangle";
+    }
+    if (this.anteVersionState?.updateAvailable) {
+      return "arrow-up-circle";
+    }
+    if (this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
+      return "badge-check";
+    }
+    return "refresh-cw";
+  }
+
+  private async refreshAnteVersionState(): Promise<void> {
+    if (this.checkingAnteVersion) {
+      return;
+    }
+
+    this.checkingAnteVersion = true;
+    this.display();
+    try {
+      this.anteVersionState = await this.pluginRef.anteUpdater.checkForUpdate();
+    } finally {
+      this.checkingAnteVersion = false;
+      this.display();
+    }
+  }
+
+  private async handleAnteUpgrade(): Promise<void> {
+    if (this.upgradingAnte) {
+      return;
+    }
+    if (!confirm("This will run the official Ante installer script for channel 'latest'. Continue?")) {
+      return;
+    }
+
+    this.upgradingAnte = true;
+    this.display();
+    try {
+      await this.pluginRef.anteUpdater.upgrade();
+      await this.pluginRef.refreshAnteEnvironment();
+      this.anteVersionState = await this.pluginRef.anteUpdater.checkForUpdate();
+      new Notice(
+        this.anteVersionState.localVersion ? `Ante upgraded to ${this.anteVersionState.localVersion}` : "Ante upgrade completed"
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ante upgrade failed";
+      this.anteVersionState = {
+        localVersion: this.anteVersionState?.localVersion ?? null,
+        latestVersion: this.anteVersionState?.latestVersion ?? null,
+        updateAvailable: this.anteVersionState?.updateAvailable ?? false,
+        checkedAt: new Date().toISOString(),
+        error: message
+      };
+      new Notice(message);
+    } finally {
+      this.upgradingAnte = false;
+      this.display();
+    }
   }
 
   private renderPresetSection(containerEl: HTMLElement): void {
