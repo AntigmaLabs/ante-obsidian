@@ -148,8 +148,11 @@ const NOISY_SYSTEM_PATTERNS = [
   /^Ante ToolUpdate\b/,
 ]
 
-const shouldDisplaySystemLog = (text: string): boolean =>
-  !NOISY_SYSTEM_PATTERNS.some((pattern) => pattern.test(text))
+const shouldDisplaySystemLog = (
+  text: string,
+  showFullProcessLogs: boolean,
+): boolean =>
+  showFullProcessLogs || !NOISY_SYSTEM_PATTERNS.some((pattern) => pattern.test(text))
 
 const extractRuntimeSummary = (
   task: TaskRecord | undefined,
@@ -246,10 +249,17 @@ const extractPartialJsonPreview = (value: string): string => {
   return normalized
 }
 
-const clampTerminalPreview = (value: string): string => {
+const clampTerminalPreview = (
+  value: string,
+  showFullProcessLogs: boolean,
+): string => {
   const normalized = value.replace(/\r/g, "")
   if (!normalized) {
     return ""
+  }
+
+  if (showFullProcessLogs) {
+    return normalized.trim()
   }
 
   const lines = normalized.split("\n")
@@ -275,6 +285,7 @@ const clampTerminalPreview = (value: string): string => {
 
 const analyzeOutput = (
   task: TaskRecord,
+  showFullProcessLogs: boolean,
 ): { text: string; suppressStdout: boolean } => {
   const primaryText = task.textResult?.text.trim()
     ? task.textResult.text.trim()
@@ -311,13 +322,14 @@ const analyzeOutput = (
   }
 
   return {
-    text: clampTerminalPreview(primaryText),
+    text: clampTerminalPreview(primaryText, showFullProcessLogs),
     suppressStdout: Boolean(task.textResult?.text.trim()),
   }
 }
 
 const buildStreamingPreview = (
   task: TaskRecord,
+  showFullProcessLogs: boolean,
 ): { text: string; timestamp: string } | null => {
   const combined = task.stdoutText
   if (!combined.trim()) {
@@ -332,6 +344,7 @@ const buildStreamingPreview = (
     return {
       text: clampTerminalPreview(
         extracted || partial || "Preparing Markdown change...",
+        showFullProcessLogs,
       ),
       timestamp: task.endedAt ?? task.startedAt,
     }
@@ -342,15 +355,23 @@ const buildStreamingPreview = (
   }
 
   return {
-    text: clampTerminalPreview(normalized),
+    text: clampTerminalPreview(normalized, showFullProcessLogs),
     timestamp: task.endedAt ?? task.startedAt,
   }
 }
 
-const clampDisplayLines = (text: string, maxLines = 3): string => {
+const clampDisplayLines = (
+  text: string,
+  showFullProcessLogs: boolean,
+  maxLines = 3,
+): string => {
   const normalized = text.replace(/\r\n?/g, "\n").trim()
   if (!normalized) {
     return ""
+  }
+
+  if (showFullProcessLogs) {
+    return normalized
   }
 
   const lines = normalized.split("\n")
@@ -425,7 +446,11 @@ const buildProcessRows = (task: TaskRecord): TerminalRow[] => {
   return rows
 }
 
-const buildRows = (task: TaskRecord, loadingFrame: number): TerminalRow[] => {
+const buildRows = (
+  task: TaskRecord,
+  loadingFrame: number,
+  showFullProcessLogs: boolean,
+): TerminalRow[] => {
   const rows: TerminalRow[] = []
   rows.push({
     key: `${task.id}:command`,
@@ -435,10 +460,10 @@ const buildRows = (task: TaskRecord, loadingFrame: number): TerminalRow[] => {
   })
 
   const hasStructuredOutput = Boolean(task.textResult?.text.trim())
-  const output = analyzeOutput(task)
+  const output = analyzeOutput(task, showFullProcessLogs)
   const streamingPreview =
     !hasStructuredOutput && task.status === "running"
-      ? buildStreamingPreview(task)
+      ? buildStreamingPreview(task, showFullProcessLogs)
       : null
 
   let visibleLogIndex = 0
@@ -446,7 +471,7 @@ const buildRows = (task: TaskRecord, loadingFrame: number): TerminalRow[] => {
     if (log.stream === "stdout") {
       continue
     }
-    if (log.stream === "system" && !shouldDisplaySystemLog(log.text)) {
+    if (log.stream === "system" && !shouldDisplaySystemLog(log.text, showFullProcessLogs)) {
       continue
     }
     rows.push({
@@ -464,7 +489,7 @@ const buildRows = (task: TaskRecord, loadingFrame: number): TerminalRow[] => {
     rows.push({
       key: `${task.id}:streaming`,
       kind: "streaming",
-      text: clampDisplayLines(streamingPreview.text),
+      text: clampDisplayLines(streamingPreview.text, showFullProcessLogs),
       timestamp: streamingPreview.timestamp,
     })
   }
@@ -508,7 +533,11 @@ const buildRows = (task: TaskRecord, loadingFrame: number): TerminalRow[] => {
   return rows
 }
 
-const buildAllRows = (state: TmdState, loadingFrame: number): TerminalRow[] => {
+const buildAllRows = (
+  state: TmdState,
+  loadingFrame: number,
+  showFullProcessLogs: boolean,
+): TerminalRow[] => {
   const tasks = state.tasks.filter((task) => task.triggerSource === "terminal")
   if (tasks.length === 0) {
     return [
@@ -521,7 +550,9 @@ const buildAllRows = (state: TmdState, loadingFrame: number): TerminalRow[] => {
     ]
   }
 
-  return [...tasks].reverse().flatMap((task) => buildRows(task, loadingFrame))
+  return [...tasks].reverse().flatMap((task) =>
+    buildRows(task, loadingFrame, showFullProcessLogs),
+  )
 }
 
 export class TmdTerminalView extends ItemView {
@@ -725,7 +756,13 @@ export class TmdTerminalView extends ItemView {
     this.statusEl.setText(terminalStatus(latestTask))
     this.metaLineEl.setText(summarizeTerminalMeta(context, runtimeSummary))
 
-    this.syncRows(buildAllRows(state, this.loadingFrame))
+    this.syncRows(
+      buildAllRows(
+        state,
+        this.loadingFrame,
+        this.plugin.shouldShowFullProcessLogs(),
+      ),
+    )
     this.syncPrompt(context, tasks, isEditable)
     this.syncInlineArtifacts(latestTask)
     this.syncApproval(latestTask)
@@ -1079,7 +1116,11 @@ export class TmdTerminalView extends ItemView {
     )
     const shouldAnimate = terminalTasks
       .filter((task) => task.status === "running")
-      .some((task) => !analyzeOutput(task).text && !task.pendingApproval)
+      .some(
+        (task) =>
+          !analyzeOutput(task, this.plugin.shouldShowFullProcessLogs()).text &&
+          !task.pendingApproval,
+      )
 
     if (shouldAnimate && this.loadingTimer == null) {
       this.loadingTimer = window.setInterval(() => {

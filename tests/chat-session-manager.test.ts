@@ -84,6 +84,154 @@ test("structured chat change results do not keep raw JSON as message text", () =
   }
 });
 
+test("streaming structured chat payloads do not show raw JSON envelope", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = createWindowStub();
+
+  try {
+    const pluginStub = {
+      saveChatState: async () => {}
+    };
+
+    const manager = new ChatSessionManager(pluginStub as never);
+    const { conversation } = manager.appendUserPrompt("改写成 JSON", context);
+    manager.createAssistantTurn(conversation.id, "task-1");
+
+    manager.syncFromTaskState({
+      currentTaskId: null,
+      tasks: [
+        {
+          id: "task-1",
+          kind: "chat",
+          preset: {
+            id: "default",
+            label: "@ante",
+            goal: "Discuss the current Markdown content before editing anything.",
+            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+          },
+          triggerSource: "chat",
+          inlineInstruction: "改写成 JSON",
+          context,
+          status: "running",
+          logs: [],
+          stdoutText: '{"type":"changes","changes":[{"operation":"replace-file","targetPath":"Note.md","afterText":"beta"}]}',
+          artifacts: [],
+          startedAt: "2026-03-29T00:00:00.000Z"
+        }
+      ]
+    });
+
+    const snapshot = manager.getSnapshot();
+    const messages = snapshot.messagesByConversation[conversation.id] ?? [];
+    const assistant = messages.find((message) => message.role === "assistant");
+
+    assert.ok(assistant);
+    assert.equal(assistant?.status, "streaming");
+    assert.equal(assistant?.text, "");
+  } finally {
+    (globalThis as { window?: unknown }).window = originalWindow;
+  }
+});
+
+test("streaming structured text payloads show inner text without the JSON envelope", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = createWindowStub();
+
+  try {
+    const pluginStub = {
+      saveChatState: async () => {}
+    };
+
+    const manager = new ChatSessionManager(pluginStub as never);
+    const { conversation } = manager.appendUserPrompt("继续写", context);
+    manager.createAssistantTurn(conversation.id, "task-1");
+
+    manager.syncFromTaskState({
+      currentTaskId: null,
+      tasks: [
+        {
+          id: "task-1",
+          kind: "chat",
+          preset: {
+            id: "default",
+            label: "@ante",
+            goal: "Discuss the current Markdown content before editing anything.",
+            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+          },
+          triggerSource: "chat",
+          inlineInstruction: "继续写",
+          context,
+          status: "running",
+          logs: [],
+          stdoutText: '{"type":"text","text":"第一行\\n第二',
+          artifacts: [],
+          startedAt: "2026-03-29T00:00:00.000Z"
+        }
+      ]
+    });
+
+    const snapshot = manager.getSnapshot();
+    const messages = snapshot.messagesByConversation[conversation.id] ?? [];
+    const assistant = messages.find((message) => message.role === "assistant");
+
+    assert.ok(assistant);
+    assert.equal(assistant?.status, "streaming");
+    assert.equal(assistant?.text, "第一行\n第二");
+  } finally {
+    (globalThis as { window?: unknown }).window = originalWindow;
+  }
+});
+
+test("full process logs mode does not break structured text extraction in chat", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = createWindowStub();
+
+  try {
+    const pluginStub = {
+      saveChatState: async () => {},
+      shouldShowFullProcessLogs: () => true
+    };
+
+    const manager = new ChatSessionManager(pluginStub as never);
+    const { conversation } = manager.appendUserPrompt("继续写", context);
+    manager.createAssistantTurn(conversation.id, "task-1");
+
+    manager.syncFromTaskState({
+      currentTaskId: null,
+      tasks: [
+        {
+          id: "task-1",
+          kind: "chat",
+          preset: {
+            id: "default",
+            label: "@ante",
+            goal: "Discuss the current Markdown content before editing anything.",
+            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+          },
+          triggerSource: "chat",
+          inlineInstruction: "继续写",
+          context,
+          status: "running",
+          logs: [],
+          stdoutText: '{"type":"text","text":"第一行\\n第二"}',
+          artifacts: [],
+          startedAt: "2026-03-29T00:00:00.000Z"
+        }
+      ]
+    });
+
+    const snapshot = manager.getSnapshot();
+    const messages = snapshot.messagesByConversation[conversation.id] ?? [];
+    const assistant = messages.find((message) => message.role === "assistant");
+
+    assert.ok(assistant);
+    assert.equal(assistant?.status, "streaming");
+    assert.equal(assistant?.text, "第一行\n第二");
+  } finally {
+    (globalThis as { window?: unknown }).window = originalWindow;
+  }
+});
+
 test("persisted chat state retains artifact snapshots for old conversations", () => {
   const originalWindow = (globalThis as { window?: unknown }).window;
   (globalThis as { window?: unknown }).window = createWindowStub();

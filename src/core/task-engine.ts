@@ -21,12 +21,15 @@ type StateListener = (state: TmdState) => void;
 const MAX_STDOUT_BUFFER_CHARS = 16000;
 const STDOUT_FLUSH_INTERVAL_MS = 100;
 
-const appendStdoutPreview = (existing: string, incoming: string): string => {
+const appendStdoutPreview = (existing: string, incoming: string, preserveFullText: boolean): string => {
   if (!incoming) {
     return existing;
   }
 
   const combined = existing + incoming;
+  if (preserveFullText) {
+    return combined;
+  }
   if (combined.length <= MAX_STDOUT_BUFFER_CHARS) {
     return combined;
   }
@@ -73,7 +76,8 @@ export class TaskEngine {
   constructor(
     private readonly runtime: AnteRuntime,
     private readonly host: HostAdapter,
-    private readonly resolvePresetById: (presetId: PresetId) => PresetDefinition
+    private readonly resolvePresetById: (presetId: PresetId) => PresetDefinition,
+    private readonly shouldPreserveFullStdout: () => boolean = () => false
   ) {}
 
   getState(): TmdState {
@@ -537,7 +541,7 @@ export class TaskEngine {
     this.pendingStdout.delete(taskId);
     const task = this.getTask(taskId);
     this.patchTask(taskId, {
-      stdoutText: appendStdoutPreview(task.stdoutText, pending.chunks.join(""))
+      stdoutText: appendStdoutPreview(task.stdoutText, pending.chunks.join(""), this.shouldPreserveFullStdout())
     });
   }
 

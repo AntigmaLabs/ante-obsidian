@@ -3,6 +3,7 @@ import type TmdPlugin from "./main";
 import type { ChatConversationRecord, ChatMessageRecord, ChatStateSnapshot } from "../core/chat-types";
 import type {
   ContextSnapshot,
+  LogEntry,
   RuntimeApprovalDecision,
   RuntimeProcessLane,
   TaskRecord,
@@ -109,6 +110,24 @@ const buildProcessStatusLines = (process: RuntimeProcessLane | undefined): strin
   return lines;
 };
 
+const MAX_CHAT_PROCESS_LOG_LINES = 24;
+
+const buildRuntimeLogLines = (logs: LogEntry[], showFullProcessLogs: boolean): string[] => {
+  if (!showFullProcessLogs || logs.length === 0) {
+    return [];
+  }
+
+  const visibleLogs = logs
+    .filter(
+      (log) =>
+        log.stream === "stderr" ||
+        (log.stream === "system" && /^Ante\b/.test(log.text))
+    )
+    .slice(-MAX_CHAT_PROCESS_LOG_LINES);
+
+  return visibleLogs.map((log) => `${log.stream === "stderr" ? "err" : "sys"} ${log.text}`);
+};
+
 interface ChatContextElements {
   titleEl: HTMLDivElement;
   valueEl: HTMLDivElement;
@@ -147,6 +166,7 @@ export class TmdChatView extends ItemView {
   private liveContext: ContextSnapshot | null = null;
   private visibleMessageCount = MESSAGE_WINDOW_SIZE;
   private readonly expandedArtifactIds = new Set<string>();
+  private readonly autoExpandedArtifactGroups = new Set<string>();
   private readonly resolvedArtifactsCache = new Map<
     string,
     { signature: string; diffs: ResolvedArtifactDiff[] }
@@ -154,6 +174,7 @@ export class TmdChatView extends ItemView {
   private readonly sidebarRowEls = new Map<string, HTMLDivElement>();
   private readonly messageEls = new Map<string, ChatMessageElements>();
   private readonly messageOrder = new Set<string>();
+  private readonly messageStatusById = new Map<string, ChatMessageRecord["status"]>();
   private sidebarEl!: HTMLDivElement;
   private sidebarToggleEl!: HTMLButtonElement;
   private contextEl!: HTMLDivElement;
@@ -330,6 +351,7 @@ export class TmdChatView extends ItemView {
     const shouldForceScrollToBottom =
       this.shouldAutoScrollToBottom || (activeConversationId !== null && activeConversationId !== this.lastRenderedConversationId);
     const messages = activeConversation ? chatState.messagesByConversation[activeConversation.id] ?? [] : [];
+    const completedMessageToFocusId = this.getCompletedMessageToFocus(messages);
     const visibleMessages = messages.slice(-this.visibleMessageCount);
     const visibleTaskIds = visibleMessages
       .map((message) => message.turn?.taskId)
@@ -381,8 +403,14 @@ export class TmdChatView extends ItemView {
     this.syncEmptyState(false);
     this.syncLoadMore(activeConversation.id, messages.length - visibleMessages.length);
     this.syncMessages(visibleMessages, taskLookup, diffsByTask);
+    this.syncMessageStatuses(visibleMessages);
     this.pruneResolvedArtifactCache(visibleTaskIds);
     this.lastRenderedConversationId = activeConversationId;
+    if (completedMessageToFocusId && visibleMessages.some((message) => message.id === completedMessageToFocusId)) {
+      this.scrollMessageToTop(completedMessageToFocusId);
+      this.shouldAutoScrollToBottom = false;
+      return;
+    }
     if (shouldForceScrollToBottom || shouldStickToBottom) {
       this.scrollToBottom();
       this.shouldAutoScrollToBottom = false;
@@ -589,7 +617,13 @@ export class TmdChatView extends ItemView {
       this.removeLoading(elements);
     }
 
-    const processLines = buildProcessStatusLines(message.runtime?.processLane);
+    const processLines =
+      message.status === "streaming"
+        ? [
+            ...buildProcessStatusLines(message.runtime?.processLane),
+            ...buildRuntimeLogLines(task?.logs ?? [], this.plugin.shouldShowFullProcessLogs())
+          ]
+        : [];
     this.syncProcessLines(elements, processLines);
 
     const resolvedArtifacts = task ? diffsByTask.get(task.id) ?? [] : [];
@@ -626,11 +660,39 @@ export class TmdChatView extends ItemView {
       this.disposeMessageTextComponent(elements);
       elements.rootEl.remove();
       this.messageEls.delete(messageId);
+      this.messageStatusById.delete(messageId);
     }
     this.messageOrder.clear();
     for (const messageId of visibleIds) {
       this.messageOrder.add(messageId);
     }
+  }
+
+  private syncMessageStatuses(messages: ChatMessageRecord[]): void {
+    const visibleIds = new Set(messages.map((message) => message.id));
+    for (const [messageId] of [...this.messageStatusById.entries()]) {
+      if (!visibleIds.has(messageId)) {
+        this.messageStatusById.delete(messageId);
+      }
+    }
+    for (const message of messages) {
+      this.messageStatusById.set(message.id, message.status);
+    }
+  }
+
+  private getCompletedMessageToFocus(messages: ChatMessageRecord[]): string | null {
+    const latestAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant");
+    if (!latestAssistantMessage) {
+      return null;
+    }
+    const previousStatus = this.messageStatusById.get(latestAssistantMessage.id);
+    if (previousStatus !== "streaming") {
+      return null;
+    }
+    if (latestAssistantMessage.status === "streaming") {
+      return null;
+    }
+    return latestAssistantMessage.id;
   }
 
   private syncMessageText(elements: ChatMessageElements, message: ChatMessageRecord, text: string): void {
@@ -772,6 +834,7 @@ export class TmdChatView extends ItemView {
     task: TaskRecord | null,
     resolvedArtifacts: ResolvedArtifactDiff[]
   ): void {
+    this.ensureDefaultExpandedArtifact(task, resolvedArtifacts);
     const signature = this.buildArtifactsSignature(task?.id ?? "persisted", resolvedArtifacts);
     if (elements.artifactsHostEl && elements.artifactsValue === signature) {
       return;
@@ -787,6 +850,23 @@ export class TmdChatView extends ItemView {
     elements.artifactsHostEl?.remove();
     elements.artifactsHostEl = null;
     elements.artifactsValue = null;
+  }
+
+  private ensureDefaultExpandedArtifact(task: TaskRecord | null, resolvedArtifacts: ResolvedArtifactDiff[]): void {
+    if (resolvedArtifacts.length === 0) {
+      return;
+    }
+
+    const groupKey = `${task?.id ?? "persisted"}:${resolvedArtifacts.map(({ artifact }) => artifact.id).join(",")}`;
+    if (this.autoExpandedArtifactGroups.has(groupKey)) {
+      return;
+    }
+
+    const hasExpandedArtifact = resolvedArtifacts.some(({ artifact }) => this.expandedArtifactIds.has(artifact.id));
+    if (!hasExpandedArtifact) {
+      this.expandedArtifactIds.add(resolvedArtifacts[0]!.artifact.id);
+    }
+    this.autoExpandedArtifactGroups.add(groupKey);
   }
 
   private renderArtifacts(container: HTMLElement, task: TaskRecord | null, resolvedArtifacts: ResolvedArtifactDiff[]): void {
@@ -1078,6 +1158,14 @@ export class TmdChatView extends ItemView {
 
   private scrollToBottom(): void {
     this.timelineEl.scrollTop = this.timelineEl.scrollHeight;
+  }
+
+  private scrollMessageToTop(messageId: string): void {
+    const messageEl = this.messageEls.get(messageId)?.rootEl;
+    if (!messageEl) {
+      return;
+    }
+    this.timelineEl.scrollTop = Math.max(0, messageEl.offsetTop);
   }
 
   private pruneResolvedArtifactCache(activeTaskIds: string[]): void {

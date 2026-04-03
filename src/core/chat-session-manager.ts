@@ -92,6 +92,123 @@ const emptyRuntime = () => ({
   artifactIds: [] as string[]
 });
 
+const STRUCTURED_JSON_TYPE_PATTERN = /"type"\s*:\s*"(text|change|changes)"/;
+const STRUCTURED_TEXT_TYPE_PATTERN = /"type"\s*:\s*"text"/;
+const STRUCTURED_CHANGE_TYPE_PATTERN = /"type"\s*:\s*"(change|changes)"/;
+
+const decodePartialJsonString = (input: string): string => {
+  let output = "";
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+    if (char !== "\\") {
+      output += char;
+      continue;
+    }
+
+    index += 1;
+    const escaped = input[index];
+    if (escaped == null) {
+      break;
+    }
+
+    switch (escaped) {
+      case '"':
+        output += '"';
+        break;
+      case "\\":
+        output += "\\";
+        break;
+      case "/":
+        output += "/";
+        break;
+      case "b":
+        output += "\b";
+        break;
+      case "f":
+        output += "\f";
+        break;
+      case "n":
+        output += "\n";
+        break;
+      case "r":
+        output += "\r";
+        break;
+      case "t":
+        output += "\t";
+        break;
+      case "u": {
+        const hex = input.slice(index + 1, index + 5);
+        if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+          output += String.fromCharCode(Number.parseInt(hex, 16));
+          index += 4;
+        }
+        break;
+      }
+      default:
+        output += escaped;
+        break;
+    }
+  }
+
+  return output;
+};
+
+const extractStructuredStreamingText = (text: string): string | null => {
+  const normalized = text.trim();
+  if (!normalized || !normalized.startsWith("{") || !STRUCTURED_JSON_TYPE_PATTERN.test(normalized)) {
+    return null;
+  }
+
+  if (STRUCTURED_CHANGE_TYPE_PATTERN.test(normalized)) {
+    return "";
+  }
+
+  if (!STRUCTURED_TEXT_TYPE_PATTERN.test(normalized)) {
+    return "";
+  }
+
+  const textFieldMatch = /"text"\s*:\s*"/.exec(normalized);
+  if (!textFieldMatch) {
+    return "";
+  }
+
+  const contentStart = textFieldMatch.index + textFieldMatch[0].length;
+  let escaped = false;
+  let valueEnd = normalized.length;
+
+  for (let index = contentStart; index < normalized.length; index += 1) {
+    const char = normalized[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      valueEnd = index;
+      break;
+    }
+  }
+
+  return decodePartialJsonString(normalized.slice(contentStart, valueEnd));
+};
+
+const shouldHideStructuredStreamingText = (text: string): boolean => {
+  const normalized = text.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  if (!normalized.startsWith("{")) {
+    return false;
+  }
+
+  return STRUCTURED_CHANGE_TYPE_PATTERN.test(normalized);
+};
+
 export class ChatSessionManager {
   private readonly listeners = new Set<ChatListener>();
   private readonly conversations = new Map<string, ChatConversationRecord>();
@@ -369,10 +486,13 @@ export class ChatSessionManager {
 
     const hasStructuredResult =
       Boolean(task.textResult?.text.trim()) || task.artifacts.length > 0 || Boolean(task.inlineChanges && task.inlineChanges.length > 0);
+    const streamingText =
+      extractStructuredStreamingText(task.stdoutText) ??
+      (shouldHideStructuredStreamingText(task.stdoutText) ? "" : task.stdoutText);
     const nextText =
       task.status === "running"
-        ? task.stdoutText
-        : task.textResult?.text.trim() || (hasStructuredResult ? "" : task.stdoutText);
+        ? streamingText
+        : task.textResult?.text.trim() || (hasStructuredResult ? "" : streamingText);
     const nextStatus =
       task.error ? "failed" : task.status === "awaiting-apply" ? "awaiting-apply" : task.status === "running" ? "streaming" : "completed";
     const nextRuntime = {

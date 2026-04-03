@@ -69,7 +69,12 @@ export default class TmdPlugin extends Plugin {
             : {}
       };
     });
-    this.taskEngine = new TaskEngine(this.runtime, this.hostAdapter, (presetId) => this.getPresetById(presetId));
+    this.taskEngine = new TaskEngine(
+      this.runtime,
+      this.hostAdapter,
+      (presetId) => this.getPresetById(presetId),
+      () => this.shouldShowFullProcessLogs()
+    );
     this.chatManager = new ChatSessionManager(this, this.pluginData.chatState);
     this.taskEngine.subscribe((state) => {
       this.chatManager.syncFromTaskState(state);
@@ -143,6 +148,10 @@ export default class TmdPlugin extends Plugin {
   async refreshAnteEnvironment(): Promise<void> {
     await this.loadShellEnv();
     await this.loadAnteDefaults();
+  }
+
+  shouldShowFullProcessLogs(): boolean {
+    return this.settings.showFullProcessLogs;
   }
 
   async runPresetFromContextMenu(presetId: PresetId): Promise<void> {

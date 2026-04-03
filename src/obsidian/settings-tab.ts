@@ -86,6 +86,16 @@ export class TmdSettingTab extends PluginSettingTab {
         })
       );
 
+    new Setting(containerEl)
+      .setName("Show full process logs")
+      .setDesc("Show detailed runtime process information without hiding noisy system logs or truncating streamed output. Default: off.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.pluginRef.settings.showFullProcessLogs).onChange(async (value) => {
+          this.pluginRef.settings.showFullProcessLogs = value;
+          await this.pluginRef.saveSettings();
+        })
+      );
+
     const resolvedAnteTarget = this.pluginRef.getResolvedAnteTarget();
 
     new Setting(containerEl)

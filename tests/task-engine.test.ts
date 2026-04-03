@@ -218,6 +218,27 @@ test("stdout preview buffer is capped", async () => {
   assert.match(task?.stdoutText ?? "", /^a*b+$/);
 });
 
+test("full process logs mode preserves complete stdout", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({ type: "log", stream: "stdout", text: "a".repeat(12000) });
+    onEvent({ type: "log", stream: "stdout", text: "b".repeat(12000) });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById, () => true);
+  await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Stream long text"
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.stdoutText.length, 24000);
+  assert.equal(task?.stdoutText, `${"a".repeat(12000)}${"b".repeat(12000)}`);
+});
+
 test("startChatTask creates a chat task with chat trigger source", async () => {
   let capturedRequest: TaskRequest | null = null;
   const runtime = new RuntimeStub((request, onEvent) => {

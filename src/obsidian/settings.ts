@@ -43,6 +43,7 @@ export interface TmdSettings {
   anteModel: string;
   anteProvider: AnteProvider;
   autoApproveAnteTools: boolean;
+  showFullProcessLogs: boolean;
   geminiApiKey: string;
   geminiApiKeyEnvKey: string;
   mentionTriggerDebug: boolean;
@@ -58,6 +59,7 @@ export const DEFAULT_SETTINGS: TmdSettings = {
   anteModel: getDefaultModelForProvider(OPENAI_PROVIDER),
   anteProvider: OPENAI_PROVIDER,
   autoApproveAnteTools: true,
+  showFullProcessLogs: false,
   geminiApiKey: "",
   geminiApiKeyEnvKey: "GEMINI_API_KEY",
   mentionTriggerDebug: false,
@@ -155,6 +157,7 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
     anteModel,
     anteProvider,
     autoApproveAnteTools: raw.autoApproveAnteTools !== false,
+    showFullProcessLogs: raw.showFullProcessLogs === true,
     geminiApiKey: typeof raw.geminiApiKey === "string" ? raw.geminiApiKey : DEFAULT_SETTINGS.geminiApiKey,
     geminiApiKeyEnvKey:
       typeof raw.geminiApiKeyEnvKey === "string" && raw.geminiApiKeyEnvKey.trim()
