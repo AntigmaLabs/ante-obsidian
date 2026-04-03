@@ -44,12 +44,20 @@ const buildLineOffsets = (documentText: string): number[] => {
   return offsets;
 };
 
-const headingLinePattern = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
+const headingLinePattern = /^(#{1,6})\s+(.*?)(?:\s+#+\s*)?$/;
+
+const normalizeHeadingQuery = (query: string): string =>
+  query
+    .trim()
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/\s+#+\s*$/, "")
+    .trim()
+    .toLowerCase();
 
 const findHeadingOffset = (documentText: string, query: string, placement: "before" | "after"): number | null => {
   const lines = documentText.split("\n");
   const offsets = buildLineOffsets(documentText);
-  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedQuery = normalizeHeadingQuery(query);
 
   for (let index = 0; index < lines.length; index += 1) {
     const match = headingLinePattern.exec(lines[index] ?? "");

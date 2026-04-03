@@ -1,6 +1,6 @@
 {
   "name": "ante-md",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "private": true,
   "license": "MIT",
   "description": "Obsidian desktop plugin for Ante-powered terminal Markdown workflows with diff previews and Chat with Ante.",

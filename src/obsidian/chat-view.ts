@@ -878,19 +878,22 @@ export class TmdChatView extends ItemView {
   }
 
   private renderArtifacts(container: HTMLElement, task: TaskRecord | null, resolvedArtifacts: ResolvedArtifactDiff[]): void {
+    const isApplyAllDisabled =
+      resolvedArtifacts.every(
+        ({ artifact }) => artifact.applyState === "applied" || artifact.applyState === "discarded"
+      ) || !task;
+    const applyAllArtifacts =
+      task
+        ? () => {
+            void this.plugin.taskEngine.applyAllArtifacts(task.id).catch((error) => {
+              new Notice(error instanceof Error ? error.message : "Failed to apply all changes");
+            });
+          }
+        : undefined;
     const diffList = renderDiffSummary(container, resolvedArtifacts, {
       actionLabel: "Apply all",
-      onAction:
-        task
-          ? () => {
-              void this.plugin.taskEngine.applyAllArtifacts(task.id).catch((error) => {
-                new Notice(error instanceof Error ? error.message : "Failed to apply all changes");
-              });
-            }
-          : undefined,
-      isActionDisabled: resolvedArtifacts.every(
-        ({ artifact }) => artifact.applyState === "applied" || artifact.applyState === "discarded"
-      ) || !task
+      onAction: applyAllArtifacts,
+      isActionDisabled: isApplyAllDisabled
     });
 
     for (const resolvedArtifact of resolvedArtifacts) {
@@ -904,13 +907,15 @@ export class TmdChatView extends ItemView {
       });
     }
 
-    const openResults = container.createEl("button", {
+    const applyAll = container.createEl("button", {
       cls: "tmd-chat-secondary-action",
-      text: "Open Results"
+      text: "Apply all"
     });
-    openResults.addEventListener("click", () => {
-      void this.plugin.openResultsView();
-    });
+    applyAll.type = "button";
+    applyAll.disabled = isApplyAllDisabled;
+    if (applyAllArtifacts) {
+      applyAll.addEventListener("click", applyAllArtifacts);
+    }
   }
 
   private syncApproval(

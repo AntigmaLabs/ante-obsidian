@@ -96,6 +96,54 @@ test("insert-block can target a heading anchor", () => {
   assert.equal(artifact.afterText, "# Plan\n\nalpha\n\ninserted\n\n## Next\n\nbeta\n");
 });
 
+test("insert-block heading anchor accepts markdown heading syntax in the anchor value", () => {
+  const context: ContextSnapshot = {
+    vaultPath: "/vaults/test",
+    filePath: "Note.md",
+    noteTitle: "Note",
+    documentText: "# Plan\n\nalpha\n\n## Draft Recommendation\n\nbeta\n",
+    selection: {
+      text: "",
+      from: { line: 0, ch: 0 },
+      to: { line: 0, ch: 0 }
+    }
+  };
+  const change: RuntimeChangeSuggestion = {
+    kind: "change",
+    operation: "insert-block",
+    afterText: "inserted",
+    anchor: { by: "heading", value: "## Draft Recommendation" },
+    placement: "before"
+  };
+
+  const artifact = toDocumentChangeArtifact(change, context, context.documentText ?? "");
+  assert.equal(artifact.afterText, "# Plan\n\nalpha\n\ninserted\n\n## Draft Recommendation\n\nbeta\n");
+});
+
+test("insert-block heading anchor preserves semantic trailing hash characters", () => {
+  const context: ContextSnapshot = {
+    vaultPath: "/vaults/test",
+    filePath: "Note.md",
+    noteTitle: "Note",
+    documentText: "# Languages\n\n## C#\n\nbeta\n",
+    selection: {
+      text: "",
+      from: { line: 0, ch: 0 },
+      to: { line: 0, ch: 0 }
+    }
+  };
+  const change: RuntimeChangeSuggestion = {
+    kind: "change",
+    operation: "insert-block",
+    afterText: "inserted",
+    anchor: { by: "heading", value: "## C#" },
+    placement: "before"
+  };
+
+  const artifact = toDocumentChangeArtifact(change, context, context.documentText ?? "");
+  assert.equal(artifact.afterText, "# Languages\n\ninserted\n\n## C#\n\nbeta\n");
+});
+
 test("insert-block can target a paragraph index anchor", () => {
   const context: ContextSnapshot = {
     vaultPath: "/vaults/test",

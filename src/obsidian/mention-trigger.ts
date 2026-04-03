@@ -144,16 +144,19 @@ export class MentionTriggerService {
     const loadingSeed = window.crypto.randomUUID();
     const markers = this.createPlaceholderMarkers(loadingSeed);
     const placeholderPrefix = replaceFrom.ch > 0 ? "\n\n" : "";
+    const placeholderSuffix = "\n\n";
+    const placeholderText = `${placeholderPrefix}${this.wrapPlaceholder(
+      markers,
+      `> ${formatLoadingLabel(loadingSeed, loadingFrameIndex)}`
+    )}${placeholderSuffix}`;
 
     this.performEditorReplace(editor, () => {
       if (replaceFrom.line === replaceTo.line && replaceFrom.ch === replaceTo.ch) {
         editor.setSelection(replaceTo, replaceTo);
       }
-      editor.replaceRange(
-        `${placeholderPrefix}${this.wrapPlaceholder(markers, `> ${formatLoadingLabel(loadingSeed, loadingFrameIndex)}`)}`,
-        replaceFrom,
-        replaceTo
-      );
+      const insertionStartOffset = editor.posToOffset(replaceFrom);
+      editor.replaceRange(placeholderText, replaceFrom, replaceTo);
+      editor.setCursor(editor.offsetToPos(insertionStartOffset + placeholderText.length));
     });
 
     const updateLoading = () => {
