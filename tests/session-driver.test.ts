@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AnteSessionDriver, type AnteRuntimeConfig } from "../src/runtime/ante-session-driver";
+import { AnteSessionDriver, configSignature, type AnteRuntimeConfig } from "../src/runtime/ante-session-driver";
 import type { RuntimeObserver } from "../src/runtime/ante-runtime";
 import type { TaskRequest } from "../src/core/types";
 import type { AnteTransport } from "../src/runtime/transport/ante-transport";
+import { buildInteractivePrompt } from "../src/core/runtime-prompt";
 
 const request: TaskRequest = {
   taskId: "task-1",
@@ -27,6 +28,7 @@ const request: TaskRequest = {
 
 class FakeTransport implements AnteTransport {
   connected = false;
+  readonly sentMessages: string[] = [];
   messageHandler: (message: string) => void = () => {};
   errorHandler: (error: Error) => void = () => {};
   closeHandler: (info?: { code?: number; reason?: string }) => void = () => {};
@@ -40,7 +42,9 @@ class FakeTransport implements AnteTransport {
     this.connected = false;
   }
 
-  send(_message: string): void {}
+  send(message: string): void {
+    this.sentMessages.push(message);
+  }
 
   isConnected(): boolean {
     return this.connected;
@@ -86,6 +90,25 @@ class TestSessionDriver extends AnteSessionDriver {
       emittedStdout: false,
       completed: false
     };
+  }
+
+  primeSession(transport: FakeTransport, sessionId: string): void {
+    (this as unknown as {
+      transport: FakeTransport;
+      transportSignature: string;
+      sessionId: string;
+    }).transport = transport;
+    (this as unknown as {
+      transport: FakeTransport;
+      transportSignature: string;
+      sessionId: string;
+    }).transportSignature = configSignature(config);
+    (this as unknown as {
+      transport: FakeTransport;
+      transportSignature: string;
+      sessionId: string;
+    }).sessionId = sessionId;
+    transport.connected = true;
   }
 }
 
@@ -156,4 +179,261 @@ test("non-approval TurnPause still emits a log when auto-approve is enabled", ()
 
   assert.equal(events.length, 1);
   assert.match(events[0]?.text ?? "", /Ante TurnPause/);
+});
+
+test("run resumes the requested session before sending user input", async () => {
+  const transport = new FakeTransport();
+  const driver = new TestSessionDriver(() => config, () => transport);
+  const events: Array<{ type: string; sessionId?: string; text?: string }> = [];
+  const exits: Array<{ status: "completed" | "failed" | "cancelled"; error?: string }> = [];
+  const observer: RuntimeObserver = {
+    onEvent: (event) => {
+      if (event.type === "runtime.session") {
+        events.push({ type: event.type, sessionId: event.sessionId });
+      }
+      if (event.type === "result.text") {
+        events.push({ type: event.type, text: event.text });
+      }
+    },
+    onExit: (result) => {
+      exits.push(result);
+    }
+  };
+
+  driver.run(
+    {
+      ...request,
+      kind: "chat",
+      triggerSource: "chat",
+      mode: "followup",
+      runtimeSessionId: "ses_target"
+    },
+    observer
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(transport.sentMessages.length, 1);
+  assert.deepEqual(JSON.parse(transport.sentMessages[0] ?? "{}").op, {
+    ResumeSession: {
+      session_id: "ses_target"
+    }
+  });
+
+  driver.emit(JSON.stringify({ event: { SessionStart: { session_id: "ses_target" } } }));
+  driver.emit(JSON.stringify({ event: { ExtensionRefreshed: { session_id: "ses_target", skills: [], subagents: [] } } }));
+  driver.emit(JSON.stringify({ event: { AgentMessage: "old replay that should be ignored" } }));
+  driver.emit(JSON.stringify({ event: { TurnEnd: { status: "Completed" } } }));
+
+  await new Promise((resolve) => setTimeout(resolve, 180));
+
+  assert.equal(transport.sentMessages.length, 2);
+  assert.deepEqual(JSON.parse(transport.sentMessages[1] ?? "{}").op, {
+    UserInput: buildInteractivePrompt({
+      ...request,
+      kind: "chat",
+      triggerSource: "chat",
+      mode: "followup",
+      runtimeSessionId: "ses_target"
+    })
+  });
+
+  driver.emit(JSON.stringify({ event: { AgentMessage: "{\"type\":\"text\",\"text\":\"fresh response\"}" } }));
+  driver.emit(JSON.stringify({ event: { TurnEnd: { status: "Completed" } } }));
+
+  assert.deepEqual(
+    events.filter((event) => event.type === "runtime.session"),
+    [{ type: "runtime.session", sessionId: "ses_target" }]
+  );
+  assert.deepEqual(
+    events.filter((event) => event.type === "result.text"),
+    [{ type: "result.text", text: "fresh response" }]
+  );
+  assert.equal(exits.at(-1)?.status, "completed");
+});
+
+test("resume continues after SessionStart even when ExtensionRefreshed is not emitted", async () => {
+  const transport = new FakeTransport();
+  const driver = new TestSessionDriver(() => config, () => transport);
+
+  driver.run(
+    {
+      ...request,
+      kind: "chat",
+      triggerSource: "chat",
+      mode: "followup",
+      runtimeSessionId: "ses_target_no_extension"
+    },
+    {
+      onEvent: () => {},
+      onExit: () => {}
+    }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(transport.sentMessages.length, 1);
+  driver.emit(JSON.stringify({ event: { SessionStart: { session_id: "ses_target_no_extension" } } }));
+  driver.emit(JSON.stringify({ event: { AgentMessage: "history replay ignored" } }));
+  driver.emit(JSON.stringify({ event: { TurnEnd: { status: "Completed" } } }));
+
+  await new Promise((resolve) => setTimeout(resolve, 180));
+
+  assert.equal(transport.sentMessages.length, 2);
+  assert.deepEqual(JSON.parse(transport.sentMessages[1] ?? "{}").op, {
+    UserInput: buildInteractivePrompt({
+      ...request,
+      kind: "chat",
+      triggerSource: "chat",
+      mode: "followup",
+      runtimeSessionId: "ses_target_no_extension"
+    })
+  });
+});
+
+test("initial chat requests start a fresh session instead of reusing the current one", async () => {
+  const transport = new FakeTransport();
+  const driver = new TestSessionDriver(() => config, () => transport);
+  driver.primeSession(transport, "ses_current");
+
+  driver.run(
+    {
+      ...request,
+      kind: "chat",
+      triggerSource: "chat",
+      mode: "initial"
+    },
+    {
+      onEvent: () => {},
+      onExit: () => {}
+    }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(transport.sentMessages.length, 1);
+  assert.deepEqual(JSON.parse(transport.sentMessages[0] ?? "{}").op, {
+    StartSession: {
+      model: config.model,
+      provider: config.provider,
+      streaming: true
+    }
+  });
+});
+
+test("persistActiveSession sends Shutdown and waits for transport close", async () => {
+  const transport = new FakeTransport();
+  const driver = new TestSessionDriver(() => config, () => transport);
+  const warmup = driver.ensureWarmSession();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  driver.emit(JSON.stringify({ event: { SessionStart: { session_id: "ses_current" } } }));
+  await warmup;
+
+  const pending = driver.persistActiveSession();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(transport.sentMessages.length, 2);
+  assert.equal(JSON.parse(transport.sentMessages[1] ?? "{}").op, "Shutdown");
+
+  transport.closeHandler({ code: 0 });
+  await pending;
+  assert.equal(driver.getActiveSessionId(), null);
+});
+
+test("run waits for a pending shutdown to finish before resuming another session", async () => {
+  const transport = new FakeTransport();
+  const driver = new TestSessionDriver(() => config, () => transport);
+  const warmup = driver.ensureWarmSession();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  driver.emit(JSON.stringify({ event: { SessionStart: { session_id: "ses_current" } } }));
+  await warmup;
+
+  const shutdown = driver.persistActiveSession();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(JSON.parse(transport.sentMessages.at(-1) ?? "{}").op, "Shutdown");
+
+  driver.run(
+    {
+      ...request,
+      kind: "chat",
+      triggerSource: "chat",
+      mode: "followup",
+      runtimeSessionId: "ses_next"
+    },
+    {
+      onEvent: () => {},
+      onExit: () => {}
+    }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(
+    transport.sentMessages.some((message) => JSON.parse(message).op?.ResumeSession?.session_id === "ses_next"),
+    false
+  );
+
+  transport.closeHandler({ code: 0 });
+  await shutdown;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(
+    transport.sentMessages.some((message) => JSON.parse(message).op?.ResumeSession?.session_id === "ses_next"),
+    true
+  );
+});
+
+test("persistActiveSession resolves after SessionEnd even before transport close", async () => {
+  const transport = new FakeTransport();
+  const driver = new TestSessionDriver(() => config, () => transport);
+  const warmup = driver.ensureWarmSession();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  driver.emit(JSON.stringify({ event: { SessionStart: { session_id: "ses_current" } } }));
+  await warmup;
+
+  const pending = driver.persistActiveSession();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  driver.emit(JSON.stringify({ event: "SessionEnd", parent: "op_shutdown" }));
+  await pending;
+
+  assert.equal(driver.getActiveSessionId(), null);
+  assert.equal(transport.connected, false);
+});
+
+test("stale transport close is ignored after a newer transport starts", async () => {
+  const transports: FakeTransport[] = [];
+  const driver = new TestSessionDriver(() => config, () => {
+    const transport = new FakeTransport();
+    transports.push(transport);
+    return transport;
+  });
+
+  const warmup = driver.ensureWarmSession();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  transports[0]?.messageHandler(JSON.stringify({ event: { SessionStart: { session_id: "ses_current" } } }));
+  await warmup;
+
+  const shutdown = driver.persistActiveSession();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  transports[0]?.messageHandler(JSON.stringify({ event: "SessionEnd", parent: "op_shutdown" }));
+  await shutdown;
+
+  const exits: Array<{ status: "completed" | "failed" | "cancelled"; error?: string }> = [];
+  driver.run(
+    {
+      ...request,
+      kind: "chat",
+      triggerSource: "chat",
+      mode: "followup",
+      runtimeSessionId: "ses_next"
+    },
+    {
+      onEvent: () => {},
+      onExit: (result) => {
+        exits.push(result);
+      }
+    }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(transports.length >= 2, true);
+  transports[0]?.closeHandler({ code: 0 });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(exits.length, 0);
 });

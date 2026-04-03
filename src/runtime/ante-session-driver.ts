@@ -16,7 +16,7 @@ import {
   getVariant,
   parseAssistantMessage
 } from "./ante-event-parser";
-import { parseEnvelope, serializeOperation } from "./ante-protocol";
+import { generateOpId, parseEnvelope, serializeOperation } from "./ante-protocol";
 import type { AnteRuntime, RuntimeObserver } from "./ante-runtime";
 import type { AnteTransport } from "./transport/ante-transport";
 
@@ -42,6 +42,7 @@ type ActiveRun = {
   processLane?: RuntimeProcessLane;
   startedAtMs: number;
   userInputSentAtMs?: number;
+  userInputOpId?: string;
   sessionReadyAtMs?: number;
   firstEventAtMs?: number;
   firstStdoutAtMs?: number;
@@ -53,10 +54,47 @@ type WarmupState = {
   reject: (error: Error) => void;
 };
 
+type SessionTransitionKind = "start" | "resume";
+
+type SessionTransitionState = {
+  kind: SessionTransitionKind;
+  observer: RuntimeObserver;
+  promise: Promise<void>;
+  resolve: () => void;
+  reject: (error: Error) => void;
+  targetSessionId?: string;
+  hasSeenTargetSession: boolean;
+  settleTimer: ReturnType<typeof setTimeout> | null;
+};
+
+type ShutdownState = {
+  promise: Promise<void>;
+  resolve: () => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout> | null;
+};
+
 const logDebug = (...args: unknown[]): void => {
   if (globalThis.localStorage?.getItem("tmd-debug") === "true") {
     console.info("[tmd]", ...args);
   }
+};
+
+const emitDiagnosticLog = (observer: RuntimeObserver | null | undefined, text: string): void => {
+  console.info("[tmd session]", text);
+  observer?.onEvent({
+    type: "log",
+    stream: "system",
+    text
+  });
+};
+
+const normalizeProtocolErrorMessage = (message: string): string => {
+  const normalized = message.trim();
+  if (/Failed to resume session: .*No such file or directory/i.test(normalized)) {
+    return "Ante could not restore this chat because its saved session files are missing. Start a new chat to continue.";
+  }
+  return normalized;
 };
 
 export const configSignature = (config: AnteRuntimeConfig): string =>
@@ -75,11 +113,14 @@ export const configSignature = (config: AnteRuntimeConfig): string =>
 
 export class AnteSessionDriver implements AnteRuntime {
   private transport: AnteTransport | null = null;
+  private transportGeneration = 0;
   private transportSignature: string | null = null;
   private transportStarting: { signature: string; promise: Promise<void> } | null = null;
   private activeRun: ActiveRun | null = null;
   private sessionId: string | null = null;
   private sessionStarting = false;
+  private sessionTransition: SessionTransitionState | null = null;
+  private shutdownState: ShutdownState | null = null;
   private warmup: WarmupState | null = null;
   private lastSentContextFingerprint: string | null = null;
   private readonly startupDiagnostics: Array<{ stream: "stdout" | "stderr"; text: string }> = [];
@@ -94,6 +135,8 @@ export class AnteSessionDriver implements AnteRuntime {
     if (!config.command.trim() || !config.model.trim() || !config.provider.trim()) {
       return;
     }
+
+    await this.awaitPendingShutdown();
 
     const signature = configSignature(config);
     if (this.transportSignature === signature && this.sessionId) {
@@ -133,6 +176,29 @@ export class AnteSessionDriver implements AnteRuntime {
     this.stopTransport();
   }
 
+  async persistActiveSession(): Promise<void> {
+    if (!this.transport || !this.transport.isConnected() || !this.sessionId || this.activeRun) {
+      return;
+    }
+    if (this.sessionTransition) {
+      await this.sessionTransition.promise;
+    }
+    if (this.shutdownState) {
+      await this.shutdownState.promise;
+      return;
+    }
+
+    const shutdown = this.createShutdownState();
+    this.shutdownState = shutdown;
+    emitDiagnosticLog(undefined, `Persisting Ante session via Shutdown · session=${this.sessionId}`);
+    this.transport.send(serializeOperation("Shutdown", generateOpId()));
+    await shutdown.promise;
+  }
+
+  getActiveSessionId(): string | null {
+    return this.sessionId;
+  }
+
   respondToApproval(approval: RuntimeApprovalRequest, decision: RuntimeApprovalDecision): void {
     if (!this.transport || !this.activeRun) {
       throw new Error("Ante is not waiting for approval");
@@ -163,6 +229,8 @@ export class AnteSessionDriver implements AnteRuntime {
       observer.onExit({ status: "failed", error: "Another Ante task is already running" });
       return;
     }
+
+    await this.awaitPendingShutdown();
 
     const signature = configSignature(config);
     const hasCompatibleTransport = this.transportSignature === signature;
@@ -201,6 +269,20 @@ export class AnteSessionDriver implements AnteRuntime {
       });
     }
 
+    try {
+      emitDiagnosticLog(
+        observer,
+        `Session prep start · requested=${request.runtimeSessionId?.trim() || "new"} · current=${this.sessionId ?? "none"} · mode=${request.mode ?? "initial"}`
+      );
+      await this.ensureRequestSession(request, config, observer);
+      emitDiagnosticLog(observer, `Session prep ready · active=${this.sessionId ?? "none"}`);
+    } catch (error) {
+      const resumeError =
+        error instanceof Error ? this.withStartupDiagnostics(error) : this.withStartupDiagnostics(new Error(String(error)));
+      observer.onExit({ status: "failed", error: resumeError.message });
+      return;
+    }
+
     this.activeRun = {
       observer,
       request,
@@ -213,29 +295,43 @@ export class AnteSessionDriver implements AnteRuntime {
 
     if (this.sessionId) {
       observer.onEvent({ type: "runtime.session", provider: "ante", sessionId: this.sessionId });
-      this.sendUserInput(request);
-      return;
     }
-
-    if (!this.sessionStarting) {
-      this.beginSession(config);
-    }
+    this.sendUserInput(request);
   }
 
   private async startTransport(config: AnteRuntimeConfig): Promise<void> {
     const transport = this.createTransport(config);
-    transport.setMessageHandler((message) => this.handleTransportMessage(message));
+    const generation = this.transportGeneration + 1;
+    this.transportGeneration = generation;
+    const isStaleTransport = (): boolean => generation !== this.transportGeneration || this.transport !== transport;
+
+    transport.setMessageHandler((message) => {
+      if (isStaleTransport()) {
+        return;
+      }
+      this.handleTransportMessage(message);
+    });
     transport.setDiagnosticHandler((event) => {
+      if (isStaleTransport()) {
+        return;
+      }
       this.startupDiagnostics.push(event);
       if (this.startupDiagnostics.length > 50) {
         this.startupDiagnostics.shift();
       }
+      console.info("[tmd transport]", `${event.stream}: ${event.text}`);
       this.activeRun?.observer.onEvent({ type: "log", stream: event.stream, text: event.text });
     });
     transport.setErrorHandler((error) => {
+      if (isStaleTransport()) {
+        return;
+      }
+      console.error("[tmd transport] error", error);
       const errorWithDiagnostics = this.withStartupDiagnostics(error);
+      this.rejectShutdown(errorWithDiagnostics);
       this.warmup?.reject(error);
       this.warmup = null;
+      this.rejectSessionTransition(errorWithDiagnostics);
       if (this.activeRun) {
         this.flushStartupDiagnostics();
         this.activeRun.observer.onExit({ status: "failed", error: errorWithDiagnostics.message });
@@ -246,10 +342,24 @@ export class AnteSessionDriver implements AnteRuntime {
       }
     });
     transport.setCloseHandler((info) => {
+      if (isStaleTransport()) {
+        return;
+      }
+      console.info("[tmd transport] close", info ?? {});
+      const shutdown = this.shutdownState;
+      if (shutdown) {
+        this.clearShutdownTimer(shutdown);
+        this.shutdownState = null;
+      }
       const activeRun = this.activeRun;
       if (this.transport === transport) {
         this.stopTransport();
       }
+      if (shutdown) {
+        shutdown.resolve();
+        return;
+      }
+      this.rejectSessionTransition(new Error("Ante server closed during session transition"));
       if (!activeRun || activeRun.completed) {
         this.warmup?.reject(new Error("Ante server closed before the warm session became ready"));
         this.warmup = null;
@@ -331,19 +441,91 @@ export class AnteSessionDriver implements AnteRuntime {
         this.sessionStarting = false;
         this.warmup?.resolve();
         this.warmup = null;
+        this.handleSessionTransitionSessionStart(sessionId);
+        emitDiagnosticLog(this.activeRun?.observer ?? this.sessionTransition?.observer, `Protocol SessionStart · session=${sessionId} · parent=${envelope.parent ?? "none"}`);
         if (!this.activeRun) {
           return;
         }
         this.activeRun.sessionReadyAtMs = performance.now();
         this.activeRun.observer.onEvent({ type: "runtime.session", provider: "ante", sessionId });
-        this.sendUserInput(this.activeRun.request);
         return;
       }
+      case "Error": {
+        const rawMessage = extractErrorMessage(variant.payload);
+        const message = normalizeProtocolErrorMessage(rawMessage);
+        const payloadText = (() => {
+          try {
+            return JSON.stringify(variant.payload);
+          } catch {
+            return String(variant.payload);
+          }
+        })();
+        emitDiagnosticLog(
+          this.activeRun?.observer ?? this.sessionTransition?.observer,
+          `Protocol Error · message=${rawMessage} · parent=${envelope.parent ?? "none"} · payload=${payloadText}`
+        );
+        if (this.sessionTransition) {
+          this.rejectSessionTransition(new Error(message));
+          return;
+        }
+        if (this.shutdownState) {
+          this.rejectShutdown(new Error(message));
+          this.stopTransport();
+          return;
+        }
+        if (!this.activeRun) {
+          return;
+        }
+        this.activeRun.observer.onEvent({ type: "process.update", process: undefined });
+        this.activeRun.observer.onEvent({ type: "session.failed", error: message });
+        this.activeRun.completed = true;
+        this.activeRun.observer.onExit({ status: "failed", error: message });
+        this.activeRun = null;
+        return;
+      }
+      case "SessionEnd":
+        this.sessionId = null;
+        emitDiagnosticLog(this.activeRun?.observer ?? this.sessionTransition?.observer, `Protocol SessionEnd · parent=${envelope.parent ?? "none"}`);
+        if (this.shutdownState) {
+          const shutdown = this.shutdownState;
+          this.clearShutdownTimer(shutdown);
+          this.shutdownState = null;
+          shutdown.resolve();
+          this.stopTransport();
+          return;
+        }
+        if (!this.activeRun) {
+          return;
+        }
+        return;
+      case "ExtensionRefreshed":
+        this.handleSessionTransitionExtensionRefresh(extractSessionId(variant.payload));
+        emitDiagnosticLog(
+          this.activeRun?.observer ?? this.sessionTransition?.observer,
+          `Protocol ExtensionRefreshed · session=${extractSessionId(variant.payload) ?? "none"} · parent=${envelope.parent ?? "none"}`
+        );
+        if (!this.activeRun) {
+          return;
+        }
+        return;
+      case "SessionUpdated":
+        if (!this.activeRun) {
+          return;
+        }
+        return;
       default:
         if (!this.activeRun) {
           return;
         }
         break;
+    }
+
+    if (this.shouldIgnoreEventForActiveRun(envelope.parent)) {
+      emitDiagnosticLog(
+        this.activeRun?.observer,
+        `Ignoring replay event · type=${variant.name} · parent=${envelope.parent ?? "none"} · expected=${this.activeRun?.userInputOpId ?? "none"}`
+      );
+      return;
     }
 
     switch (variant.name) {
@@ -458,15 +640,6 @@ export class AnteSessionDriver implements AnteRuntime {
         });
         return;
       }
-      case "Error": {
-        const message = extractErrorMessage(variant.payload);
-        this.activeRun.observer.onEvent({ type: "process.update", process: undefined });
-        this.activeRun.observer.onEvent({ type: "session.failed", error: message });
-        this.activeRun.completed = true;
-        this.activeRun.observer.onExit({ status: "failed", error: message });
-        this.activeRun = null;
-        return;
-      }
       case "TurnEnd": {
         const status = extractTurnStatus(variant.payload)?.toLowerCase();
         const errorMessage = extractErrorMessage(variant.payload);
@@ -531,11 +704,13 @@ export class AnteSessionDriver implements AnteRuntime {
       `prompt stats prompt=${prompt.length} chars doc=${request.context.documentText?.length ?? 0} chars selection=${request.context.selection?.text.length ?? 0} chars`
     );
 
-    this.sendOperation({
+    const opId = this.sendOperation({
       UserInput: prompt
     });
     if (this.activeRun) {
+      this.activeRun.userInputOpId = opId;
       this.activeRun.userInputSentAtMs = performance.now();
+      emitDiagnosticLog(this.activeRun.observer, `Sent UserInput · op=${opId} · session=${this.sessionId ?? "none"}`);
     }
     const elapsed = Math.round(performance.now() - startedAt);
     if (elapsed >= 16) {
@@ -546,17 +721,32 @@ export class AnteSessionDriver implements AnteRuntime {
     this.lastSentContextFingerprint = fingerprint;
   }
 
-  private sendOperation(op: { StartSession: { model: string; provider: string; streaming: boolean } } | { UserInput: string } | { ApprovalResponse: { turn_id: string; responses: Array<[string, RuntimeApprovalDecision]> } }): void {
-    this.transport?.send(serializeOperation(op));
+  private sendOperation(
+    op:
+      | { StartSession: { model: string; provider: string; streaming: boolean } }
+      | { ResumeSession: { session_id: string } }
+      | { UserInput: string }
+      | { ApprovalResponse: { turn_id: string; responses: Array<[string, RuntimeApprovalDecision]> } }
+      | "Shutdown"
+  ): string {
+    const opId = generateOpId();
+    this.transport?.send(serializeOperation(op, opId));
+    return opId;
   }
 
   private stopTransport(): void {
+    if (this.shutdownState) {
+      this.clearShutdownTimer(this.shutdownState);
+      this.shutdownState = null;
+    }
     if (this.warmup) {
       this.warmup.reject(new Error("Ante warm session was interrupted"));
       this.warmup = null;
     }
+    this.rejectSessionTransition(new Error("Ante session transition was interrupted"));
     this.transport?.disconnect();
     this.transport = null;
+    this.transportGeneration += 1;
     this.transportSignature = null;
     this.transportStarting = null;
     this.sessionId = null;
@@ -576,6 +766,14 @@ export class AnteSessionDriver implements AnteRuntime {
     });
   }
 
+  private beginResumeSession(targetSessionId: string): void {
+    this.sendOperation({
+      ResumeSession: {
+        session_id: targetSessionId
+      }
+    });
+  }
+
   private createWarmupState(): WarmupState {
     let resolve = () => {};
     let reject = (_error: Error) => {};
@@ -584,6 +782,182 @@ export class AnteSessionDriver implements AnteRuntime {
       reject = rejectPromise;
     });
     return { promise, resolve, reject };
+  }
+
+  private async awaitPendingShutdown(): Promise<void> {
+    if (!this.shutdownState) {
+      return;
+    }
+    emitDiagnosticLog(undefined, "Waiting for Ante shutdown to finish before starting the next session");
+    await this.shutdownState.promise;
+  }
+
+  private createShutdownState(): ShutdownState {
+    let resolve = () => {};
+    let reject = (_error: Error) => {};
+    const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    });
+    const shutdown: ShutdownState = {
+      promise,
+      resolve,
+      reject,
+      timer: null
+    };
+    shutdown.timer = setTimeout(() => {
+      if (this.shutdownState !== shutdown) {
+        return;
+      }
+      this.shutdownState = null;
+      reject(new Error("Timed out while waiting for Ante to persist the active session"));
+      this.stopTransport();
+    }, 5000);
+    return shutdown;
+  }
+
+  private clearShutdownTimer(shutdown: ShutdownState | null): void {
+    if (shutdown?.timer != null) {
+      clearTimeout(shutdown.timer);
+      shutdown.timer = null;
+    }
+  }
+
+  private rejectShutdown(error: Error): void {
+    const shutdown = this.shutdownState;
+    if (!shutdown) {
+      return;
+    }
+    this.clearShutdownTimer(shutdown);
+    this.shutdownState = null;
+    shutdown.reject(error);
+  }
+
+  private createSessionTransition(
+    kind: SessionTransitionKind,
+    observer: RuntimeObserver,
+    targetSessionId?: string
+  ): SessionTransitionState {
+    let resolve = () => {};
+    let reject = (_error: Error) => {};
+    const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    });
+    return {
+      kind,
+      observer,
+      promise,
+      resolve,
+      reject,
+      targetSessionId,
+      hasSeenTargetSession: false,
+      settleTimer: null
+    };
+  }
+
+  private clearSessionTransitionTimer(transition: SessionTransitionState | null): void {
+    if (transition?.settleTimer != null) {
+      clearTimeout(transition.settleTimer);
+      transition.settleTimer = null;
+    }
+  }
+
+  private rejectSessionTransition(error: Error): void {
+    const transition = this.sessionTransition;
+    if (!transition) {
+      return;
+    }
+    this.clearSessionTransitionTimer(transition);
+    this.sessionTransition = null;
+    transition.reject(error);
+  }
+
+  private scheduleSessionTransitionSettle(): void {
+    const transition = this.sessionTransition;
+    if (!transition || !transition.hasSeenTargetSession) {
+      return;
+    }
+    this.clearSessionTransitionTimer(transition);
+    if (this.sessionTransition !== transition) {
+      return;
+    }
+    this.sessionTransition = null;
+    transition.resolve();
+  }
+
+  private handleSessionTransitionSessionStart(sessionId: string): void {
+    const transition = this.sessionTransition;
+    if (!transition) {
+      return;
+    }
+    if (transition.kind === "resume" && transition.targetSessionId && transition.targetSessionId !== sessionId) {
+      return;
+    }
+    transition.hasSeenTargetSession = true;
+    emitDiagnosticLog(transition.observer, `Session transition matched target · kind=${transition.kind} · session=${sessionId}`);
+    this.scheduleSessionTransitionSettle();
+  }
+
+  private handleSessionTransitionExtensionRefresh(sessionId: string | null): void {
+    const transition = this.sessionTransition;
+    if (!transition) {
+      return;
+    }
+    if (transition.kind === "resume" && transition.targetSessionId && sessionId && transition.targetSessionId !== sessionId) {
+      return;
+    }
+    emitDiagnosticLog(transition.observer, `Session transition extension refresh · kind=${transition.kind} · session=${sessionId ?? "none"}`);
+    this.scheduleSessionTransitionSettle();
+  }
+
+  private shouldStartFreshSession(request: TaskRequest): boolean {
+    return (request.kind === "chat" || request.kind === "terminal") && request.mode === "initial";
+  }
+
+  private async ensureRequestSession(request: TaskRequest, config: AnteRuntimeConfig, observer: RuntimeObserver): Promise<void> {
+    const requestedSessionId = request.runtimeSessionId?.trim() ?? "";
+
+    if (requestedSessionId) {
+      if (this.sessionId === requestedSessionId) {
+        return;
+      }
+      await this.resumeSession(requestedSessionId, observer);
+      return;
+    }
+
+    if (this.shouldStartFreshSession(request) || !this.sessionId) {
+      await this.startFreshSession(config, observer);
+    }
+  }
+
+  private async startFreshSession(config: AnteRuntimeConfig, observer: RuntimeObserver): Promise<void> {
+    if (this.sessionTransition) {
+      await this.sessionTransition.promise;
+    }
+    const transition = this.createSessionTransition("start", observer);
+    this.sessionTransition = transition;
+    emitDiagnosticLog(observer, "Starting fresh Ante session");
+    this.beginSession(config);
+    await transition.promise;
+  }
+
+  private async resumeSession(targetSessionId: string, observer: RuntimeObserver): Promise<void> {
+    if (this.sessionTransition) {
+      await this.sessionTransition.promise;
+    }
+    const transition = this.createSessionTransition("resume", observer, targetSessionId);
+    this.sessionTransition = transition;
+    emitDiagnosticLog(observer, `Resuming Ante session · target=${targetSessionId}`);
+    this.beginResumeSession(targetSessionId);
+    await transition.promise;
+  }
+
+  private shouldIgnoreEventForActiveRun(parentOpId: string | undefined): boolean {
+    if (!this.activeRun?.userInputOpId) {
+      return false;
+    }
+    return parentOpId != null && parentOpId !== this.activeRun.userInputOpId;
   }
 
   private getContextFingerprint(request: TaskRequest): string {

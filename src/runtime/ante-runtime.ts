@@ -10,5 +10,7 @@ export interface AnteRuntime {
   run(request: TaskRequest, observer: RuntimeObserver): void;
   cancelActiveRun(): void;
   respondToApproval(approval: RuntimeApprovalRequest, decision: RuntimeApprovalDecision): void;
+  persistActiveSession(): Promise<void>;
+  getActiveSessionId(): string | null;
   dispose(): void;
 }

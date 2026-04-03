@@ -183,6 +183,10 @@ export class TaskEngine {
     this.runtime.cancelActiveRun();
   }
 
+  hasActiveTask(): boolean {
+    return this.activeTaskId != null;
+  }
+
   clearTasksByTriggerSource(triggerSource: TaskTriggerSource): void {
     const remainingTasks = this.state.tasks.filter((task) => task.triggerSource !== triggerSource);
     const removedTaskIds = new Set(

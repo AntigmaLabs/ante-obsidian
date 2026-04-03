@@ -2,6 +2,7 @@ import type { RuntimeApprovalDecision } from "../core/types";
 
 export interface AnteEventEnvelope {
   event?: unknown;
+  parent?: string;
 }
 
 export type AnteOperation =
@@ -10,6 +11,11 @@ export type AnteOperation =
         model: string;
         provider: string;
         streaming: boolean;
+      };
+    }
+  | {
+      ResumeSession: {
+        session_id: string;
       };
     }
   | {
@@ -37,9 +43,9 @@ const generateUlid = (): string => {
   return result;
 };
 
-const generateOpId = (): string => `op_${generateUlid()}`;
+export const generateOpId = (): string => `op_${generateUlid()}`;
 
-export const serializeOperation = (op: AnteOperation): string => JSON.stringify({ op, id: generateOpId() });
+export const serializeOperation = (op: AnteOperation, id = generateOpId()): string => JSON.stringify({ op, id });
 
 export const parseEnvelope = (raw: string): AnteEventEnvelope | null => {
   try {

@@ -93,6 +93,7 @@ export default class TmdPlugin extends Plugin {
 
   async onunload(): Promise<void> {
     this.mentionTrigger?.destroy();
+    await this.runtime?.persistActiveSession().catch(() => {});
     this.chatManager?.dispose();
     this.runtime?.dispose();
     this.app.workspace.detachLeavesOfType(TMD_DIFF_VIEW_TYPE);
@@ -125,6 +126,53 @@ export default class TmdPlugin extends Plugin {
       chatState
     };
     await this.saveData(this.pluginData);
+  }
+
+  private async handoffAnteSession(action: () => void | Promise<void>, reason: string): Promise<void> {
+    console.info("[tmd session]", reason);
+    await this.persistIdleAnteSession();
+    await action();
+  }
+
+  async activateChatConversation(conversationId: string): Promise<void> {
+    if (this.chatManager.getActiveConversation().id === conversationId) {
+      return;
+    }
+    await this.handoffAnteSession(
+      () => {
+        this.chatManager.setActiveConversation(conversationId);
+      },
+      `Switching chat conversation · next=${conversationId}`
+    );
+  }
+
+  async createChatConversation(context?: ContextSnapshot | null): Promise<void> {
+    await this.handoffAnteSession(
+      () => {
+        this.chatManager.createConversation({ context: context ?? undefined });
+      },
+      "Creating new chat conversation"
+    );
+  }
+
+  async deleteChatConversation(conversationId: string): Promise<void> {
+    const sessionId = this.chatManager.getConversationRuntimeSessionId(conversationId);
+    const activeSessionId = this.runtime.getActiveSessionId();
+    console.info(
+      "[tmd session]",
+      `Deleting chat conversation · id=${conversationId} · session=${sessionId ?? "none"} · active=${activeSessionId ?? "none"}`
+    );
+    const removedTaskIds = this.chatManager.removeConversation(conversationId);
+    this.taskEngine.clearTasks(removedTaskIds);
+  }
+
+  async persistIdleAnteSession(): Promise<void> {
+    if (this.taskEngine.hasActiveTask()) {
+      console.info("[tmd session]", "Skipping Ante session persist because a task is still running");
+      return;
+    }
+    console.info("[tmd session]", `Persisting idle Ante session · active=${this.runtime.getActiveSessionId() ?? "none"}`);
+    await this.runtime.persistActiveSession();
   }
 
   async loadAnteDefaults(): Promise<void> {

@@ -108,6 +108,9 @@ export const extractText = (value: unknown): string => {
 };
 
 export const extractErrorMessage = (value: unknown): string => {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
   const direct = findNestedStringField(value, ["message", "error", "description", "details"]);
   return direct ?? "Ante returned an unknown error";
 };

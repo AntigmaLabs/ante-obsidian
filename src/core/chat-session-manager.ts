@@ -209,6 +209,18 @@ const shouldHideStructuredStreamingText = (text: string): boolean => {
   return STRUCTURED_CHANGE_TYPE_PATTERN.test(normalized);
 };
 
+const isRecoverableConversationSession = (task: TaskRecord): boolean => Boolean(task.runtimeSession?.sessionId && task.endedAt);
+
+const isRecoverableConversationMessage = (message: ChatMessageRecord | undefined): boolean =>
+  Boolean(message?.turn?.runtimeSessionId && message.status !== "streaming");
+
+const isMissingAnteSessionError = (error: string | undefined): boolean =>
+  Boolean(
+    error &&
+      (error.includes("saved session files are missing") ||
+        error.includes("Failed to resume session: No such file or directory"))
+  );
+
 export class ChatSessionManager {
   private readonly listeners = new Set<ChatListener>();
   private readonly conversations = new Map<string, ChatConversationRecord>();
@@ -343,12 +355,41 @@ export class ChatSessionManager {
       return null;
     }
     for (const messageId of [...conversation.messageIds].reverse()) {
-      const sessionId = this.messages.get(messageId)?.turn?.runtimeSessionId?.trim();
+      const message = this.messages.get(messageId);
+      if (!isRecoverableConversationMessage(message)) {
+        continue;
+      }
+      const sessionId = message.turn?.runtimeSessionId?.trim();
       if (sessionId) {
         return sessionId;
       }
     }
     return null;
+  }
+
+  clearConversationRuntimeSessionId(conversationId: string, sessionId: string): void {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation || !sessionId.trim()) {
+      return;
+    }
+
+    let changed = false;
+    for (const messageId of conversation.messageIds) {
+      const message = this.messages.get(messageId);
+      if (!message?.turn?.runtimeSessionId || message.turn.runtimeSessionId !== sessionId) {
+        continue;
+      }
+      message.turn = {
+        ...message.turn,
+        runtimeSessionId: undefined
+      };
+      changed = true;
+    }
+
+    if (changed) {
+      conversation.updatedAt = new Date().toISOString();
+      this.persistAndNotify();
+    }
   }
 
   appendUserPrompt(
@@ -484,6 +525,13 @@ export class ChatSessionManager {
       return;
     }
 
+    if (task.error && isMissingAnteSessionError(task.error)) {
+      const boundSessionId = this.getConversationRuntimeSessionId(message.conversationId);
+      if (boundSessionId) {
+        this.clearConversationRuntimeSessionId(message.conversationId, boundSessionId);
+      }
+    }
+
     const hasStructuredResult =
       Boolean(task.textResult?.text.trim()) || task.artifacts.length > 0 || Boolean(task.inlineChanges && task.inlineChanges.length > 0);
     const streamingText =
@@ -575,6 +623,7 @@ export class ChatSessionManager {
       textResult: task.textResult?.text ?? "",
       error: task.error ?? "",
       runtimeSessionId: task.runtimeSession?.sessionId ?? "",
+      persistedRuntimeSessionId: isRecoverableConversationSession(task) ? task.runtimeSession?.sessionId ?? "" : "",
       approval: task.pendingApproval,
       processLane: task.processLane,
       artifacts: task.artifacts.map((artifact) => ({

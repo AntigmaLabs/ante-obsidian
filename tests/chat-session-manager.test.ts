@@ -298,3 +298,214 @@ test("persisted chat state retains artifact snapshots for old conversations", ()
     (globalThis as { window?: unknown }).window = originalWindow;
   }
 });
+
+test("conversation runtime session is only persisted after the task completes", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = createWindowStub();
+
+  try {
+    const pluginStub = {
+      saveChatState: async () => {}
+    };
+
+    const manager = new ChatSessionManager(pluginStub as never);
+    const { conversation } = manager.appendUserPrompt("继续", context);
+    manager.createAssistantTurn(conversation.id, "task-1");
+
+    manager.syncFromTaskState({
+      currentTaskId: null,
+      tasks: [
+        {
+          id: "task-1",
+          kind: "chat",
+          preset: {
+            id: "default",
+            label: "@ante",
+            goal: "Discuss the current Markdown content before editing anything.",
+            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+          },
+          triggerSource: "chat",
+          inlineInstruction: "继续",
+          context,
+          status: "running",
+          logs: [],
+          stdoutText: "",
+          artifacts: [],
+          runtimeSession: {
+            type: "runtime.session",
+            provider: "ante",
+            sessionId: "ses_running"
+          },
+          startedAt: "2026-03-29T00:00:00.000Z"
+        }
+      ]
+    });
+
+    assert.equal(manager.getConversationRuntimeSessionId(conversation.id), null);
+
+    manager.syncFromTaskState({
+      currentTaskId: null,
+      tasks: [
+        {
+          id: "task-1",
+          kind: "chat",
+          preset: {
+            id: "default",
+            label: "@ante",
+            goal: "Discuss the current Markdown content before editing anything.",
+            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+          },
+          triggerSource: "chat",
+          inlineInstruction: "继续",
+          context,
+          status: "completed",
+          logs: [],
+          stdoutText: "",
+          artifacts: [],
+          runtimeSession: {
+            type: "runtime.session",
+            provider: "ante",
+            sessionId: "ses_completed"
+          },
+          startedAt: "2026-03-29T00:00:00.000Z",
+          endedAt: "2026-03-29T00:00:01.000Z"
+        }
+      ]
+    });
+
+    assert.equal(manager.getConversationRuntimeSessionId(conversation.id), "ses_completed");
+  } finally {
+    (globalThis as { window?: unknown }).window = originalWindow;
+  }
+});
+
+test("streaming assistant messages keep the live runtime session for loading state without rebinding the conversation", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = createWindowStub();
+
+  try {
+    const pluginStub = {
+      saveChatState: async () => {}
+    };
+
+    const manager = new ChatSessionManager(pluginStub as never);
+    const { conversation } = manager.appendUserPrompt("first", context);
+    manager.createAssistantTurn(conversation.id, "task-1");
+
+    manager.syncFromTaskState({
+      currentTaskId: "task-1",
+      tasks: [
+        {
+          id: "task-1",
+          kind: "chat",
+          preset: {
+            id: "default",
+            label: "@ante",
+            goal: "Discuss the current Markdown content before editing anything.",
+            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+          },
+          triggerSource: "chat",
+          inlineInstruction: "first",
+          context,
+          status: "running",
+          logs: [],
+          stdoutText: "",
+          artifacts: [],
+          runtimeSession: {
+            provider: "ante",
+            sessionId: "ses_live"
+          },
+          startedAt: "2026-03-29T00:00:00.000Z"
+        }
+      ]
+    });
+
+    const snapshot = manager.getSnapshot();
+    const messages = snapshot.messagesByConversation[conversation.id] ?? [];
+    const assistant = messages.find((message) => message.role === "assistant");
+
+    assert.equal(assistant?.turn?.runtimeSessionId, "ses_live");
+    assert.equal(manager.getConversationRuntimeSessionId(conversation.id), null);
+  } finally {
+    (globalThis as { window?: unknown }).window = originalWindow;
+  }
+});
+
+test("missing session resume errors clear the stored conversation binding", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = createWindowStub();
+
+  try {
+    const pluginStub = {
+      saveChatState: async () => {}
+    };
+
+    const manager = new ChatSessionManager(pluginStub as never);
+    const { conversation } = manager.appendUserPrompt("第一轮", context);
+    manager.createAssistantTurn(conversation.id, "task-1");
+
+    manager.syncFromTaskState({
+      currentTaskId: null,
+      tasks: [
+        {
+          id: "task-1",
+          kind: "chat",
+          preset: {
+            id: "default",
+            label: "@ante",
+            goal: "Discuss the current Markdown content before editing anything.",
+            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+          },
+          triggerSource: "chat",
+          inlineInstruction: "第一轮",
+          context,
+          status: "completed",
+          logs: [],
+          stdoutText: "",
+          artifacts: [],
+          runtimeSession: {
+            type: "runtime.session",
+            provider: "ante",
+            sessionId: "ses_broken"
+          },
+          startedAt: "2026-03-29T00:00:00.000Z",
+          endedAt: "2026-03-29T00:00:01.000Z"
+        }
+      ]
+    });
+
+    assert.equal(manager.getConversationRuntimeSessionId(conversation.id), "ses_broken");
+
+    manager.appendUserPrompt("继续", context);
+    manager.createAssistantTurn(conversation.id, "task-2");
+    manager.syncFromTaskState({
+      currentTaskId: null,
+      tasks: [
+        {
+          id: "task-2",
+          kind: "chat",
+          preset: {
+            id: "default",
+            label: "@ante",
+            goal: "Discuss the current Markdown content before editing anything.",
+            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+          },
+          triggerSource: "chat",
+          inlineInstruction: "继续",
+          context,
+          status: "failed",
+          logs: [],
+          stdoutText: "",
+          artifacts: [],
+          error: "Ante could not restore this chat because its saved session files are missing. Start a new chat to continue.",
+          startedAt: "2026-03-29T00:01:00.000Z",
+          endedAt: "2026-03-29T00:01:01.000Z"
+        }
+      ]
+    });
+
+    assert.equal(manager.getConversationRuntimeSessionId(conversation.id), null);
+  } finally {
+    (globalThis as { window?: unknown }).window = originalWindow;
+  }
+});

@@ -78,7 +78,7 @@ const formatTime = (timestamp: string): string =>
 
 const loadingLabelForMessage = (message: ChatMessageRecord, loadingFrame: number): string => {
   if (!message.turn?.runtimeSessionId) {
-    return "booting ante";
+    return "preparing session";
   }
   return formatLoadingLabel(message.id, loadingFrame);
 };
@@ -234,6 +234,7 @@ export class TmdChatView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    await this.plugin.persistIdleAnteSession().catch(() => {});
     this.unsubscribeTaskState?.();
     this.unsubscribeTaskState = null;
     this.unsubscribeChatState?.();
@@ -268,7 +269,9 @@ export class TmdChatView extends ItemView {
     setIcon(newChatIcon, "square-pen");
     newChatButton.prepend(newChatIcon);
     newChatButton.addEventListener("click", () => {
-      this.plugin.chatManager.createConversation({ context: this.liveContext });
+      void this.plugin.createChatConversation(this.liveContext).catch((error) => {
+        new Notice(error instanceof Error ? error.message : String(error));
+      });
     });
     this.conversationListEl = this.sidebarEl.createDiv({ cls: "tmd-chat-sidebar-list" });
     this.syncSidebarCollapsedState();
@@ -435,14 +438,18 @@ export class TmdChatView extends ItemView {
         rowEl.tabIndex = 0;
         rowEl.setAttribute("role", "button");
         rowEl.addEventListener("click", () => {
-          this.plugin.chatManager.setActiveConversation(conversation.id);
+          void this.plugin.activateChatConversation(conversation.id).catch((error) => {
+            new Notice(error instanceof Error ? error.message : String(error));
+          });
         });
         rowEl.addEventListener("keydown", (event) => {
           if (event.key !== "Enter" && event.key !== " ") {
             return;
           }
           event.preventDefault();
-          this.plugin.chatManager.setActiveConversation(conversation.id);
+          void this.plugin.activateChatConversation(conversation.id).catch((error) => {
+            new Notice(error instanceof Error ? error.message : String(error));
+          });
         });
         rowEl.addEventListener("contextmenu", (event) => {
           event.preventDefault();
@@ -467,8 +474,9 @@ export class TmdChatView extends ItemView {
           return;
         }
         if (window.confirm(`Delete chat "${conversation.title}"?`)) {
-          const removedTaskIds = this.plugin.chatManager.removeConversation(conversation.id);
-          this.plugin.taskEngine.clearTasks(removedTaskIds);
+          void this.plugin.deleteChatConversation(conversation.id).catch((error) => {
+            new Notice(error instanceof Error ? error.message : String(error));
+          });
         }
       });
 
@@ -1146,9 +1154,14 @@ export class TmdChatView extends ItemView {
       new Notice("Stop the active chat task before resetting the conversation");
       return;
     }
-    const removedTaskIds = this.plugin.chatManager.removeConversation(activeConversation.id);
-    this.plugin.taskEngine.clearTasks(removedTaskIds);
-    this.expandedArtifactIds.clear();
+    void this.plugin
+      .deleteChatConversation(activeConversation.id)
+      .then(() => {
+        this.expandedArtifactIds.clear();
+      })
+      .catch((error) => {
+        new Notice(error instanceof Error ? error.message : String(error));
+      });
   }
 
   private shouldStickToBottom(): boolean {

@@ -22,6 +22,8 @@ const context: ContextSnapshot = {
 class RuntimeStub {
   constructor(private readonly emit: (request: TaskRequest, onEvent: (event: RuntimeEvent) => void) => void) {}
 
+  async ensureWarmSession(): Promise<void> {}
+
   run(
     request: TaskRequest,
     observer: {
@@ -36,6 +38,14 @@ class RuntimeStub {
   cancelActiveRun(): void {}
 
   respondToApproval(_approval: unknown, _decision: RuntimeApprovalDecision): void {}
+
+  async persistActiveSession(): Promise<void> {}
+
+  getActiveSessionId(): string | null {
+    return null;
+  }
+
+  dispose(): void {}
 }
 
 class HostStub {
@@ -287,6 +297,16 @@ test("startChatTask follow-up reuses the latest chat session id", async () => {
   assert.equal(seenRequests[1]?.mode, "followup");
   assert.equal(seenRequests[1]?.runtimeSessionId, "session-1");
   assert.equal(seenRequests[1]?.followUpPrompt, "Second turn");
+});
+
+test("hasActiveTask becomes false after task completion even when currentTaskId is retained", async () => {
+  const runtime = new RuntimeStub((_request, _onEvent) => {});
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+
+  await engine.startChatTask("hello");
+
+  assert.equal(engine.getState().currentTaskId != null, true);
+  assert.equal(engine.hasActiveTask(), false);
 });
 
 test("clearTasksByTriggerSource removes only chat tasks", async () => {
