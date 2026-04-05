@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Plugin, type WorkspaceLeaf } from "obsidian";
+import { App, MarkdownView, Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 import { TaskEngine } from "../core/task-engine";
 import type { ContextSnapshot, PresetId } from "../core/types";
 import { MentionTriggerService } from "./mention-trigger";
@@ -18,10 +18,14 @@ import { ChatSessionManager } from "../core/chat-session-manager";
 import type { ChatPersistenceState } from "../core/chat-types";
 import { getResolvedPreset, listResolvedPresets } from "../core/presets";
 import { AnteUpdater } from "./ante-updater";
+import { PluginUpdater } from "./plugin-updater";
 
 interface TmdPluginData {
   settings?: Partial<TmdSettings>;
   chatState?: ChatPersistenceState | null;
+  pluginUpdateState?: {
+    lastNotifiedVersion?: string | null;
+  } | null;
 }
 
 export default class TmdPlugin extends Plugin {
@@ -37,8 +41,12 @@ export default class TmdPlugin extends Plugin {
   chatManager!: ChatSessionManager;
   mentionTrigger!: MentionTriggerService;
   anteUpdater!: AnteUpdater;
+  pluginUpdater!: PluginUpdater;
   private runtime!: AnteRuntime;
   private pluginData: TmdPluginData = {};
+  private pluginUpdateState: { lastNotifiedVersion: string | null } = {
+    lastNotifiedVersion: null
+  };
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -47,6 +55,7 @@ export default class TmdPlugin extends Plugin {
 
     this.hostAdapter = new ObsidianHostAdapter(this.app);
     this.anteUpdater = new AnteUpdater();
+    this.pluginUpdater = new PluginUpdater(this.manifest.version);
     this.runtime = createAnteRuntime(() => {
       const resolved = this.getResolvedAnteTarget();
       const geminiEnvKey = normalizeEnvVarName(this.settings.geminiApiKeyEnvKey);
@@ -89,6 +98,7 @@ export default class TmdPlugin extends Plugin {
     this.registerCommands();
     this.registerEditorMenu();
     this.registerMentionTrigger();
+    void this.checkForPluginUpdateOnStartup();
   }
 
   async onunload(): Promise<void> {
@@ -105,7 +115,8 @@ export default class TmdPlugin extends Plugin {
     await this.loadShellEnv();
     this.pluginData = {
       ...this.pluginData,
-      settings: this.settings
+      settings: this.settings,
+      pluginUpdateState: this.pluginUpdateState
     };
     await this.saveData(this.pluginData);
   }
@@ -117,15 +128,49 @@ export default class TmdPlugin extends Plugin {
       this.pluginData.settings ??
       (stored && !("settings" in (stored as Record<string, unknown>)) ? (stored as Partial<TmdSettings>) : undefined);
     this.settings = normalizeSettings(legacySettings);
+    this.pluginUpdateState = {
+      lastNotifiedVersion:
+        typeof this.pluginData.pluginUpdateState?.lastNotifiedVersion === "string"
+          ? this.pluginData.pluginUpdateState.lastNotifiedVersion
+          : null
+    };
   }
 
   async saveChatState(chatState: ChatPersistenceState): Promise<void> {
     this.pluginData = {
       ...this.pluginData,
       settings: this.settings,
-      chatState
+      chatState,
+      pluginUpdateState: this.pluginUpdateState
     };
     await this.saveData(this.pluginData);
+  }
+
+  isAnteInstalled(): boolean {
+    return this.resolvedAnteCommand.trim().length > 0;
+  }
+
+  async openPluginSettings(): Promise<void> {
+    const setting = (this.app as App & {
+      setting?: {
+        open?: () => void;
+        openTabById?: (id: string) => void;
+      };
+    }).setting;
+    setting?.open?.();
+    setting?.openTabById?.(this.manifest.id);
+  }
+
+  notifyAnteMissing(sourceLabel: string): void {
+    new Notice(`${sourceLabel} needs the local Ante CLI. Open Ante md Settings to install Ante.`, 9000);
+  }
+
+  ensureAnteInstalled(sourceLabel: string): boolean {
+    if (this.isAnteInstalled()) {
+      return true;
+    }
+    this.notifyAnteMissing(sourceLabel);
+    return false;
   }
 
   private async handoffAnteSession(action: () => void | Promise<void>, reason: string): Promise<void> {
@@ -204,6 +249,9 @@ export default class TmdPlugin extends Plugin {
 
   async runPresetFromContextMenu(presetId: PresetId): Promise<void> {
     try {
+      if (!this.ensureAnteInstalled("Ante md")) {
+        return;
+      }
       const context = await this.hostAdapter.getActiveContext();
       if (!context) {
         throw new Error("Open a Markdown note or select some text before running Ante");
@@ -244,9 +292,13 @@ export default class TmdPlugin extends Plugin {
     const leaf = await this.ensureLeaf(TMD_TERMINAL_VIEW_TYPE);
     await leaf.setViewState({ type: TMD_TERMINAL_VIEW_TYPE, active: true });
     this.app.workspace.revealLeaf(leaf);
-    void this.runtime.ensureWarmSession().catch(() => {
-      // Ignore idle warmup failures here; the visible task path still surfaces errors.
-    });
+    if (this.isAnteInstalled()) {
+      void this.runtime.ensureWarmSession().catch(() => {
+        // Ignore idle warmup failures here; the visible task path still surfaces errors.
+      });
+      return;
+    }
+    this.notifyAnteMissing("Ante Terminal");
   }
 
   async openResultsView(): Promise<void> {
@@ -454,5 +506,24 @@ export default class TmdPlugin extends Plugin {
       leaf = this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf(true);
     }
     return leaf;
+  }
+
+  private async checkForPluginUpdateOnStartup(): Promise<void> {
+    const result = await this.pluginUpdater.checkForUpdate();
+    if (!result.updateAvailable || !result.latestVersion) {
+      return;
+    }
+    if (this.pluginUpdateState.lastNotifiedVersion === result.latestVersion) {
+      return;
+    }
+
+    this.pluginUpdateState.lastNotifiedVersion = result.latestVersion;
+    this.pluginData = {
+      ...this.pluginData,
+      settings: this.settings,
+      pluginUpdateState: this.pluginUpdateState
+    };
+    await this.saveData(this.pluginData);
+    new Notice(`Ante md ${result.latestVersion} is available. Open settings to review the update.`, 9000);
   }
 }

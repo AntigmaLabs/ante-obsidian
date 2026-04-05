@@ -2,6 +2,7 @@ import { DropdownComponent, Modal, Notice, PluginSettingTab, Setting, setIcon } 
 import { listResolvedPresets } from "../core/presets";
 import type TmdPlugin from "./main";
 import type { AnteVersionCheckResult } from "./ante-updater";
+import type { PluginVersionCheckResult } from "./plugin-updater";
 import {
   type AnteConnectionMode,
   ANTHROPIC_PROVIDER,
@@ -15,7 +16,9 @@ import {
 export class TmdSettingTab extends PluginSettingTab {
   private draggingPresetId: string | null = null;
   private anteVersionState: AnteVersionCheckResult | null = null;
+  private pluginVersionState: PluginVersionCheckResult | null = null;
   private checkingAnteVersion = false;
+  private checkingPluginVersion = false;
   private upgradingAnte = false;
 
   constructor(private readonly pluginRef: TmdPlugin) {
@@ -25,9 +28,10 @@ export class TmdSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
+    containerEl.addClass("tmd-settings");
     containerEl.createEl("h2", { text: "Ante md Settings" });
 
-    this.renderAnteUpdateSection(containerEl);
+    this.renderUpdatesSection(containerEl);
 
     new Setting(containerEl)
       .setName("Ante connection mode")
@@ -183,68 +187,121 @@ export class TmdSettingTab extends PluginSettingTab {
       );
   }
 
-  private renderAnteUpdateSection(containerEl: HTMLElement): void {
-    const sectionEl = containerEl.createDiv({ cls: "tmd-ante-update-section" });
-    sectionEl.createEl("h3", { text: "Ante Runtime Update", cls: "tmd-ante-update-title" });
+  private renderUpdatesSection(containerEl: HTMLElement): void {
+    const sectionEl = containerEl.createDiv({ cls: "tmd-updates-section" });
+    sectionEl.createEl("h3", { text: "Updates", cls: "tmd-ante-update-title" });
     sectionEl.createEl("p", {
-      text: "Check the local Ante CLI version and run the official updater when a newer release is available.",
+      text: "Check plugin and local runtime update status.",
       cls: "tmd-ante-update-summary"
     });
 
-    const contentRowEl = sectionEl.createDiv({ cls: "tmd-ante-update-layout" });
-    const statusCardEl = sectionEl.createDiv({ cls: "tmd-ante-update-card" });
-    const localVersion = this.anteVersionState?.localVersion ?? "Checking...";
-    const latestVersion = this.anteVersionState?.latestVersion ?? "Checking...";
-    const statusLabel = this.getAnteUpdateStatusLabel();
+    const listEl = sectionEl.createDiv({ cls: "tmd-updates-list" });
+    this.renderPluginUpdateItem(listEl);
+    this.renderAnteUpdateItem(listEl);
 
-    contentRowEl.appendChild(statusCardEl);
+    if (!this.pluginVersionState && !this.checkingPluginVersion) {
+      void this.refreshPluginVersionState();
+    }
+    if (!this.anteVersionState && !this.checkingAnteVersion) {
+      void this.refreshAnteVersionState();
+    }
+  }
 
-    this.createAnteUpdateRow(statusCardEl, "check-circle", "is-local", "Local version", localVersion);
-    this.createAnteUpdateRow(statusCardEl, "cloud-download", "is-remote", "Latest version", latestVersion);
-    this.createAnteUpdateRow(statusCardEl, this.getAnteStatusIcon(), this.getAnteStatusTone(), "Status", statusLabel);
+  private renderPluginUpdateItem(containerEl: HTMLElement): void {
+    const itemEl = containerEl.createDiv({ cls: `tmd-update-item ${this.getPluginStatusTone()}` });
+    const iconEl = itemEl.createDiv({ cls: "tmd-update-item-icon" });
+    setIcon(iconEl, this.getPluginStatusIcon());
 
-    if (this.anteVersionState?.error) {
-      statusCardEl.createEl("p", {
-        text: this.anteVersionState.error,
-        cls: "tmd-ante-update-error"
+    const bodyEl = itemEl.createDiv({ cls: "tmd-update-item-body" });
+    const headerEl = bodyEl.createDiv({ cls: "tmd-update-item-header" });
+    const titleRowEl = headerEl.createDiv({ cls: "tmd-update-item-title-row" });
+    titleRowEl.createSpan({ cls: "tmd-update-item-title", text: "Ante md" });
+    titleRowEl.createSpan({ cls: "tmd-update-item-status", text: this.getPluginUpdateStatusLabel() });
+
+    bodyEl.createDiv({
+      cls: "tmd-update-item-summary",
+      text: this.getPluginUpdateSummary()
+    });
+    bodyEl.createDiv({
+      cls: "tmd-update-item-meta",
+      text: this.getPluginUpdateMeta()
+    });
+
+    const actionsEl = itemEl.createDiv({ cls: "tmd-update-item-actions" });
+    const checkButton = actionsEl.createEl("button");
+    checkButton.addClass("tmd-update-item-button");
+    this.decorateAnteActionButton(
+      checkButton,
+      this.checkingPluginVersion ? "loader-circle" : "refresh-cw",
+      this.checkingPluginVersion ? "Checking" : "Check"
+    );
+    checkButton.disabled = this.checkingPluginVersion;
+    checkButton.addEventListener("click", () => {
+      void this.refreshPluginVersionState();
+    });
+
+    if (this.pluginVersionState?.latestUrl) {
+      const openButton = actionsEl.createEl("button", {
+        cls: this.pluginVersionState.updateAvailable ? "mod-cta" : ""
+      });
+      openButton.addClass("tmd-update-item-button");
+      this.decorateAnteActionButton(
+        openButton,
+        "external-link",
+        this.pluginVersionState.updateAvailable ? "Open release" : "Open repo"
+      );
+      openButton.addEventListener("click", () => {
+        window.open(this.pluginVersionState?.latestUrl, "_blank", "noopener");
       });
     }
+  }
 
-    const actionRowEl = contentRowEl.createDiv({ cls: "tmd-ante-update-actions" });
-    const checkButton = actionRowEl.createEl("button");
-    checkButton.addClass("tmd-ante-update-button");
-    this.decorateAnteActionButton(checkButton, this.checkingAnteVersion ? "loader-circle" : "refresh-cw", this.checkingAnteVersion ? "Checking..." : "Check again");
+  private renderAnteUpdateItem(containerEl: HTMLElement): void {
+    const itemEl = containerEl.createDiv({ cls: `tmd-update-item ${this.getAnteStatusTone()}` });
+    const iconEl = itemEl.createDiv({ cls: "tmd-update-item-icon" });
+    setIcon(iconEl, this.getAnteStatusIcon());
+
+    const bodyEl = itemEl.createDiv({ cls: "tmd-update-item-body" });
+    const headerEl = bodyEl.createDiv({ cls: "tmd-update-item-header" });
+    const titleRowEl = headerEl.createDiv({ cls: "tmd-update-item-title-row" });
+    titleRowEl.createSpan({ cls: "tmd-update-item-title", text: "Ante Runtime" });
+    titleRowEl.createSpan({ cls: "tmd-update-item-status", text: this.getAnteUpdateStatusLabel() });
+
+    bodyEl.createDiv({
+      cls: "tmd-update-item-summary",
+      text: this.getAnteUpdateSummary()
+    });
+    bodyEl.createDiv({
+      cls: "tmd-update-item-meta",
+      text: this.getAnteUpdateMeta()
+    });
+
+    const actionsEl = itemEl.createDiv({ cls: "tmd-update-item-actions" });
+    const checkButton = actionsEl.createEl("button");
+    checkButton.addClass("tmd-update-item-button");
+    this.decorateAnteActionButton(
+      checkButton,
+      this.checkingAnteVersion ? "loader-circle" : "refresh-cw",
+      this.checkingAnteVersion ? "Checking" : "Check"
+    );
     checkButton.disabled = this.checkingAnteVersion || this.upgradingAnte;
     checkButton.addEventListener("click", () => {
       void this.refreshAnteVersionState();
     });
 
     if (this.anteVersionState?.updateAvailable || (!this.anteVersionState?.localVersion && !!this.anteVersionState?.latestVersion)) {
-      const upgradeButton = actionRowEl.createEl("button", { cls: "mod-cta" });
-      upgradeButton.addClass("tmd-ante-update-button");
+      const upgradeButton = actionsEl.createEl("button", { cls: "mod-cta" });
+      upgradeButton.addClass("tmd-update-item-button");
       this.decorateAnteActionButton(
         upgradeButton,
         this.upgradingAnte ? "loader-circle" : this.anteVersionState?.localVersion ? "arrow-up-circle" : "download",
-        this.upgradingAnte ? "Upgrading..." : this.anteVersionState?.localVersion ? "Upgrade Ante" : "Install Ante"
+        this.upgradingAnte ? "Upgrading" : this.anteVersionState?.localVersion ? "Upgrade" : "Install"
       );
       upgradeButton.disabled = this.checkingAnteVersion || this.upgradingAnte;
       upgradeButton.addEventListener("click", () => {
         void this.handleAnteUpgrade();
       });
     }
-
-    if (!this.anteVersionState && !this.checkingAnteVersion) {
-      void this.refreshAnteVersionState();
-    }
-  }
-
-  private createAnteUpdateRow(containerEl: HTMLElement, icon: string, toneClass: string, label: string, value: string): void {
-    const rowEl = containerEl.createDiv({ cls: `tmd-ante-update-row ${toneClass}` });
-    const labelWrapEl = rowEl.createDiv({ cls: "tmd-ante-update-label-wrap" });
-    const iconEl = labelWrapEl.createSpan({ cls: "tmd-ante-update-icon" });
-    setIcon(iconEl, icon);
-    labelWrapEl.createSpan({ text: label, cls: "tmd-ante-update-label" });
-    rowEl.createSpan({ text: value, cls: "tmd-ante-update-value" });
   }
 
   private decorateAnteActionButton(buttonEl: HTMLButtonElement, icon: string, label: string): void {
@@ -255,16 +312,16 @@ export class TmdSettingTab extends PluginSettingTab {
 
   private getAnteUpdateStatusLabel(): string {
     if (this.upgradingAnte) {
-      return "Upgrading...";
+      return "Upgrading";
     }
     if (this.checkingAnteVersion) {
-      return "Checking...";
+      return "Checking";
     }
     if (!this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
       return "Not installed";
     }
     if (this.anteVersionState?.error) {
-      return "Check failed";
+      return "Couldn’t check";
     }
     if (this.anteVersionState?.updateAvailable) {
       return "Update available";
@@ -272,7 +329,64 @@ export class TmdSettingTab extends PluginSettingTab {
     if (this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
       return "Up to date";
     }
-    return "Checking...";
+    return "Checking";
+  }
+
+  private getPluginUpdateStatusLabel(): string {
+    if (this.checkingPluginVersion) {
+      return "Checking";
+    }
+    if (this.pluginVersionState && !this.pluginVersionState.sourceAvailable) {
+      return "No public feed";
+    }
+    if (this.pluginVersionState?.error) {
+      return "Couldn’t check";
+    }
+    if (this.pluginVersionState?.updateAvailable) {
+      return "Update available";
+    }
+    if (this.pluginVersionState?.latestVersion) {
+      return "Up to date";
+    }
+    return "Checking";
+  }
+
+  private getPluginStatusTone(): string {
+    if (this.checkingPluginVersion) {
+      return "is-progress";
+    }
+    if (this.pluginVersionState && !this.pluginVersionState.sourceAvailable) {
+      return "is-neutral";
+    }
+    if (this.pluginVersionState?.error) {
+      return "is-error";
+    }
+    if (this.pluginVersionState?.updateAvailable) {
+      return "is-warning";
+    }
+    if (this.pluginVersionState?.latestVersion) {
+      return "is-success";
+    }
+    return "is-neutral";
+  }
+
+  private getPluginStatusIcon(): string {
+    if (this.checkingPluginVersion) {
+      return "refresh-cw";
+    }
+    if (this.pluginVersionState && !this.pluginVersionState.sourceAvailable) {
+      return "info";
+    }
+    if (this.pluginVersionState?.error) {
+      return "alert-triangle";
+    }
+    if (this.pluginVersionState?.updateAvailable) {
+      return "arrow-up-circle";
+    }
+    if (this.pluginVersionState?.latestVersion) {
+      return "badge-check";
+    }
+    return "refresh-cw";
   }
 
   private getAnteStatusTone(): string {
@@ -294,7 +408,7 @@ export class TmdSettingTab extends PluginSettingTab {
     if (this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
       return "is-success";
     }
-    return "is-progress";
+    return "is-neutral";
   }
 
   private getAnteStatusIcon(): string {
@@ -319,6 +433,63 @@ export class TmdSettingTab extends PluginSettingTab {
     return "refresh-cw";
   }
 
+  private getPluginUpdateSummary(): string {
+    if (this.checkingPluginVersion) {
+      return "Checking the latest available plugin release.";
+    }
+    if (this.pluginVersionState && !this.pluginVersionState.sourceAvailable) {
+      return "No public GitHub release feed is available for this repository.";
+    }
+    if (this.pluginVersionState?.error) {
+      return "The plugin update source could not be reached right now.";
+    }
+    if (this.pluginVersionState?.updateAvailable) {
+      return "A newer plugin version is available.";
+    }
+    if (this.pluginVersionState?.latestVersion) {
+      return "This plugin build matches the latest visible release.";
+    }
+    return "Waiting to check the plugin version.";
+  }
+
+  private getPluginUpdateMeta(): string {
+    const currentVersion = this.pluginVersionState?.currentVersion ?? this.pluginRef.manifest.version;
+    if (this.pluginVersionState?.latestVersion) {
+      return `Current ${currentVersion}  ->  Latest ${this.pluginVersionState.latestVersion}`;
+    }
+    return `Current ${currentVersion}`;
+  }
+
+  private getAnteUpdateSummary(): string {
+    if (this.upgradingAnte) {
+      return "Installing or upgrading the local Ante CLI.";
+    }
+    if (this.checkingAnteVersion) {
+      return "Checking the local Ante CLI against the latest runtime channel.";
+    }
+    if (!this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
+      return "Ante is not installed locally yet.";
+    }
+    if (this.anteVersionState?.error) {
+      return "The runtime version could not be checked right now.";
+    }
+    if (this.anteVersionState?.updateAvailable) {
+      return "A newer local Ante runtime is available.";
+    }
+    if (this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
+      return "The local Ante runtime is already up to date.";
+    }
+    return "Waiting to check the local Ante runtime.";
+  }
+
+  private getAnteUpdateMeta(): string {
+    const localVersion = this.anteVersionState?.localVersion ?? "not installed";
+    if (this.anteVersionState?.latestVersion) {
+      return `Local ${localVersion}  ->  Latest ${this.anteVersionState.latestVersion}`;
+    }
+    return `Local ${localVersion}`;
+  }
+
   private async refreshAnteVersionState(): Promise<void> {
     if (this.checkingAnteVersion) {
       return;
@@ -330,6 +501,21 @@ export class TmdSettingTab extends PluginSettingTab {
       this.anteVersionState = await this.pluginRef.anteUpdater.checkForUpdate();
     } finally {
       this.checkingAnteVersion = false;
+      this.display();
+    }
+  }
+
+  private async refreshPluginVersionState(): Promise<void> {
+    if (this.checkingPluginVersion) {
+      return;
+    }
+
+    this.checkingPluginVersion = true;
+    this.display();
+    try {
+      this.pluginVersionState = await this.pluginRef.pluginUpdater.checkForUpdate();
+    } finally {
+      this.checkingPluginVersion = false;
       this.display();
     }
   }

@@ -26,7 +26,8 @@ export type AnteOperation =
         turn_id: string;
         responses: Array<[string, RuntimeApprovalDecision]>;
       };
-    };
+    }
+  | "Shutdown";
 
 const generateUlid = (): string => {
   const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";

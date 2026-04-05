@@ -7,6 +7,13 @@
   --tmd-terminal-ok: oklch(0.83 0.08 145);
   --tmd-terminal-fail: oklch(0.82 0.09 28);
   --tmd-terminal-agent: oklch(0.8 0.14 55);
+  --tmd-type-kicker-size: 0.72rem;
+  --tmd-type-meta-size: 0.82rem;
+  --tmd-type-body-size: 0.98rem;
+  --tmd-type-body-leading: 1.6;
+  --tmd-type-reading-size: 1.04rem;
+  --tmd-type-reading-leading: 1.72;
+  --tmd-type-mono-size: 12px;
   padding: 16px;
   overflow-y: auto;
 }
@@ -34,7 +41,8 @@
 
 .tmd-meta {
   color: var(--text-muted);
-  font-size: 0.9em;
+  font-size: var(--tmd-type-meta-size);
+  line-height: 1.45;
 }
 
 .tmd-empty {
@@ -57,7 +65,7 @@
 .tmd-text-result,
 .tmd-console-log {
   font-family: var(--font-monospace);
-  font-size: 12px;
+  font-size: var(--tmd-type-mono-size);
   white-space: pre-wrap;
   word-break: break-word;
   background: var(--background-primary);
@@ -228,14 +236,45 @@ button.tmd-diff-file-main {
   margin: 18px 0 24px;
 }
 
-.tmd-ante-update-section {
-  margin: 0 0 22px;
+.tmd-settings > h2 {
+  margin: 0 0 20px;
+  padding: 0 !important;
+  color: var(--text-normal);
+  font-size: 1.18rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
 }
 
-.tmd-ante-update-title,
-.tmd-preset-title {
+.tmd-settings > .setting-item {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.tmd-settings > .setting-item .setting-item-name {
+  color: var(--text-normal);
+  font-size: 0.96rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.tmd-settings > .setting-item .setting-item-description {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.tmd-updates-section,
+.tmd-ante-update-section {
+  margin: 0 0 24px;
+  padding: 0 var(--size-4-4);
+}
+
+.tmd-settings .tmd-ante-update-title,
+.tmd-settings .tmd-preset-title,
+.tmd-settings .tmd-preset-modal-title {
   margin: 0;
-  padding: 0;
+  padding: 0 !important;
   color: var(--text-normal);
   font-size: 1rem;
   font-weight: 600;
@@ -244,87 +283,21 @@ button.tmd-diff-file-main {
 }
 
 .tmd-ante-update-summary {
-  margin: 6px 0 12px;
+  margin: 4px 0 12px;
   color: var(--text-muted);
-  font-size: 0.82em;
-  line-height: 1.35;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  max-width: 56ch;
 }
 
-.tmd-ante-update-layout {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.tmd-ante-update-card {
-  display: grid;
-  gap: 0;
-  flex: 0 1 620px;
-  min-width: min(100%, 420px);
-  padding: 8px 16px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--background-primary) 95%, white 5%);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 65%, transparent);
-}
-
-.tmd-ante-update-row {
-  display: grid;
-  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
-  gap: 18px;
-  align-items: center;
-  min-height: 54px;
-}
-
-.tmd-ante-update-row + .tmd-ante-update-row {
-  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 68%, transparent);
-}
-
-.tmd-ante-update-label-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.tmd-ante-update-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-}
-
-.tmd-ante-update-label {
-  color: var(--text-normal);
-  font-size: 0.95em;
-  font-weight: 500;
-}
-
-.tmd-ante-update-value {
-  color: var(--text-normal);
-  font-family: var(--font-monospace);
-  font-size: 1.02em;
-  word-break: break-word;
-}
-
-.tmd-ante-update-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: stretch;
-  flex: 0 0 auto;
-}
-
+.tmd-update-item-button,
 .tmd-ante-update-button {
   display: inline-flex;
   align-items: center;
-  min-width: 150px;
   justify-content: center;
 }
 
+.tmd-update-item-button-icon,
 .tmd-ante-update-button-icon {
   display: inline-flex;
   align-items: center;
@@ -332,67 +305,159 @@ button.tmd-diff-file-main {
   margin-right: 8px;
 }
 
+.tmd-update-item-button-label,
 .tmd-ante-update-button-label {
   white-space: nowrap;
 }
 
-.tmd-ante-update-error {
-  margin: 10px 0 6px;
-  padding-top: 12px;
-  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 68%, transparent);
-  color: var(--text-error);
-  font-size: 0.82em;
+.tmd-updates-list {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 72%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--background-primary) 96%, white 4%);
+}
+
+.tmd-update-item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+}
+
+.tmd-update-item + .tmd-update-item {
+  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 62%, transparent);
+}
+
+.tmd-update-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.tmd-update-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tmd-update-item-header {
+  display: block;
+  min-width: 0;
+}
+
+.tmd-update-item-title-row {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tmd-update-item-title {
+  color: var(--text-normal);
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.tmd-update-item-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--background-modifier-hover) 68%, transparent);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tmd-update-item-summary {
+  color: var(--text-normal);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.tmd-update-item-meta {
+  color: var(--text-muted);
+  font-size: 0.82rem;
   line-height: 1.4;
+  font-variant-numeric: tabular-nums;
 }
 
-.tmd-ante-update-row.is-local .tmd-ante-update-icon {
-  color: color-mix(in srgb, var(--color-green) 78%, var(--text-muted) 22%);
+.tmd-update-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.tmd-ante-update-row.is-remote .tmd-ante-update-icon {
-  color: color-mix(in srgb, var(--color-blue) 78%, var(--text-muted) 22%);
+.tmd-update-item-button {
+  min-width: 92px;
 }
 
-.tmd-ante-update-row.is-success .tmd-ante-update-icon,
-.tmd-ante-update-row.is-success .tmd-ante-update-value {
-  color: color-mix(in srgb, var(--color-green) 80%, var(--text-normal) 20%);
+.tmd-update-item.is-success .tmd-update-item-icon,
+.tmd-update-item.is-success .tmd-update-item-status {
+  color: color-mix(in srgb, var(--color-green) 78%, var(--text-normal) 22%);
 }
 
-.tmd-ante-update-row.is-warning .tmd-ante-update-icon,
-.tmd-ante-update-row.is-warning .tmd-ante-update-value {
+.tmd-update-item.is-success .tmd-update-item-status {
+  background: color-mix(in srgb, var(--color-green) 14%, transparent);
+}
+
+.tmd-update-item.is-warning .tmd-update-item-icon,
+.tmd-update-item.is-warning .tmd-update-item-status {
   color: color-mix(in srgb, var(--color-orange) 82%, var(--text-normal) 18%);
 }
 
-.tmd-ante-update-row.is-error .tmd-ante-update-icon,
-.tmd-ante-update-row.is-error .tmd-ante-update-value {
-  color: color-mix(in srgb, var(--color-red) 86%, var(--text-normal) 14%);
+.tmd-update-item.is-warning .tmd-update-item-status {
+  background: color-mix(in srgb, var(--color-orange) 14%, transparent);
 }
 
-.tmd-ante-update-row.is-progress .tmd-ante-update-icon,
-.tmd-ante-update-row.is-progress .tmd-ante-update-value {
-  color: color-mix(in srgb, var(--color-blue) 78%, var(--text-normal) 22%);
+.tmd-update-item.is-error .tmd-update-item-icon,
+.tmd-update-item.is-error .tmd-update-item-status {
+  color: color-mix(in srgb, var(--color-red) 84%, var(--text-normal) 16%);
+}
+
+.tmd-update-item.is-error .tmd-update-item-status {
+  background: color-mix(in srgb, var(--color-red) 12%, transparent);
+}
+
+.tmd-update-item.is-progress .tmd-update-item-icon,
+.tmd-update-item.is-progress .tmd-update-item-status {
+  color: color-mix(in srgb, var(--color-blue) 76%, var(--text-normal) 24%);
+}
+
+.tmd-update-item.is-progress .tmd-update-item-status {
+  background: color-mix(in srgb, var(--color-blue) 12%, transparent);
+}
+
+.tmd-update-item.is-neutral .tmd-update-item-icon,
+.tmd-update-item.is-neutral .tmd-update-item-status {
+  color: color-mix(in srgb, var(--text-muted) 86%, var(--text-normal) 14%);
+}
+
+.tmd-update-item.is-neutral .tmd-update-item-status {
+  background: color-mix(in srgb, var(--background-modifier-hover) 72%, transparent);
 }
 
 @media (max-width: 720px) {
-  .tmd-ante-update-layout {
-    flex-direction: column;
+  .tmd-update-item {
+    grid-template-columns: 20px minmax(0, 1fr);
   }
 
-  .tmd-ante-update-card {
-    width: 100%;
-    min-width: 0;
-    flex-basis: auto;
+  .tmd-update-item-actions {
+    grid-column: 2;
+    justify-content: flex-start;
   }
 
-  .tmd-ante-update-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-    padding: 8px 0;
-  }
-
-  .tmd-ante-update-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
+  .tmd-update-item-title-row {
+    gap: 8px;
   }
 }
 
@@ -401,7 +466,7 @@ button.tmd-diff-file-main {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .tmd-preset-toolbar-copy {
@@ -414,8 +479,9 @@ button.tmd-diff-file-main {
 .tmd-preset-summary {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.82em;
-  line-height: 1.35;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  max-width: 56ch;
 }
 
 .tmd-preset-new-button {
@@ -453,8 +519,8 @@ button.tmd-diff-file-main {
 
 .tmd-gemini-field-label {
   color: var(--text-muted);
-  font-size: 0.78em;
-  line-height: 1.2;
+  font-size: 0.76rem;
+  line-height: 1.25;
 }
 
 .tmd-gemini-field-input {
@@ -634,10 +700,6 @@ button.tmd-diff-file-main {
 
 .tmd-preset-modal-title {
   margin: 0 0 14px;
-  padding: 0;
-  color: var(--text-normal);
-  font-size: 1.05rem;
-  font-weight: 700;
 }
 
 .tmd-preset-modal-setting {
@@ -654,12 +716,13 @@ button.tmd-diff-file-main {
 }
 
 .tmd-preset-modal-setting .setting-item-name {
-  font-size: 0.95em;
+  font-size: 0.92rem;
+  font-weight: 600;
 }
 
 .tmd-preset-modal-setting .setting-item-description {
-  font-size: 0.78em;
-  line-height: 1.35;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .tmd-preset-modal-setting .setting-item-control {
@@ -1181,7 +1244,8 @@ button.tmd-diff-file-main {
 
 .tmd-chat-header h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.12rem;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
@@ -1200,23 +1264,24 @@ button.tmd-diff-file-main {
 .tmd-chat-context-title {
   margin-bottom: 2px;
   color: color-mix(in srgb, var(--text-muted) 82%, transparent);
-  font-size: 0.5rem;
-  font-weight: 400;
-  letter-spacing: 0.06em;
+  font-size: var(--tmd-type-kicker-size);
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .tmd-chat-context-value {
   color: color-mix(in srgb, var(--text-muted) 88%, var(--text-normal) 12%);
-  font-size: 0.68rem;
-  font-weight: 400;
+  font-size: 0.84rem;
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 .tmd-chat-context-snippet {
   margin-top: 6px;
   color: color-mix(in srgb, var(--text-muted) 84%, transparent);
-  font-size: 0.82rem;
-  line-height: 1.45;
+  font-size: 0.9rem;
+  line-height: 1.55;
   white-space: pre-wrap;
 }
 
@@ -1330,7 +1395,8 @@ button.tmd-diff-file-main {
 .tmd-chat-text {
   margin: 0;
   color: var(--text-normal);
-  line-height: 1.6;
+  font-size: var(--tmd-type-body-size);
+  line-height: var(--tmd-type-body-leading);
   white-space: pre-wrap;
   word-break: break-word;
   user-select: text;
@@ -1376,8 +1442,8 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-message.tmd-is-assistant .tmd-chat-text {
-  font-size: 1.08rem;
-  line-height: 1.75;
+  font-size: var(--tmd-type-reading-size);
+  line-height: var(--tmd-type-reading-leading);
 }
 
 .tmd-chat-pre {
@@ -1385,16 +1451,16 @@ button.tmd-diff-file-main {
   border: 0;
   background: transparent;
   font-family: var(--font-text);
-  font-size: 0.98rem;
+  font-size: var(--tmd-type-body-size);
 }
 
 .tmd-chat-message.tmd-is-assistant .tmd-chat-pre {
-  font-size: 1.08rem;
+  font-size: var(--tmd-type-reading-size);
 }
 
 .tmd-chat-loading {
   color: var(--text-muted);
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   font-style: italic;
 }
 
@@ -1409,7 +1475,7 @@ button.tmd-diff-file-main {
 .tmd-chat-process-line {
   color: var(--text-muted);
   font-family: var(--font-monospace);
-  font-size: 0.84rem;
+  font-size: 0.88rem;
   line-height: 1.45;
 }
 
@@ -1493,6 +1559,13 @@ button.tmd-diff-file-main {
   box-shadow: none;
 }
 
+.tmd-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 @media (max-width: 900px) {
   .tmd-chat-shell {
     grid-template-columns: 1fr;
@@ -1540,6 +1613,35 @@ button.tmd-diff-file-main {
   box-shadow: 0 22px 48px color-mix(in srgb, black 18%, transparent);
 }
 
+.tmd-runtime-help {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 72%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--background-primary) 96%, white 4%);
+}
+
+.tmd-runtime-help-title {
+  color: var(--text-normal);
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.tmd-runtime-help-text {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.tmd-runtime-help-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .tmd-terminal-chrome,
 .tmd-terminal-meta,
 .tmd-terminal-screen,
@@ -1569,7 +1671,7 @@ button.tmd-diff-file-main {
 
 .tmd-terminal-chrome-title,
 .tmd-terminal-status {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1677,7 +1779,7 @@ button.tmd-diff-file-main {
 
 .tmd-terminal-process-kicker {
   color: var(--tmd-terminal-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1707,7 +1809,7 @@ button.tmd-diff-file-main {
 
 .tmd-terminal-process-label {
   color: var(--tmd-terminal-text);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
 }
 
@@ -1723,7 +1825,7 @@ button.tmd-diff-file-main {
   gap: 10px;
   align-items: start;
   color: color-mix(in srgb, var(--tmd-terminal-muted) 80%, white 20%);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -1741,7 +1843,7 @@ button.tmd-diff-file-main {
 
 .tmd-terminal-meta-line {
   color: var(--tmd-terminal-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
   user-select: text;
   white-space: nowrap;
@@ -1782,7 +1884,7 @@ button.tmd-diff-file-main {
   align-items: start;
   padding: 4px 0;
   color: var(--tmd-terminal-text);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
 }
 

@@ -561,6 +561,7 @@ export class TmdTerminalView extends ItemView {
   private loadingFrame = 0
   private latestState: TmdState | null = null
   private liveContext: ContextSnapshot | null = null
+  private runtimeHelpEl: HTMLDivElement | null = null
   private frameEl!: HTMLDivElement
   private statusEl!: HTMLDivElement
   private metaLineEl!: HTMLDivElement
@@ -643,6 +644,9 @@ export class TmdTerminalView extends ItemView {
     const { contentEl } = this
     contentEl.empty()
     contentEl.createEl("h2", { text: "Ante Workspace" })
+
+    this.runtimeHelpEl = contentEl.createDiv({ cls: "tmd-runtime-help" })
+    this.runtimeHelpEl.hide()
 
     this.frameEl = contentEl.createDiv({ cls: "tmd-terminal-frame" })
     const chrome = this.frameEl.createDiv({ cls: "tmd-terminal-chrome" })
@@ -755,6 +759,7 @@ export class TmdTerminalView extends ItemView {
     this.statusEl.className = `tmd-terminal-status ${terminalStatusClass(latestTask)}`
     this.statusEl.setText(terminalStatus(latestTask))
     this.metaLineEl.setText(summarizeTerminalMeta(context, runtimeSummary))
+    this.syncRuntimeHelp()
 
     this.syncRows(
       buildAllRows(
@@ -977,6 +982,10 @@ export class TmdTerminalView extends ItemView {
     if (!promptText) {
       return
     }
+    if (!this.plugin.ensureAnteInstalled("Ante Terminal")) {
+      this.syncRuntimeHelp()
+      return
+    }
     this.promptHistory = [
       ...this.promptHistory.filter((entry) => entry !== promptText),
       promptText,
@@ -1174,5 +1183,44 @@ export class TmdTerminalView extends ItemView {
     this.editorEl.dataset.placeholder = this.liveContext?.filePath
       ? `Use ${this.liveContext.filePath} as Markdown context to plan, write, edit, or run tasks`
       : "Use the current Markdown context to plan, write, edit, or run tasks"
+  }
+
+  private syncRuntimeHelp(): void {
+    const helpEl = this.runtimeHelpEl
+    if (!helpEl) {
+      return
+    }
+    if (this.plugin.isAnteInstalled()) {
+      helpEl.empty()
+      helpEl.hide()
+      return
+    }
+
+    helpEl.empty()
+    helpEl.show()
+    helpEl.createDiv({
+      cls: "tmd-runtime-help-title",
+      text: "Ante CLI is missing"
+    })
+    helpEl.createDiv({
+      cls: "tmd-runtime-help-text",
+      text: "Open Ante md Settings to install Ante, then refresh runtime detection here."
+    })
+    const actionsEl = helpEl.createDiv({ cls: "tmd-runtime-help-actions" })
+    const settingsButton = actionsEl.createEl("button", {
+      text: "Open settings",
+      cls: "mod-cta"
+    })
+    settingsButton.addEventListener("click", () => {
+      void this.plugin.openPluginSettings()
+    })
+    const refreshButton = actionsEl.createEl("button", {
+      text: "Refresh runtime"
+    })
+    refreshButton.addEventListener("click", () => {
+      void this.plugin.refreshAnteEnvironment().then(() => {
+        this.syncRuntimeHelp()
+      })
+    })
   }
 }

@@ -211,7 +211,9 @@ const shouldHideStructuredStreamingText = (text: string): boolean => {
 
 const isRecoverableConversationSession = (task: TaskRecord): boolean => Boolean(task.runtimeSession?.sessionId && task.endedAt);
 
-const isRecoverableConversationMessage = (message: ChatMessageRecord | undefined): boolean =>
+const isRecoverableConversationMessage = (
+  message: ChatMessageRecord | undefined
+): message is ChatMessageRecord & { turn: NonNullable<ChatMessageRecord["turn"]> } =>
   Boolean(message?.turn?.runtimeSessionId && message.status !== "streaming");
 
 const isMissingAnteSessionError = (error: string | undefined): boolean =>

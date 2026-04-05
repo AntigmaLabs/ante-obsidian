@@ -86,6 +86,10 @@ export class MentionTriggerService {
               : null
           };
 
+    if (!this.plugin.ensureAnteInstalled("Inline Ante trigger")) {
+      return;
+    }
+
     this.handledKeys.add(lineKey);
     this.running = true;
 

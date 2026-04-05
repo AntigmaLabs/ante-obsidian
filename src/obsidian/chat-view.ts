@@ -550,6 +550,24 @@ export class TmdChatView extends ItemView {
       return;
     }
     const empty = this.timelineEl.createDiv({ cls: "tmd-empty tmd-chat-empty" });
+    if (!this.plugin.isAnteInstalled()) {
+      empty.createEl("p", { text: "Ante is not installed yet." });
+      empty.createEl("p", {
+        cls: "tmd-meta",
+        text: "Open Ante md Settings to install the local Ante CLI before starting chat."
+      });
+      const actionsEl = empty.createDiv({ cls: "tmd-empty-actions" });
+      const settingsButton = actionsEl.createEl("button", { text: "Open settings", cls: "mod-cta" });
+      settingsButton.addEventListener("click", () => {
+        void this.plugin.openPluginSettings();
+      });
+      const refreshButton = actionsEl.createEl("button", { text: "Refresh runtime" });
+      refreshButton.addEventListener("click", () => {
+        void this.plugin.refreshAnteEnvironment().then(() => this.render());
+      });
+      this.emptyStateEl = empty;
+      return;
+    }
     empty.createEl("p", { text: "No messages yet." });
     empty.createEl("p", { cls: "tmd-meta", text: "Use the current note as context and start chatting with Ante." });
     this.emptyStateEl = empty;
@@ -1047,6 +1065,9 @@ export class TmdChatView extends ItemView {
   private runPrompt(): void {
     const prompt = this.composerEl.value.trim();
     if (!prompt) {
+      return;
+    }
+    if (!this.plugin.ensureAnteInstalled("Chat with Ante")) {
       return;
     }
     this.shouldAutoScrollToBottom = true;

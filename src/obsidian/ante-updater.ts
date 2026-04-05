@@ -2,11 +2,9 @@ import { requestUrl } from "obsidian";
 import { spawn } from "node:child_process";
 import { normalizeAnteVersion, parseAnteVersionOutput, shouldOfferAnteUpdate } from "./ante-version";
 import { resolveCommandPath } from "../runtime/transport/ante-stdio-transport";
+import { DEFAULT_UPDATE_CONFIG } from "./update-config";
 
 const DEFAULT_SHELL = "/bin/zsh";
-const DEFAULT_MANIFEST_URL = "https://storage.googleapis.com/release-antigma-public/channels/latest/manifest.json";
-const DEFAULT_INSTALL_URL = "https://storage.googleapis.com/release-antigma-public/install.sh";
-const DEFAULT_CHANNEL = "latest";
 
 export interface AnteRemoteManifest {
   version: string;
@@ -82,7 +80,7 @@ export class AnteUpdater {
     return parseAnteVersionOutput(output);
   }
 
-  async getRemoteManifest(manifestUrl = DEFAULT_MANIFEST_URL): Promise<AnteRemoteManifest> {
+  async getRemoteManifest(manifestUrl = DEFAULT_UPDATE_CONFIG.anteManifestUrl): Promise<AnteRemoteManifest> {
     const response = await requestUrl({
       url: manifestUrl,
       method: "GET",
@@ -104,8 +102,8 @@ export class AnteUpdater {
     };
   }
 
-  async upgrade(channel = DEFAULT_CHANNEL): Promise<void> {
-    const installCommand = `curl -fsSL ${this.quoteShellArg(DEFAULT_INSTALL_URL)} | bash -s -- ${this.quoteShellArg(channel)}`;
+  async upgrade(channel = DEFAULT_UPDATE_CONFIG.anteChannel): Promise<void> {
+    const installCommand = `curl -fsSL ${this.quoteShellArg(DEFAULT_UPDATE_CONFIG.anteInstallUrl)} | bash -s -- ${this.quoteShellArg(channel)}`;
     await runShellCommand(installCommand);
   }
 
