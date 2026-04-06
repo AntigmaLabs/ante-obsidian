@@ -13,7 +13,7 @@ Ante md 当前主要提供 7 类用户可见功能：
 3. 在 `Results` 中查看文本结果和 Markdown Diff。
 4. 在 `Chat with Ante` 中进行连续追问。
 5. 在 `Ante Terminal` 中使用更接近终端的交互方式。
-6. 在插件设置中配置本地 Ante 运行时、provider、model 和凭据。
+6. 在插件设置中配置本地 Ante 运行时、连接方式、provider、model，以及当前支持的凭据项。
 7. 在插件设置中管理预设显示、排序以及自定义预设。
 
 ## 功能一：笔记内联触发
@@ -89,6 +89,7 @@ Ante md 注册了这些常用命令，可以从 Obsidian 命令面板直接调�
 ## 功能四：Results 结果面板
 
 `Results` 是查看任务结果的核心面板。它既能展示纯文本输出，也能展示 Markdown Diff 和改动摘要。
+对很多由 `@ante`、右键菜单或命令面板发起的文档任务来说，改动可能已经被自动应用；这时 `Results` 更适合用来检查范围、确认结果和在需要时回退。
 
 ### 你可以在这里看到什么
 
@@ -97,7 +98,7 @@ Ante md 注册了这些常用命令，可以从 Obsidian 命令面板直接调�
 - 每个改动项对应的文件位置
 - 每个改动项的增删行数统计
 - 统一 Diff 预览
-- 对待应用改动的操作按钮
+- 已应用或待处理改动的状态与操作
 
 ### 支持的改动类型
 
@@ -163,19 +164,21 @@ Ante md 当前支持以下 Markdown 变更操作：
 
 ## 功能七：设置与预设管理
 
-除了运行配置外，Ante md 现在还提供了单独的预设管理区域。
+除了运行配置外，Ante md 现在还提供了单独的更新检查与预设管理区域。
 
 ### 可配置项包括
 
 - Ante 连接模式（`stdio` 或 `websocket`）
-- Ante 可执行命令
 - Ante 启动参数
 - Ante WebSocket 地址
-- 工作目录
 - 是否自动批准 Ante 工具调用
+- 是否显示完整运行日志
 - 是否沿用 `~/.ante/settings.json` 里的 provider 和 model
 - 手动指定 provider 和 model
+- 支持的 provider 包括 `openai-subscription`、`gemini` 和 `anthropic`
 - Gemini API Key 或其环境变量名
+- 插件版本与本地 Ante Runtime 的更新检查
+- 在设置页中安装或升级 Ante Runtime
 - 是否开启 mention trigger 调试提示
 - 预设显示开关
 - 拖拽排序预设
@@ -186,6 +189,7 @@ Ante md 当前支持以下 Markdown 变更操作：
 - 你可以让 Ante md 复用已有的 Ante 配置。
 - 你可以在本地标准输入输出和 WebSocket 两种连接方式之间切换。
 - 也可以在插件内部单独指定模型和供应商。
+- 如果本机尚未准备好 Ante，也可以先在设置页里检查状态并完成安装或升级。
 - 可以把编辑器菜单精简成你真正常用的那几个预设。
 - 还可以为团队或个人流程增加固定的自定义预设，而不需要改代码。
 
@@ -207,8 +211,8 @@ Ante md 本身不直接提供模型能力，它依赖你本机可用的 Ante 运
 
 - 你使用的是 Obsidian 桌面版
 - 已正确安装并启用 Ante md
-- 本机可以运行 `ante`
-- Ante 对应的 provider、model、API 凭据已经配置好
+- 本机可以运行标准 `ante` 命令，或可在 Ante md 设置页中先完成安装
+- Ante 对应的 provider、model 已经配置好；如使用 Gemini，也可以在插件设置中手动填写或覆盖 API Key
 
 如果 Ante 本身不可用，Ante md 也无法正常工作。
 

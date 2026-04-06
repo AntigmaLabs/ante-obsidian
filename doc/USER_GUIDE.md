@@ -13,7 +13,7 @@ Ante md currently provides 7 main user-facing capabilities:
 3. Review text output and Markdown diffs in `Results`.
 4. Ask follow-up questions in `Chat with Ante`.
 5. Use `Ante Terminal` for a more terminal-style prompt flow.
-6. Configure the local Ante runtime, provider, model, and credentials from plugin settings.
+6. Configure the local Ante runtime, connection mode, provider, model, and currently supported credential options from plugin settings.
 7. Manage preset visibility, ordering, and custom preset definitions from plugin settings.
 
 ## Feature 1: Inline Trigger Inside Notes
@@ -89,6 +89,7 @@ Ante md also registers these commands in the Obsidian command palette:
 ## Feature 4: Results
 
 `Results` is the main panel for reviewing task output. It can show plain text output, diff summaries, and full Markdown diffs.
+For many document tasks started from `@ante`, the editor context menu, or command palette actions, changes may already be auto-applied. In that case, `Results` is mainly where you inspect scope, confirm the outcome, and revert if needed.
 
 ### What You Can See There
 
@@ -97,7 +98,7 @@ Ante md also registers these commands in the Obsidian command palette:
 - The target file or selection location for each change
 - Addition and removal counts
 - Unified diff previews
-- Apply actions for pending changes
+- Status and actions for applied or pending changes
 
 ### Supported Change Types
 
@@ -163,19 +164,21 @@ If Ante asks to use tools during a run, the terminal view can show an approval c
 
 ## Feature 7: Settings And Preset Management
 
-Besides runtime configuration, Ante md now includes a dedicated preset management section in settings.
+Besides runtime configuration, Ante md now includes dedicated update checks and preset management sections in settings.
 
 ### Available Settings
 
 - Ante connection mode (`stdio` or `websocket`)
-- Ante executable command
 - Ante launch arguments
 - Ante WebSocket address
-- Working directory
 - Auto-approve Ante tool calls
+- Show full process logs
 - Whether to use provider and model from `~/.ante/settings.json`
 - Manual provider and model selection
+- Supported providers include `openai-subscription`, `gemini`, and `anthropic`
 - Gemini API key or its environment variable name
+- Plugin update checks and local Ante Runtime update checks
+- Install or upgrade Ante Runtime directly from settings
 - Mention trigger debug notices
 - Preset visibility controls
 - Drag-and-drop preset reordering
@@ -186,6 +189,7 @@ Besides runtime configuration, Ante md now includes a dedicated preset managemen
 - You can reuse your existing Ante configuration.
 - You can choose between a local stdin/stdout connection and a WebSocket transport.
 - You can override provider and model inside the plugin.
+- If Ante is not ready locally yet, you can check status and complete install or upgrade steps from settings.
 - You can simplify the editor menu to only show the presets you actually use.
 - You can add team- or workflow-specific presets without changing code.
 
@@ -207,8 +211,8 @@ Before using Ante md, make sure:
 
 - You are on Obsidian desktop
 - Ante md is installed and enabled
-- `ante` runs on your machine
-- Ante provider, model, and credentials are already configured
+- The standard `ante` command runs on your machine, or you can install it first from Ante md settings
+- Ante provider and model are already configured; if you use Gemini, you can also fill in or override the API key from plugin settings
 
 If Ante is not available, Ante md will not work.
 

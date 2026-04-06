@@ -2,7 +2,7 @@
 
 This guide explains the supported ways to install Ante md as an Obsidian plugin.
 
-Ante md is a desktop-only plugin. It also depends on a local `ante` command to do any actual work after installation.
+Ante md is a desktop-only plugin. It still depends on a local Ante Runtime to do actual work, but you no longer need to install `ante` manually before installing the plugin.
 
 ## Before You Install
 
@@ -10,10 +10,10 @@ Make sure all of the following are true:
 
 - You are using Obsidian desktop.
 - Your Obsidian version is at least `1.6.0`.
-- You have a local `ante` executable installed and runnable from your machine.
-- If your Ante setup uses a remote model provider, that provider is already configured in Ante.
+- Your machine allows Ante md to check, install, or upgrade the local Ante Runtime from settings.
+- If you do not plan to rely on Ante defaults, you have the required provider model and credentials ready.
 
-Ante md does not become usable just because the plugin files are installed. The local Ante runtime must also be available.
+Ante md does not become usable just because the plugin files are installed. Before first use, you still need to confirm the local Ante Runtime status in Ante md settings.
 
 ## Option 1: Install From The Obsidian Community Plugins Browser
 
@@ -25,7 +25,7 @@ Use this option after Ante md has been accepted into the official Obsidian commu
 4. Search for `Ante md`.
 5. Install the plugin.
 6. Enable the plugin.
-7. Open the Ante md settings and confirm the Ante command, provider, and model configuration.
+7. Open the Ante md settings and confirm the runtime status, connection mode, and provider/model configuration.
 
 This is the simplest option for most users, but it only works after the plugin passes Obsidian's review process.
 
@@ -49,7 +49,7 @@ The final path should be:
 ```
 
 4. Open Obsidian and enable `Ante md` in `Settings -> Community plugins`.
-5. Open the Ante md settings and confirm the Ante command, provider, and model configuration.
+5. Open the Ante md settings and confirm the runtime status, connection mode, and provider/model configuration.
 
 If the plugin does not appear, verify that the folder name matches the plugin id in `manifest.json`. For this project, the id is `ante-md`.
 
@@ -81,7 +81,7 @@ npm run build
 - `main.js`
 - `styles.css`
 6. Open Obsidian and enable `Ante md` in `Settings -> Community plugins`.
-7. Open the Ante md settings and confirm the Ante command, provider, and model configuration.
+7. Open the Ante md settings and confirm the runtime status, connection mode, and provider/model configuration.
 
 For development, you can also place the repository directly in the plugin directory and rebuild in place.
 
@@ -90,11 +90,14 @@ For development, you can also place the repository directly in the plugin direct
 After installation, verify the runtime configuration:
 
 1. Open Ante md settings.
-2. Confirm the Ante command. The default is `ante`.
-3. Confirm any required command arguments.
-4. Confirm the provider and model settings, if you are not relying on Ante's own defaults.
-5. Try a simple Ante md action on a test note.
+2. Check the `Updates` section for plugin and local Ante Runtime status.
+3. If Ante is not installed locally yet, use `Install` directly from the settings page.
+4. Confirm the connection mode and any required launch arguments.
+5. Confirm the provider and model settings if you are not relying on Ante's own defaults.
+6. If you use Gemini, optionally fill in the API key or env var name.
+7. Try a simple Ante md action on a test note.
 
+Ante md still depends on a working local Ante Runtime, but it now assumes the standard `ante` executable and provides built-in status checks plus install/upgrade actions in settings.
 By default, Ante md follows Ante's local configuration when possible. If your Ante setup is broken, Ante md will also fail.
 
 ## Troubleshooting
@@ -106,7 +109,7 @@ Most likely causes:
 - `ante` is not installed.
 - `ante` is not in your `PATH`.
 - Ante itself is not configured for your model provider.
-- The plugin settings point to the wrong command or arguments.
+- The plugin settings use the wrong connection mode or launch arguments.
 
 ### The plugin does not appear in Obsidian
 
