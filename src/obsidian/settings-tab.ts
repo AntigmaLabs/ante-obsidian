@@ -100,6 +100,16 @@ export class TmdSettingTab extends PluginSettingTab {
         })
       );
 
+    new Setting(containerEl)
+      .setName("Show chat runtime details")
+      .setDesc("Show structured telemetry like thinking, token usage, and compaction events in Chat with Ante. Default: on.")
+      .addToggle((toggle) =>
+        toggle.setValue(this.pluginRef.settings.showChatRuntimeDetails).onChange(async (value) => {
+          this.pluginRef.settings.showChatRuntimeDetails = value;
+          await this.pluginRef.saveSettings();
+        })
+      );
+
     const resolvedAnteTarget = this.pluginRef.getResolvedAnteTarget();
 
     new Setting(containerEl)

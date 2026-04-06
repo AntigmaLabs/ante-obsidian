@@ -247,6 +247,10 @@ export default class TmdPlugin extends Plugin {
     return this.settings.showFullProcessLogs;
   }
 
+  shouldShowChatRuntimeDetails(): boolean {
+    return this.settings.showChatRuntimeDetails;
+  }
+
   async runPresetFromContextMenu(presetId: PresetId): Promise<void> {
     try {
       if (!this.ensureAnteInstalled("Ante md")) {

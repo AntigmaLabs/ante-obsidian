@@ -463,6 +463,125 @@ test("streaming assistant messages keep the live runtime session for loading sta
   }
 });
 
+test("chat runtime state preserves telemetry for high-signal observability", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = createWindowStub();
+
+  try {
+    const pluginStub = {
+      saveChatState: async () => {}
+    };
+
+    const manager = new ChatSessionManager(pluginStub as never);
+    const { conversation } = manager.appendUserPrompt("继续", context);
+    manager.createAssistantTurn(conversation.id, "task-1");
+
+    manager.syncFromTaskState({
+      currentTaskId: null,
+      tasks: [
+        {
+          id: "task-1",
+          kind: "chat",
+          preset: {
+            id: "default",
+            label: "@ante",
+            goal: "Discuss the current Markdown content before editing anything.",
+            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+          },
+          triggerSource: "chat",
+          inlineInstruction: "继续",
+          context,
+          status: "running",
+          logs: [],
+          stdoutText: "",
+          artifacts: [],
+          telemetry: {
+            thinkingText: "compare alternatives",
+            compacting: true,
+            usage: {
+              promptTokens: 120,
+              completionTokens: 80,
+              totalTokens: 200
+            },
+            lastInfo: {
+              level: "info",
+              message: "compacting history",
+              timestamp: "2026-03-29T00:00:00.500Z"
+            },
+            timeline: [
+              {
+                kind: "compaction-start",
+                timestamp: "2026-03-29T00:00:00.500Z"
+              }
+            ]
+          },
+          startedAt: "2026-03-29T00:00:00.000Z"
+        }
+      ]
+    });
+
+    const snapshot = manager.getSnapshot();
+    const messages = snapshot.messagesByConversation[conversation.id] ?? [];
+    const assistant = messages.find((message) => message.role === "assistant");
+
+    assert.equal(assistant?.runtime?.telemetry?.thinkingText, "compare alternatives");
+    assert.equal(assistant?.runtime?.telemetry?.usage?.totalTokens, 200);
+    assert.equal(assistant?.runtime?.telemetry?.compacting, true);
+    assert.equal(assistant?.runtime?.telemetry?.timeline[0]?.kind, "compaction-start");
+  } finally {
+    (globalThis as { window?: unknown }).window = originalWindow;
+  }
+});
+
+test("cancelled chat tasks stay cancelled instead of being mapped to failed", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = createWindowStub();
+
+  try {
+    const pluginStub = {
+      saveChatState: async () => {}
+    };
+
+    const manager = new ChatSessionManager(pluginStub as never);
+    const { conversation } = manager.appendUserPrompt("停掉", context);
+    manager.createAssistantTurn(conversation.id, "task-cancelled");
+
+    manager.syncFromTaskState({
+      currentTaskId: null,
+      tasks: [
+        {
+          id: "task-cancelled",
+          kind: "chat",
+          preset: {
+            id: "default",
+            label: "@ante",
+            goal: "Discuss the current Markdown content before editing anything.",
+            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+          },
+          triggerSource: "chat",
+          inlineInstruction: "停掉",
+          context,
+          status: "cancelled",
+          logs: [],
+          stdoutText: "partial output",
+          artifacts: [],
+          startedAt: "2026-03-29T00:00:00.000Z",
+          endedAt: "2026-03-29T00:00:01.000Z"
+        }
+      ]
+    });
+
+    const snapshot = manager.getSnapshot();
+    const messages = snapshot.messagesByConversation[conversation.id] ?? [];
+    const assistant = messages.find((message) => message.role === "assistant");
+
+    assert.equal(assistant?.status, "cancelled");
+    assert.equal(assistant?.text, "partial output");
+  } finally {
+    (globalThis as { window?: unknown }).window = originalWindow;
+  }
+});
+
 test("missing session resume errors clear the stored conversation binding", () => {
   const originalWindow = (globalThis as { window?: unknown }).window;
   (globalThis as { window?: unknown }).window = createWindowStub();

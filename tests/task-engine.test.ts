@@ -48,6 +48,22 @@ class RuntimeStub {
   dispose(): void {}
 }
 
+class CancelledRuntimeStub extends RuntimeStub {
+  constructor() {
+    super(() => {});
+  }
+
+  override run(
+    _request: TaskRequest,
+    observer: {
+      onEvent: (event: RuntimeEvent) => void;
+      onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+    }
+  ): void {
+    observer.onExit({ status: "cancelled" });
+  }
+}
+
 class HostStub {
   async getActiveContext(): Promise<ContextSnapshot | null> {
     return context;
@@ -307,6 +323,17 @@ test("hasActiveTask becomes false after task completion even when currentTaskId 
 
   assert.equal(engine.getState().currentTaskId != null, true);
   assert.equal(engine.hasActiveTask(), false);
+});
+
+test("cancelled runtime exits are preserved as cancelled tasks instead of failed tasks", async () => {
+  const engine = new TaskEngine(new CancelledRuntimeStub() as never, new HostStub() as never, resolvePresetById);
+
+  await engine.startChatTask("stop this");
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.status, "cancelled");
+  assert.equal(task?.error, undefined);
 });
 
 test("clearTasksByTriggerSource removes only chat tasks", async () => {

@@ -17,6 +17,7 @@ import type {
   LogEntry,
   RuntimeApprovalDecision,
   RuntimeProcessLane,
+  RuntimeTelemetryState,
   TaskRecord,
   TmdState,
 } from "../core/types"
@@ -167,8 +168,11 @@ interface ChatContextElements {
 
 interface ChatMessageElements {
   rootEl: HTMLDivElement
+  stackEl: HTMLDivElement
   bubbleEl: HTMLDivElement
+  metaEl: HTMLDivElement
   roleEl: HTMLDivElement
+  footerEl: HTMLDivElement
   stampEl: HTMLDivElement
   textEl: HTMLElement | null
   textValue: string | null
@@ -183,6 +187,8 @@ interface ChatMessageElements {
   artifactsValue: string | null
   approvalHostEl: HTMLDivElement | null
   approvalValue: string | null
+  runtimeDetailsHostEl: HTMLDivElement | null
+  runtimeDetailsValue: string | null
   errorEl: HTMLDivElement | null
   errorValue: string | null
 }
@@ -776,14 +782,19 @@ export class TmdChatView extends ItemView {
       const rootEl = createDiv({
         cls: `tmd-chat-message ${message.role === "user" ? "tmd-is-user" : "tmd-is-assistant"}`,
       })
-      const bubbleEl = rootEl.createDiv({ cls: "tmd-chat-bubble" })
+      const stackEl = rootEl.createDiv({ cls: "tmd-chat-stack" })
+      const bubbleEl = stackEl.createDiv({ cls: "tmd-chat-bubble" })
       const metaEl = bubbleEl.createDiv({ cls: "tmd-chat-meta" })
       const roleEl = metaEl.createDiv({ cls: "tmd-chat-role" })
-      const stampEl = metaEl.createDiv({ cls: "tmd-chat-stamp" })
+      const footerEl = stackEl.createDiv({ cls: "tmd-chat-footer" })
+      const stampEl = footerEl.createDiv({ cls: "tmd-chat-stamp" })
       elements = {
         rootEl,
+        stackEl,
         bubbleEl,
+        metaEl,
         roleEl,
+        footerEl,
         stampEl,
         textEl: null,
         textValue: null,
@@ -798,6 +809,8 @@ export class TmdChatView extends ItemView {
         artifactsValue: null,
         approvalHostEl: null,
         approvalValue: null,
+        runtimeDetailsHostEl: null,
+        runtimeDetailsValue: null,
         errorEl: null,
         errorValue: null,
       }
@@ -809,18 +822,10 @@ export class TmdChatView extends ItemView {
       "tmd-is-assistant",
       message.role === "assistant",
     )
-    this.setText(
-      elements.roleEl,
-      message.role === "user"
-        ? "You"
-        : message.status === "streaming"
-          ? "Ante is thinking"
-          : "Ante",
-    )
-    this.setText(
-      elements.stampEl,
-      formatTime(message.updatedAt || message.createdAt),
-    )
+    if (elements.roleEl.parentElement) {
+      elements.roleEl.detach()
+    }
+    this.syncMessageFooter(elements, message)
 
     const previewText = clampPreview(message.text)
     if (previewText) {
@@ -848,6 +853,7 @@ export class TmdChatView extends ItemView {
           ]
         : []
     this.syncProcessLines(elements, processLines)
+    this.syncRuntimeDetails(elements, message)
 
     const resolvedArtifacts = task ? (diffsByTask.get(task.id) ?? []) : []
     const fallbackResolvedArtifacts =
@@ -1277,6 +1283,128 @@ export class TmdChatView extends ItemView {
     elements.approvalValue = null
   }
 
+  private syncRuntimeDetails(
+    elements: ChatMessageElements,
+    message: ChatMessageRecord,
+  ): void {
+    if (
+      !this.plugin.shouldShowChatRuntimeDetails() ||
+      message.status !== "streaming"
+    ) {
+      this.removeRuntimeDetails(elements)
+      return
+    }
+
+    const telemetry = message.runtime?.telemetry
+    const sections = this.buildRuntimeDetailsSections(telemetry)
+    if (sections.length === 0) {
+      this.removeRuntimeDetails(elements)
+      return
+    }
+
+    const shouldOpen = this.shouldAutoExpandRuntimeDetails(message, telemetry)
+    const signature = `${sections.join("\n\n")}`
+    if (
+      elements.runtimeDetailsHostEl &&
+      elements.runtimeDetailsValue === signature
+    ) {
+      return
+    }
+
+    const host =
+      elements.runtimeDetailsHostEl ??
+      elements.bubbleEl.createDiv({ cls: "tmd-chat-runtime-details-host" })
+    host.empty()
+    const detailsEl = host.createEl("details", {
+      cls: "tmd-chat-runtime-details",
+    })
+    detailsEl.open = shouldOpen
+    detailsEl.createEl("summary", {
+      cls: "tmd-chat-runtime-summary",
+      text: "Runtime details",
+    })
+    const bodyEl = detailsEl.createDiv({ cls: "tmd-chat-runtime-body" })
+    for (const section of sections) {
+      bodyEl.createEl("pre", {
+        cls: "tmd-chat-runtime-block",
+        text: section,
+      })
+    }
+    elements.runtimeDetailsHostEl = host
+    elements.runtimeDetailsValue = signature
+  }
+
+  private removeRuntimeDetails(elements: ChatMessageElements): void {
+    elements.runtimeDetailsHostEl?.remove()
+    elements.runtimeDetailsHostEl = null
+    elements.runtimeDetailsValue = null
+  }
+
+  private buildRuntimeDetailsSections(
+    telemetry: RuntimeTelemetryState | undefined,
+  ): string[] {
+    if (!telemetry) {
+      return []
+    }
+
+    const sections: string[] = []
+    const statusLines: string[] = []
+    if (telemetry.compacting) {
+      statusLines.push("status compacting context")
+    }
+    if (telemetry.usage) {
+      statusLines.push(
+        `usage prompt=${telemetry.usage.promptTokens ?? "?"} completion=${telemetry.usage.completionTokens ?? "?"} total=${telemetry.usage.totalTokens ?? "?"}`,
+      )
+    }
+    if (telemetry.lastInfo) {
+      statusLines.push(
+        `${telemetry.lastInfo.level} ${formatTime(telemetry.lastInfo.timestamp)}${telemetry.lastInfo.message ? ` · ${telemetry.lastInfo.message}` : ""}`,
+      )
+    }
+    if (statusLines.length > 0) {
+      sections.push(statusLines.join("\n"))
+    }
+
+    const thinking = clampPreview(telemetry.thinkingText ?? "")
+    if (thinking) {
+      sections.push(`thinking\n${thinking}`)
+    }
+
+    if (telemetry.timeline.length > 0) {
+      sections.push(
+        [
+          "timeline",
+          ...telemetry.timeline.map(
+            (entry) =>
+              `${formatTime(entry.timestamp)} · ${entry.kind}${entry.message ? ` · ${entry.message}` : ""}`,
+          ),
+        ].join("\n"),
+      )
+    }
+
+    return sections
+  }
+
+  private shouldAutoExpandRuntimeDetails(
+    message: ChatMessageRecord,
+    telemetry: RuntimeTelemetryState | undefined,
+  ): boolean {
+    if (!telemetry || message.status !== "streaming") {
+      return false
+    }
+    if (telemetry.compacting) {
+      return true
+    }
+    if ((telemetry.thinkingText ?? "").trim()) {
+      return true
+    }
+    if (telemetry.lastInfo?.message?.trim()) {
+      return true
+    }
+    return telemetry.timeline.length > 0
+  }
+
   private syncError(elements: ChatMessageElements, error: string): void {
     const errorEl =
       elements.errorEl ?? elements.bubbleEl.createDiv({ cls: "tmd-error" })
@@ -1370,6 +1498,174 @@ export class TmdChatView extends ItemView {
         )
       }
     })
+  }
+
+  private syncMessageFooter(
+    elements: ChatMessageElements,
+    message: ChatMessageRecord,
+  ): void {
+    const footerEl = elements.footerEl
+    footerEl.empty()
+
+    footerEl.createDiv({
+      cls: "tmd-chat-stamp",
+      text: formatTime(message.updatedAt || message.createdAt),
+    })
+
+    const actionsEl = footerEl.createDiv({ cls: "tmd-chat-message-actions" })
+    const copyButton = actionsEl.createEl("button", {
+      cls: "tmd-chat-message-action",
+      attr: {
+        "aria-label": "Copy message",
+        title: "Copy message",
+        type: "button",
+      },
+    })
+    setIcon(copyButton, "copy")
+    copyButton.disabled = !message.text.trim()
+    copyButton.addEventListener("click", () => {
+      void this.copyMessageText(message.text)
+    })
+
+    const refreshPrompt = this.getRefreshPrompt(message)
+    if (refreshPrompt) {
+      const refreshButton = actionsEl.createEl("button", {
+        cls: "tmd-chat-message-action",
+        attr: {
+          "aria-label": "Refresh message",
+          title: "Refresh message",
+          type: "button",
+        },
+      })
+      setIcon(refreshButton, "rotate-ccw")
+      refreshButton.disabled =
+        this.hasRunningTaskForConversation(refreshPrompt.conversationId)
+      refreshButton.addEventListener("click", () => {
+        void this.refreshMessage(refreshPrompt).catch((error) => {
+          new Notice(
+            error instanceof Error
+              ? error.message
+              : "Failed to refresh message",
+          )
+        })
+      })
+    }
+  }
+
+  private async copyMessageText(text: string): Promise<void> {
+    if (!text.trim()) {
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(text)
+      new Notice("Copied message")
+    } catch (error) {
+      new Notice(
+        error instanceof Error ? error.message : "Failed to copy message",
+      )
+    }
+  }
+
+  private getRefreshPrompt(
+    message: ChatMessageRecord,
+  ):
+    | {
+        conversationId: string
+        sourceRole: "user" | "assistant"
+        prompt: string
+        context: ContextSnapshot | null
+        runtimeSessionId: string | null
+      }
+    | null {
+    const messages =
+      this.latestChatState?.messagesByConversation[message.conversationId] ?? []
+    if (messages.length === 0) {
+      return null
+    }
+
+    if (message.role === "user" && message.text.trim()) {
+      return {
+        conversationId: message.conversationId,
+        sourceRole: "user",
+        prompt: message.text,
+        context: message.context ?? null,
+        runtimeSessionId:
+          this.plugin.chatManager.getConversationRuntimeSessionId(
+            message.conversationId,
+          ),
+      }
+    }
+
+    const messageIndex = messages.findIndex(({ id }) => id === message.id)
+    if (messageIndex <= 0) {
+      return null
+    }
+    for (let index = messageIndex - 1; index >= 0; index -= 1) {
+      const candidate = messages[index]
+      if (candidate?.role === "user" && candidate.text.trim()) {
+        return {
+          conversationId: message.conversationId,
+          sourceRole: "assistant",
+          prompt: candidate.text,
+          context: candidate.context ?? null,
+          runtimeSessionId:
+            this.plugin.chatManager.getConversationRuntimeSessionId(
+              message.conversationId,
+            ),
+        }
+      }
+    }
+    return null
+  }
+
+  private async refreshMessage(request: {
+    conversationId: string
+    sourceRole: "user" | "assistant"
+    prompt: string
+    context: ContextSnapshot | null
+    runtimeSessionId: string | null
+  }): Promise<void> {
+    if (!this.plugin.ensureAnteInstalled("Chat with Ante")) {
+      return
+    }
+    if (this.hasRunningTaskForConversation(request.conversationId)) {
+      new Notice("Stop the active chat task before refreshing a message")
+      return
+    }
+
+    this.shouldAutoScrollToBottom = true
+    const taskId = crypto.randomUUID()
+    let userMessageId = ""
+    let createdConversation = false
+
+    if (request.sourceRole === "user") {
+      const pendingSend = this.plugin.chatManager.appendUserPrompt(
+        request.prompt,
+        request.context,
+      )
+      userMessageId = pendingSend.userMessageId
+      createdConversation = pendingSend.createdConversation
+    }
+
+    this.plugin.chatManager.createAssistantTurn(request.conversationId, taskId)
+    try {
+      await this.plugin.taskEngine.queueChatTask(
+        taskId,
+        request.prompt,
+        Boolean(request.runtimeSessionId),
+        request.context,
+        request.runtimeSessionId,
+      )
+    } catch (error) {
+      const removedTaskIds = this.plugin.chatManager.rollbackPendingSend(
+        request.conversationId,
+        userMessageId,
+        taskId,
+        createdConversation,
+      )
+      this.plugin.taskEngine.clearTasks(removedTaskIds)
+      throw error
+    }
   }
 
   private runPrompt(): void {

@@ -2,11 +2,12 @@ import type {
   ContextSnapshot,
   DocumentChangeArtifact,
   RuntimeApprovalRequest,
-  RuntimeProcessLane
+  RuntimeProcessLane,
+  RuntimeTelemetryState
 } from "./types";
 
 export type ChatMessageRole = "user" | "assistant";
-export type ChatMessageStatus = "streaming" | "completed" | "failed" | "awaiting-apply";
+export type ChatMessageStatus = "streaming" | "completed" | "cancelled" | "failed" | "awaiting-apply";
 
 export interface ChatTurnRef {
   taskId: string;
@@ -16,6 +17,7 @@ export interface ChatTurnRef {
 export interface ChatMessageRuntimeState {
   approval?: RuntimeApprovalRequest;
   processLane?: RuntimeProcessLane;
+  telemetry?: RuntimeTelemetryState;
   error?: string;
   artifactIds: string[];
   artifacts?: DocumentChangeArtifact[];

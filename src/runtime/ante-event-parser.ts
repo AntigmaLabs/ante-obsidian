@@ -3,6 +3,7 @@ import type {
   RuntimeApprovalRequest,
   RuntimeChangeSuggestion,
   RuntimeEvent,
+  RuntimeUsage,
   RuntimeProcessLane,
   RuntimeProcessStep,
   RuntimeProcessStepStatus
@@ -113,6 +114,38 @@ export const extractErrorMessage = (value: unknown): string => {
   }
   const direct = findNestedStringField(value, ["message", "error", "description", "details"]);
   return direct ?? "Ante returned an unknown error";
+};
+
+export const extractUsage = (value: unknown): RuntimeUsage => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { raw: value };
+  }
+  const record = value as Record<string, unknown>;
+  const readNumber = (keys: string[]): number | undefined => {
+    for (const key of keys) {
+      const candidate = record[key];
+      if (typeof candidate === "number" && Number.isFinite(candidate)) {
+        return candidate;
+      }
+    }
+    return undefined;
+  };
+
+  return {
+    promptTokens: readNumber(["prompt_tokens", "promptTokens", "input_tokens", "inputTokens"]),
+    completionTokens: readNumber(["completion_tokens", "completionTokens", "output_tokens", "outputTokens"]),
+    totalTokens: readNumber(["total_tokens", "totalTokens"]),
+    raw: value
+  };
+};
+
+export const extractInfoMessage = (value: unknown): string | undefined => {
+  const text = extractText(value).trim();
+  if (text) {
+    return text;
+  }
+  const direct = findNestedStringField(value, ["message", "text", "content", "details"]);
+  return direct?.trim() || undefined;
 };
 
 export const extractTurnPauseApproval = (value: unknown): RuntimeApprovalRequest | null => {

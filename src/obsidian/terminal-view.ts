@@ -13,6 +13,7 @@ import {
   shouldHandlePromptEnter,
   shouldStopFromPromptShortcut,
 } from "../core/terminal-input"
+import { terminalStatus, terminalStatusClass } from "../core/terminal-status"
 import {
   renderArtifactDiff,
   renderDiffSummary,
@@ -78,39 +79,6 @@ const formatTime = (timestamp: string): string =>
     minute: "2-digit",
     second: "2-digit",
   })
-
-const terminalStatus = (task: TaskRecord | undefined): string => {
-  if (!task) {
-    return "ready"
-  }
-
-  switch (task.status) {
-    case "running":
-      return "active"
-    case "applied":
-      return "done"
-    case "failed":
-      return "error"
-    case "discarded":
-      return "stopped"
-    default:
-      return task.status
-  }
-}
-
-const terminalStatusClass = (task: TaskRecord | undefined): string => {
-  const status = terminalStatus(task)
-  switch (status) {
-    case "active":
-      return "tmd-is-running"
-    case "error":
-      return "tmd-is-failed"
-    case "stopped":
-      return "tmd-is-muted"
-    default:
-      return "tmd-is-completed"
-  }
-}
 
 const summarizeContext = (
   context: ContextSnapshot | null | undefined,

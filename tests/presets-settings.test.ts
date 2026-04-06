@@ -66,3 +66,8 @@ test("normalizeSettings does not share builtin preset preference objects with de
   assert.equal(fresh.builtinPresetPreferences[0]!.enabled, true);
   assert.equal(fresh.builtinPresetPreferences[0]!.sortOrder, 0);
 });
+
+test("normalizeSettings enables chat runtime details by default and preserves explicit opt-out", () => {
+  assert.equal(normalizeSettings(undefined).showChatRuntimeDetails, true);
+  assert.equal(normalizeSettings({ showChatRuntimeDetails: false }).showChatRuntimeDetails, false);
+});

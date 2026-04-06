@@ -181,6 +181,87 @@ test("non-approval TurnPause still emits a log when auto-approve is enabled", ()
   assert.match(events[0]?.text ?? "", /Ante TurnPause/);
 });
 
+test("thinking, usage, and compaction events are surfaced as structured runtime events", () => {
+  const driver = new TestSessionDriver(() => config, () => new FakeTransport());
+  const events: Array<{ type: string; text?: string; mode?: string; phase?: string; totalTokens?: number }> = [];
+  const observer: RuntimeObserver = {
+    onEvent: (event) => {
+      switch (event.type) {
+        case "session.thinking":
+          events.push({ type: event.type, text: event.text, mode: event.mode });
+          break;
+        case "session.usage":
+          events.push({ type: event.type, totalTokens: event.usage.totalTokens });
+          break;
+        case "session.compaction":
+          events.push({ type: event.type, phase: event.phase });
+          break;
+      }
+    },
+    onExit: () => {}
+  };
+
+  driver.primeRun(observer);
+  driver.emit(JSON.stringify({ event: { ThinkingDelta: { delta: "plan..." } } }));
+  driver.emit(JSON.stringify({ event: { UsageUpdate: { total_tokens: 42 } } }));
+  driver.emit(JSON.stringify({ event: "CompactStart" }));
+  driver.emit(JSON.stringify({ event: "CompactEnd" }));
+
+  assert.deepEqual(events, [
+    { type: "session.thinking", text: "plan...", mode: "delta" },
+    { type: "session.usage", totalTokens: 42 },
+    { type: "session.compaction", phase: "start" },
+    { type: "session.compaction", phase: "end" }
+  ]);
+});
+
+test("cancelActiveRun sends Interrupt and preserves the session when Ante confirms interruption", () => {
+  const transport = new FakeTransport();
+  const driver = new TestSessionDriver(() => config, () => transport);
+  const exits: Array<{ status: "completed" | "failed" | "cancelled"; error?: string }> = [];
+  const observer: RuntimeObserver = {
+    onEvent: () => {},
+    onExit: (result) => {
+      exits.push(result);
+    }
+  };
+
+  driver.primeSession(transport, "ses_current");
+  driver.primeRun(observer);
+
+  driver.cancelActiveRun();
+
+  assert.equal(JSON.parse(transport.sentMessages.at(-1) ?? "{}").op, "Interrupt");
+
+  driver.emit(JSON.stringify({ event: { TurnEnd: { status: "Interrupted" } } }));
+
+  assert.equal(exits.at(-1)?.status, "cancelled");
+  assert.equal(driver.getActiveSessionId(), "ses_current");
+  assert.equal(transport.connected, true);
+});
+
+test("cancelActiveRun falls back to disconnect when Ante does not acknowledge the interrupt", async () => {
+  const transport = new FakeTransport();
+  const driver = new TestSessionDriver(() => config, () => transport);
+  const exits: Array<{ status: "completed" | "failed" | "cancelled"; error?: string }> = [];
+  const observer: RuntimeObserver = {
+    onEvent: () => {},
+    onExit: (result) => {
+      exits.push(result);
+    }
+  };
+
+  driver.primeSession(transport, "ses_current");
+  driver.primeRun(observer);
+
+  driver.cancelActiveRun();
+  await new Promise((resolve) => setTimeout(resolve, 850));
+
+  assert.equal(exits.at(-1)?.status, "cancelled");
+  assert.equal(driver.getActiveSessionId(), null);
+  assert.equal(transport.connected, false);
+});
+
 test("run resumes the requested session before sending user input", async () => {
   const transport = new FakeTransport();
   const driver = new TestSessionDriver(() => config, () => transport);

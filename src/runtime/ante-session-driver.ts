@@ -8,11 +8,13 @@ import type {
 import {
   buildProcessLaneFromToolPayload,
   extractErrorMessage,
+  extractInfoMessage,
   extractSessionId,
   extractText,
   extractTurnPauseApproval,
   extractTurnPauseDetail,
   extractTurnStatus,
+  extractUsage,
   getVariant,
   parseAssistantMessage
 } from "./ante-event-parser";
@@ -74,6 +76,13 @@ type ShutdownState = {
   timer: ReturnType<typeof setTimeout> | null;
 };
 
+type InterruptState = {
+  observer: RuntimeObserver;
+  timer: ReturnType<typeof setTimeout> | null;
+};
+
+const INTERRUPT_FALLBACK_MS = 750;
+
 const logDebug = (...args: unknown[]): void => {
   if (globalThis.localStorage?.getItem("tmd-debug") === "true") {
     console.info("[tmd]", ...args);
@@ -121,6 +130,7 @@ export class AnteSessionDriver implements AnteRuntime {
   private sessionStarting = false;
   private sessionTransition: SessionTransitionState | null = null;
   private shutdownState: ShutdownState | null = null;
+  private interruptState: InterruptState | null = null;
   private warmup: WarmupState | null = null;
   private lastSentContextFingerprint: string | null = null;
   private readonly startupDiagnostics: Array<{ stream: "stdout" | "stderr"; text: string }> = [];
@@ -164,10 +174,26 @@ export class AnteSessionDriver implements AnteRuntime {
 
   cancelActiveRun(): void {
     if (this.activeRun) {
-      const observer = this.activeRun.observer;
-      this.activeRun = null;
-      this.stopTransport();
-      observer.onExit({ status: "cancelled" });
+      if (!this.transport?.isConnected() || this.interruptState) {
+        this.finishCancelledRun(true);
+        return;
+      }
+
+      this.interruptState = {
+        observer: this.activeRun.observer,
+        timer: setTimeout(() => {
+          if (!this.interruptState) {
+            return;
+          }
+          this.finishCancelledRun(true);
+        }, INTERRUPT_FALLBACK_MS)
+      };
+      this.activeRun.observer.onEvent({
+        type: "log",
+        stream: "system",
+        text: "Interrupting Ante turn"
+      });
+      this.sendOperation("Interrupt");
     }
   }
 
@@ -329,6 +355,7 @@ export class AnteSessionDriver implements AnteRuntime {
       console.error("[tmd transport] error", error);
       const errorWithDiagnostics = this.withStartupDiagnostics(error);
       this.rejectShutdown(errorWithDiagnostics);
+      this.clearInterruptTimer();
       this.warmup?.reject(error);
       this.warmup = null;
       this.rejectSessionTransition(errorWithDiagnostics);
@@ -347,6 +374,7 @@ export class AnteSessionDriver implements AnteRuntime {
       }
       console.info("[tmd transport] close", info ?? {});
       const shutdown = this.shutdownState;
+      this.clearInterruptTimer();
       if (shutdown) {
         this.clearShutdownTimer(shutdown);
         this.shutdownState = null;
@@ -512,6 +540,11 @@ export class AnteSessionDriver implements AnteRuntime {
         if (!this.activeRun) {
           return;
         }
+        this.activeRun.observer.onEvent({
+          type: "session.info",
+          level: "info",
+          message: "Ante session updated"
+        });
         return;
       default:
         if (!this.activeRun) {
@@ -543,6 +576,30 @@ export class AnteSessionDriver implements AnteRuntime {
         this.activeRun.finalMessage += delta;
         this.activeRun.observer.onEvent({ type: "log", stream: "stdout", text: delta });
         this.activeRun.emittedStdout = true;
+        return;
+      }
+      case "ThinkingDelta": {
+        const delta = extractText(variant.payload);
+        if (!delta) {
+          return;
+        }
+        this.activeRun.observer.onEvent({
+          type: "session.thinking",
+          text: delta,
+          mode: "delta"
+        });
+        return;
+      }
+      case "Thinking": {
+        const text = extractText(variant.payload).trim();
+        if (!text) {
+          return;
+        }
+        this.activeRun.observer.onEvent({
+          type: "session.thinking",
+          text,
+          mode: "full"
+        });
         return;
       }
       case "AgentMessage": {
@@ -640,10 +697,43 @@ export class AnteSessionDriver implements AnteRuntime {
         });
         return;
       }
+      case "UsageUpdate":
+        this.activeRun.observer.onEvent({
+          type: "session.usage",
+          usage: extractUsage(variant.payload)
+        });
+        return;
+      case "CompactStart":
+        this.activeRun.observer.onEvent({
+          type: "session.compaction",
+          phase: "start"
+        });
+        return;
+      case "CompactEnd":
+        this.activeRun.observer.onEvent({
+          type: "session.compaction",
+          phase: "end"
+        });
+        return;
+      case "Info":
+        this.activeRun.observer.onEvent({
+          type: "session.info",
+          level: "info",
+          message: extractInfoMessage(variant.payload)
+        });
+        return;
+      case "Goodbye":
+        this.activeRun.observer.onEvent({
+          type: "session.info",
+          level: "goodbye",
+          message: extractInfoMessage(variant.payload)
+        });
+        return;
       case "TurnEnd": {
         const status = extractTurnStatus(variant.payload)?.toLowerCase();
         const errorMessage = extractErrorMessage(variant.payload);
         const isSuccess = Boolean(status && ["completed", "success", "succeeded", "ok"].includes(status));
+        const isInterrupted = Boolean(status && ["interrupted", "cancelled", "canceled", "aborted"].includes(status));
         const completedAtMs = performance.now();
         const totalMs = Math.round(completedAtMs - this.activeRun.startedAtMs);
         const sessionBootMs =
@@ -659,11 +749,16 @@ export class AnteSessionDriver implements AnteRuntime {
         logDebug(
           `timing total=${totalMs}ms${sessionBootMs != null ? ` session=${sessionBootMs}ms` : ""}${postSendToFirstEventMs != null ? ` send->event=${postSendToFirstEventMs}ms` : ""}${postSendToFirstStdoutMs != null ? ` send->stdout=${postSendToFirstStdoutMs}ms` : ""}`
         );
+        if (this.interruptState && isInterrupted) {
+          this.finishCancelledRun(false);
+          return;
+        }
         if (!isSuccess) {
           this.activeRun.observer.onEvent({ type: "process.update", process: undefined });
           this.activeRun.observer.onEvent({ type: "session.failed", error: errorMessage });
           this.activeRun.completed = true;
           this.activeRun.observer.onExit({ status: "failed", error: errorMessage });
+          this.clearInterruptTimer();
           this.activeRun = null;
           return;
         }
@@ -676,6 +771,7 @@ export class AnteSessionDriver implements AnteRuntime {
         this.activeRun.observer.onEvent({ type: "session.completed", summary: "Ante session completed" });
         this.activeRun.completed = true;
         this.activeRun.observer.onExit({ status: "completed" });
+        this.clearInterruptTimer();
         this.activeRun = null;
         return;
       }
@@ -727,6 +823,7 @@ export class AnteSessionDriver implements AnteRuntime {
       | { ResumeSession: { session_id: string } }
       | { UserInput: string }
       | { ApprovalResponse: { turn_id: string; responses: Array<[string, RuntimeApprovalDecision]> } }
+      | "Interrupt"
       | "Shutdown"
   ): string {
     const opId = generateOpId();
@@ -735,6 +832,7 @@ export class AnteSessionDriver implements AnteRuntime {
   }
 
   private stopTransport(): void {
+    this.clearInterruptTimer();
     if (this.shutdownState) {
       this.clearShutdownTimer(this.shutdownState);
       this.shutdownState = null;
@@ -831,6 +929,37 @@ export class AnteSessionDriver implements AnteRuntime {
     this.clearShutdownTimer(shutdown);
     this.shutdownState = null;
     shutdown.reject(error);
+  }
+
+  private clearInterruptTimer(): void {
+    if (this.interruptState?.timer != null) {
+      clearTimeout(this.interruptState.timer);
+      this.interruptState.timer = null;
+    }
+    this.interruptState = null;
+  }
+
+  private finishCancelledRun(disconnectTransport: boolean): void {
+    const activeRun = this.activeRun;
+    if (!activeRun) {
+      this.clearInterruptTimer();
+      if (disconnectTransport) {
+        this.stopTransport();
+      }
+      return;
+    }
+
+    this.clearInterruptTimer();
+    activeRun.observer.onEvent({ type: "process.update", process: undefined });
+    activeRun.completed = true;
+    if (disconnectTransport) {
+      this.activeRun = null;
+      this.stopTransport();
+      activeRun.observer.onExit({ status: "cancelled" });
+      return;
+    }
+    activeRun.observer.onExit({ status: "cancelled" });
+    this.activeRun = null;
   }
 
   private createSessionTransition(

@@ -100,6 +100,18 @@ const cloneMessage = (message: ChatMessageRecord): ChatMessageRecord => ({
               steps: message.runtime.processLane.steps.map((step) => ({ ...step }))
             }
           : undefined,
+        telemetry: message.runtime.telemetry
+          ? {
+              ...message.runtime.telemetry,
+              usage: message.runtime.telemetry.usage
+                ? { ...message.runtime.telemetry.usage }
+                : undefined,
+              lastInfo: message.runtime.telemetry.lastInfo
+                ? { ...message.runtime.telemetry.lastInfo }
+                : undefined,
+              timeline: message.runtime.telemetry.timeline.map((entry) => ({ ...entry }))
+            }
+          : undefined,
         error: message.runtime.error,
         artifactIds: [...message.runtime.artifactIds],
         artifacts: message.runtime.artifacts?.map((artifact) => cloneArtifact(artifact))
@@ -110,6 +122,7 @@ const cloneMessage = (message: ChatMessageRecord): ChatMessageRecord => ({
 const emptyRuntime = () => ({
   approval: undefined,
   processLane: undefined,
+  telemetry: undefined,
   error: undefined,
   artifactIds: [] as string[]
 });
@@ -585,13 +598,29 @@ export class ChatSessionManager {
         ? streamingText
         : task.textResult?.text.trim() || (hasStructuredResult ? "" : streamingText);
     const nextStatus =
-      task.error ? "failed" : task.status === "awaiting-apply" ? "awaiting-apply" : task.status === "running" ? "streaming" : "completed";
+      task.status === "cancelled"
+        ? "cancelled"
+        : task.error
+          ? "failed"
+          : task.status === "awaiting-apply"
+            ? "awaiting-apply"
+            : task.status === "running"
+              ? "streaming"
+              : "completed";
     const nextRuntime = {
       approval: task.pendingApproval,
       processLane: task.processLane
         ? {
             ...task.processLane,
             steps: task.processLane.steps.map((step) => ({ ...step }))
+          }
+        : undefined,
+      telemetry: task.telemetry
+        ? {
+            ...task.telemetry,
+            usage: task.telemetry.usage ? { ...task.telemetry.usage } : undefined,
+            lastInfo: task.telemetry.lastInfo ? { ...task.telemetry.lastInfo } : undefined,
+            timeline: task.telemetry.timeline.map((entry) => ({ ...entry }))
           }
         : undefined,
       error: task.error,
@@ -669,6 +698,7 @@ export class ChatSessionManager {
       persistedRuntimeSessionId: isRecoverableConversationSession(task) ? task.runtimeSession?.sessionId ?? "" : "",
       approval: task.pendingApproval,
       processLane: task.processLane,
+      telemetry: task.telemetry,
       artifacts: task.artifacts.map((artifact) => ({
         id: artifact.id,
         applyState: artifact.applyState,

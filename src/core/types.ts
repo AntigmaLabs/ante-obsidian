@@ -5,6 +5,7 @@ export type TaskStatus =
   | "idle"
   | "running"
   | "completed"
+  | "cancelled"
   | "failed"
   | "awaiting-apply"
   | "applied"
@@ -15,6 +16,7 @@ export type LogStream = "stdout" | "stderr" | "system" | "user";
 export type RuntimeApprovalDecision = "Accept" | "AcceptForSession" | "Skip" | "Abort";
 export type RuntimeProcessStepStatus = "pending" | "in_progress" | "completed";
 export type InsertPlacement = "before" | "after";
+export type RuntimeInfoLevel = "info" | "goodbye";
 
 export interface TextPosition {
   line: number;
@@ -83,6 +85,31 @@ export interface RuntimeProcessLane {
   steps: RuntimeProcessStep[];
 }
 
+export interface RuntimeUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  raw?: unknown;
+}
+
+export interface RuntimeTimelineEntry {
+  kind: "info" | "goodbye" | "compaction-start" | "compaction-end";
+  message?: string;
+  timestamp: string;
+}
+
+export interface RuntimeTelemetryState {
+  thinkingText?: string;
+  usage?: RuntimeUsage;
+  compacting?: boolean;
+  lastInfo?: {
+    level: RuntimeInfoLevel;
+    message?: string;
+    timestamp: string;
+  };
+  timeline: RuntimeTimelineEntry[];
+}
+
 export type DocumentChangeTarget =
   | {
       type: "selection";
@@ -144,6 +171,7 @@ export interface TaskRecord {
   artifacts: DocumentChangeArtifact[];
   pendingApproval?: RuntimeApprovalRequest;
   processLane?: RuntimeProcessLane;
+  telemetry?: RuntimeTelemetryState;
   error?: string;
   startedAt: string;
   endedAt?: string;
@@ -174,6 +202,10 @@ export type RuntimeEvent =
   | { type: "runtime.session"; provider: "ante"; sessionId: string }
   | { type: "session.approval"; approval: RuntimeApprovalRequest }
   | { type: "process.update"; process?: RuntimeProcessLane }
+  | { type: "session.thinking"; text: string; mode: "full" | "delta" }
+  | { type: "session.usage"; usage: RuntimeUsage }
+  | { type: "session.compaction"; phase: "start" | "end" }
+  | { type: "session.info"; level: RuntimeInfoLevel; message?: string }
   | { type: "result.text"; text: string }
   | { type: "result.change"; change: RuntimeChangeSuggestion }
   | { type: "result.changes"; changes: RuntimeChangeSuggestion[] }

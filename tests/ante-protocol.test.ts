@@ -7,3 +7,9 @@ test("serializeOperation supports Shutdown operations", () => {
   assert.equal(payload.id, "op_shutdown");
   assert.equal(payload.op, "Shutdown");
 });
+
+test("serializeOperation supports Interrupt operations", () => {
+  const payload = JSON.parse(serializeOperation("Interrupt", "op_interrupt"));
+  assert.equal(payload.id, "op_interrupt");
+  assert.equal(payload.op, "Interrupt");
+});

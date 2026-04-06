@@ -8,6 +8,8 @@ import type {
   RuntimeChangeSuggestion,
   RuntimeApprovalDecision,
   RuntimeEvent,
+  RuntimeTelemetryState,
+  RuntimeTimelineEntry,
   TaskRecord,
   TaskRequest,
   TmdState,
@@ -20,6 +22,7 @@ type StateListener = (state: TmdState) => void;
 
 const MAX_STDOUT_BUFFER_CHARS = 16000;
 const STDOUT_FLUSH_INTERVAL_MS = 100;
+const MAX_RUNTIME_TIMELINE_ENTRIES = 12;
 
 const appendStdoutPreview = (existing: string, incoming: string, preserveFullText: boolean): string => {
   if (!incoming) {
@@ -395,8 +398,9 @@ export class TaskEngine {
           if (result.status === "cancelled") {
             this.patchTask(request.taskId, {
               pendingApproval: undefined,
-              status: "failed",
-              error: "Ante task cancelled",
+              processLane: undefined,
+              status: "cancelled",
+              error: undefined,
               endedAt: new Date().toISOString()
             });
           } else if (result.status === "failed" && result.error) {
@@ -452,6 +456,46 @@ export class TaskEngine {
         return;
       case "process.update":
         this.patchTask(request.taskId, { processLane: event.process });
+        return;
+      case "session.thinking":
+        this.updateTaskTelemetry(request.taskId, (telemetry) => ({
+          ...telemetry,
+          thinkingText:
+            event.mode === "full"
+              ? event.text
+              : `${telemetry.thinkingText ?? ""}${event.text}`
+        }));
+        return;
+      case "session.usage":
+        this.updateTaskTelemetry(request.taskId, (telemetry) => ({
+          ...telemetry,
+          usage: event.usage
+        }));
+        return;
+      case "session.compaction":
+        this.updateTaskTelemetry(request.taskId, (telemetry) => ({
+          ...telemetry,
+          compacting: event.phase === "start",
+          timeline: this.appendTelemetryTimeline(telemetry.timeline, {
+            kind: event.phase === "start" ? "compaction-start" : "compaction-end",
+            timestamp: new Date().toISOString()
+          })
+        }));
+        return;
+      case "session.info":
+        this.updateTaskTelemetry(request.taskId, (telemetry) => ({
+          ...telemetry,
+          lastInfo: {
+            level: event.level,
+            message: event.message,
+            timestamp: new Date().toISOString()
+          },
+          timeline: this.appendTelemetryTimeline(telemetry.timeline, {
+            kind: event.level,
+            message: event.message,
+            timestamp: new Date().toISOString()
+          })
+        }));
         return;
       case "result.text":
         this.patchTask(request.taskId, {
@@ -590,6 +634,34 @@ export class TaskEngine {
       tasks: nextTasks
     };
     this.notify();
+  }
+
+  private updateTaskTelemetry(
+    taskId: string,
+    updater: (telemetry: RuntimeTelemetryState) => RuntimeTelemetryState
+  ): void {
+    const task = this.getTask(taskId);
+    const currentTelemetry: RuntimeTelemetryState = task.telemetry
+      ? {
+          ...task.telemetry,
+          usage: task.telemetry.usage ? { ...task.telemetry.usage } : undefined,
+          lastInfo: task.telemetry.lastInfo ? { ...task.telemetry.lastInfo } : undefined,
+          timeline: [...task.telemetry.timeline]
+        }
+      : {
+          timeline: []
+        };
+    this.patchTask(taskId, {
+      telemetry: updater(currentTelemetry)
+    });
+  }
+
+  private appendTelemetryTimeline(
+    timeline: RuntimeTimelineEntry[],
+    entry: RuntimeTimelineEntry
+  ): RuntimeTimelineEntry[] {
+    const next = [...timeline, entry];
+    return next.slice(-MAX_RUNTIME_TIMELINE_ENTRIES);
   }
 
   private patchArtifact(taskId: string, artifactId: string, patch: Partial<DocumentChangeArtifact>): void {

@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import { homedir } from "node:os";
 import {
   extractErrorMessage,
+  extractInfoMessage,
   extractTurnPauseApproval,
   extractTurnStatus,
+  extractUsage,
   parseAssistantMessage
 } from "../src/runtime/ante-event-parser";
 import { resolveCommandPath } from "../src/runtime/transport/ante-stdio-transport";
@@ -118,6 +120,35 @@ test("parseAssistantMessage parses insert-block anchors", () => {
       }
     }
   ]);
+});
+
+test("extractUsage accepts canonical usage payloads", () => {
+  assert.deepEqual(
+    extractUsage({
+      prompt_tokens: 12,
+      completion_tokens: 7,
+      total_tokens: 19
+    }),
+    {
+      promptTokens: 12,
+      completionTokens: 7,
+      totalTokens: 19,
+      raw: {
+        prompt_tokens: 12,
+        completion_tokens: 7,
+        total_tokens: 19
+      }
+    }
+  );
+});
+
+test("extractInfoMessage prefers structured text fields", () => {
+  assert.equal(
+    extractInfoMessage({
+      message: "context compacted"
+    }),
+    "context compacted"
+  );
 });
 
 test("resolveCommandPath falls back to ~/.ante/bin for bare ante command", () => {

@@ -27,6 +27,7 @@ export type AnteOperation =
         responses: Array<[string, RuntimeApprovalDecision]>;
       };
     }
+  | "Interrupt"
   | "Shutdown";
 
 const generateUlid = (): string => {
