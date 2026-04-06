@@ -26,3 +26,30 @@ test("normalizeCommandName rejects unsafe executable names", () => {
   assert.equal(__test__.normalizeCommandName("$(whoami)"), "");
   assert.equal(__test__.normalizeCommandName(""), "");
 });
+
+test("command lookup tries interactive fallback for zsh and bash", () => {
+  assert.deepEqual(__test__.getCommandLookupShellArgs("/bin/zsh"), [["-lc"], ["-ic"]]);
+  assert.deepEqual(__test__.getCommandLookupShellArgs("/opt/homebrew/bin/bash"), [["-lc"], ["-ic"]]);
+});
+
+test("command lookup keeps login-only mode for other shells", () => {
+  assert.deepEqual(__test__.getCommandLookupShellArgs("/bin/sh"), [["-lc"]]);
+  assert.deepEqual(__test__.getCommandLookupShellArgs("/usr/local/bin/fish"), [["-lc"]]);
+});
+
+test("command lookup extracts the last non-empty line", () => {
+  assert.equal(
+    __test__.extractCommandLookupResult("\nwelcome\n/Users/test/.local/bin/ante\n"),
+    "/Users/test/.local/bin/ante",
+  );
+  assert.equal(__test__.extractCommandLookupResult(""), "");
+});
+
+test("command lookup result validation accepts only safe path-like outputs", () => {
+  assert.equal(__test__.isValidCommandLookupResult("/Users/test/.local/bin/ante", "ante"), true);
+  assert.equal(__test__.isValidCommandLookupResult("ante", "ante"), true);
+  assert.equal(__test__.isValidCommandLookupResult("alias ante='ante --stdio'", "ante"), false);
+  assert.equal(__test__.isValidCommandLookupResult("ante is /Users/test/.local/bin/ante", "ante"), false);
+  assert.equal(__test__.isValidCommandLookupResult("Welcome to zsh", "ante"), false);
+  assert.equal(__test__.isValidCommandLookupResult("other-command", "ante"), false);
+});

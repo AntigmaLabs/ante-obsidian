@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { basename } from "node:path";
 
 const DEFAULT_SHELL = "/bin/zsh";
 const VALID_ENV_VAR_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -41,9 +42,9 @@ const readFromShell = (shellPath: string, variableName: string): Promise<string>
     });
   });
 
-const runShellCommand = (shellPath: string, command: string): Promise<string> =>
+const runShellCommand = (shellPath: string, shellArgs: string[], command: string): Promise<string> =>
   new Promise((resolve, reject) => {
-    const child = spawn(shellPath, ["-lc", command], {
+    const child = spawn(shellPath, [...shellArgs, command], {
       stdio: ["ignore", "pipe", "pipe"]
     });
 
@@ -89,25 +90,67 @@ export const normalizeCommandName = (commandName: string): string => {
   return VALID_COMMAND_NAME.test(trimmed) ? trimmed : "";
 };
 
+const getCommandLookupShellArgs = (shellPath: string): string[][] => {
+  const shellName = basename(shellPath).toLowerCase();
+  if (shellName === "zsh" || shellName === "bash") {
+    return [["-lc"], ["-ic"]];
+  }
+  return [["-lc"]];
+};
+
+const extractCommandLookupResult = (stdout: string): string => {
+  const lines = stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.length > 0 ? lines[lines.length - 1]! : "";
+};
+
+const isValidCommandLookupResult = (result: string, requestedCommand: string): boolean => {
+  if (!result) {
+    return false;
+  }
+  if (result.startsWith("alias ") || result.includes("=") || /\s/.test(result)) {
+    return false;
+  }
+  if (result.startsWith("/")) {
+    return true;
+  }
+  return result === requestedCommand;
+};
+
 export const readCommandPathFromLoginShell = async (commandName: string): Promise<string> => {
   const normalized = normalizeCommandName(commandName);
   if (!normalized) {
     return "";
   }
 
-  const shellPath = process.env.SHELL?.trim() || DEFAULT_SHELL;
+  const shellCandidates = [process.env.SHELL?.trim() || DEFAULT_SHELL, DEFAULT_SHELL].filter(
+    (shellPath, index, shells) => shellPath && shells.indexOf(shellPath) === index
+  );
   const command = `command -v -- ${normalized}`;
-  try {
-    return await runShellCommand(shellPath, command);
-  } catch {
-    if (shellPath !== DEFAULT_SHELL) {
-      return runShellCommand(DEFAULT_SHELL, command);
+
+  for (const shellPath of shellCandidates) {
+    for (const shellArgs of getCommandLookupShellArgs(shellPath)) {
+      try {
+        const rawOutput = await runShellCommand(shellPath, shellArgs, command);
+        const result = extractCommandLookupResult(rawOutput);
+        if (isValidCommandLookupResult(result, normalized)) {
+          return result;
+        }
+      } catch {
+        continue;
+      }
     }
-    return "";
   }
+
+  return "";
 };
 
 export const __test__ = {
   normalizeEnvVarName,
-  normalizeCommandName
+  normalizeCommandName,
+  getCommandLookupShellArgs,
+  extractCommandLookupResult,
+  isValidCommandLookupResult
 };

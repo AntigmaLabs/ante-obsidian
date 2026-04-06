@@ -1,7 +1,7 @@
 {
   "id": "ante-md",
   "name": "Ante md",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "minAppVersion": "1.6.0",
   "description": "AI second brian, continous ingestion, indexing, and evolving. Powered by Ante agent core from Antigma Labs ",
   "author": "Antigma Labs",
