@@ -28,6 +28,23 @@ const cloneContext = (context: ContextSnapshot | null | undefined): ContextSnaps
       }
     : null;
 
+const contextSignature = (context: ContextSnapshot | null | undefined): string =>
+  context
+    ? JSON.stringify({
+        vaultPath: context.vaultPath,
+        filePath: context.filePath,
+        noteTitle: context.noteTitle,
+        documentText: context.documentText,
+        selection: context.selection
+          ? {
+              text: context.selection.text,
+              from: context.selection.from,
+              to: context.selection.to
+            }
+          : null
+      })
+    : "";
+
 const cloneArtifact = (artifact: DocumentChangeArtifact): DocumentChangeArtifact => ({
   ...artifact,
   target:
@@ -55,6 +72,11 @@ const defaultConversationTitle = (prompt: string): string => {
   }
   return normalized.slice(0, MAX_CONVERSATION_TITLE_CHARS);
 };
+
+const isEmptyDraftConversation = (conversation: ChatConversationRecord): boolean =>
+  !conversation.archived &&
+  conversation.messageIds.length === 0 &&
+  conversation.title === "New chat";
 
 const sortConversations = (conversations: ChatConversationRecord[]): ChatConversationRecord[] =>
   [...conversations].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
@@ -282,10 +304,29 @@ export class ChatSessionManager {
   }
 
   createConversation(options?: { title?: string; context?: ContextSnapshot | null }): ChatConversationRecord {
+    const requestedTitle = options?.title?.trim() || "New chat";
+    if (requestedTitle === "New chat") {
+      const existingDraft = sortConversations([...this.conversations.values()]).find((conversation) =>
+        isEmptyDraftConversation(conversation)
+      );
+      if (existingDraft) {
+        if (
+          options?.context &&
+          contextSignature(existingDraft.pinnedContext) !== contextSignature(options.context)
+        ) {
+          existingDraft.pinnedContext = cloneContext(options.context);
+          existingDraft.updatedAt = new Date().toISOString();
+        }
+        this.activeConversationId = existingDraft.id;
+        this.persistAndNotify();
+        return existingDraft;
+      }
+    }
+
     const timestamp = new Date().toISOString();
     const conversation: ChatConversationRecord = {
       id: crypto.randomUUID(),
-      title: options?.title?.trim() || "New chat",
+      title: requestedTitle,
       createdAt: timestamp,
       updatedAt: timestamp,
       pinnedContext: cloneContext(options?.context),

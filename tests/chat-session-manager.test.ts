@@ -299,6 +299,38 @@ test("persisted chat state retains artifact snapshots for old conversations", ()
   }
 });
 
+test("reusing an empty draft updates pinned context to the latest note context", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = createWindowStub();
+
+  try {
+    const pluginStub = {
+      saveChatState: async () => {}
+    };
+
+    const manager = new ChatSessionManager(pluginStub as never);
+    const firstContext: ContextSnapshot = {
+      ...context,
+      filePath: "First.md",
+      noteTitle: "First"
+    };
+    const secondContext: ContextSnapshot = {
+      ...context,
+      filePath: "Second.md",
+      noteTitle: "Second"
+    };
+
+    const firstDraft = manager.createConversation({ context: firstContext });
+    const reusedDraft = manager.createConversation({ context: secondContext });
+
+    assert.equal(reusedDraft.id, firstDraft.id);
+    assert.equal(reusedDraft.pinnedContext?.filePath, "Second.md");
+    assert.equal(manager.getActiveConversation().id, firstDraft.id);
+  } finally {
+    (globalThis as { window?: unknown }).window = originalWindow;
+  }
+});
+
 test("conversation runtime session is only persisted after the task completes", () => {
   const originalWindow = (globalThis as { window?: unknown }).window;
   (globalThis as { window?: unknown }).window = createWindowStub();

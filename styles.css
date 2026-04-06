@@ -14,6 +14,11 @@
   --tmd-type-reading-size: 1.04rem;
   --tmd-type-reading-leading: 1.72;
   --tmd-type-mono-size: 12px;
+  --tmd-radius-xs: 8px;
+  --tmd-radius-sm: 10px;
+  --tmd-radius-md: 14px;
+  --tmd-radius-lg: 18px;
+  --tmd-radius-pill: 999px;
   padding: 16px;
   overflow-y: auto;
 }
@@ -22,7 +27,7 @@
   margin: 0 0 16px;
   padding: 12px;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 10px;
+  border-radius: var(--tmd-radius-sm);
   background: var(--background-secondary);
 }
 
@@ -70,7 +75,7 @@
   word-break: break-word;
   background: var(--background-primary);
   padding: 12px;
-  border-radius: 8px;
+  border-radius: var(--tmd-radius-xs);
   border: 1px solid var(--background-modifier-border);
 }
 
@@ -89,23 +94,23 @@
 
 .tmd-diff-card {
   overflow: hidden;
-  margin: 0 0 16px;
-  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 74%, transparent);
-  border-radius: 22px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--background-primary) 98%, white 2%), color-mix(in srgb, var(--background-secondary) 96%, var(--background-primary) 4%));
+  margin: 2px 0 8px;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 48%, transparent);
+  border-radius: var(--tmd-radius-md);
+  background: color-mix(in srgb, var(--background-secondary) 28%, var(--background-primary) 72%);
   box-shadow: none;
 }
 
 .tmd-diff-card-list {
-  background: color-mix(in srgb, var(--background-secondary) 88%, var(--background-primary) 12%);
+  background: transparent;
 }
 
 .tmd-diff-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 18px 22px;
+  gap: 12px;
+  padding: 10px 14px;
   background: transparent;
 }
 
@@ -113,38 +118,42 @@
   display: inline-flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   flex: 1 1 auto;
   min-width: 0;
-  color: var(--text-normal);
-  font-weight: 700;
+  color: color-mix(in srgb, var(--text-muted) 82%, var(--text-normal) 18%);
+  font-weight: 600;
 }
 
 .tmd-diff-summary-count {
-  font-size: 1.06rem;
+  font-size: 0.88rem;
+  letter-spacing: -0.01em;
 }
 
 .tmd-diff-summary-action {
-  padding: 6px 14px;
-  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 72%, transparent);
-  border-radius: 999px;
-  background: var(--background-primary);
-  color: var(--text-normal);
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--tmd-radius-pill);
+  background: color-mix(in srgb, var(--background-modifier-hover) 32%, transparent);
+  color: var(--text-muted);
   box-shadow: none;
   white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .tmd-diff-summary-action:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--background-primary) 72%, var(--interactive-hover) 28%);
+  background: color-mix(in srgb, var(--background-modifier-hover) 52%, transparent);
+  color: var(--text-normal);
 }
 
 .tmd-diff-stat {
   display: inline-flex;
   align-items: center;
   padding: 0;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  font-size: 0.92rem;
+  font-size: 0.82rem;
   line-height: 1;
   white-space: nowrap;
 }
@@ -167,17 +176,17 @@
 }
 
 .tmd-diff-file + .tmd-diff-file {
-  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 62%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 42%, transparent);
 }
 
 .tmd-diff-file-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 16px;
-  min-height: 72px;
-  padding: 0 18px 0 22px;
-  background: color-mix(in srgb, var(--background-secondary) 84%, var(--background-primary) 16%);
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 12px 0 14px;
+  background: transparent;
 }
 
 .tmd-diff-file-main {
@@ -190,7 +199,7 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
-  min-height: 72px;
+  min-height: 54px;
 }
 
 button.tmd-diff-file-main {
@@ -208,16 +217,16 @@ button.tmd-diff-file-main {
 .tmd-diff-file-main:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--interactive-accent) 42%, transparent);
   outline-offset: -2px;
-  border-radius: 10px;
+  border-radius: var(--tmd-radius-sm);
 }
 
 .tmd-diff-file-name {
   display: block;
   flex: 1 1 0;
   min-width: 0;
-  font-size: 1.04rem;
-  font-weight: 720;
-  letter-spacing: -0.015em;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -228,8 +237,8 @@ button.tmd-diff-file-main {
   display: flex;
   align-items: center;
   justify-content: end;
-  gap: 12px;
-  min-height: 72px;
+  gap: 10px;
+  min-height: 54px;
 }
 
 .tmd-preset-section {
@@ -313,7 +322,7 @@ button.tmd-diff-file-main {
 .tmd-updates-list {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--background-modifier-border) 72%, transparent);
-  border-radius: 14px;
+  border-radius: var(--tmd-radius-md);
   background: color-mix(in srgb, var(--background-primary) 96%, white 4%);
 }
 
@@ -369,7 +378,7 @@ button.tmd-diff-file-main {
   align-items: center;
   min-height: 22px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--tmd-radius-pill);
   background: color-mix(in srgb, var(--background-modifier-hover) 68%, transparent);
   color: var(--text-muted);
   font-size: 0.78rem;
@@ -530,7 +539,7 @@ button.tmd-diff-file-main {
 .tmd-preset-list {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--background-modifier-border) 72%, transparent);
-  border-radius: 14px;
+  border-radius: var(--tmd-radius-md);
   background: color-mix(in srgb, var(--background-primary) 96%, white 4%);
 }
 
@@ -563,7 +572,7 @@ button.tmd-diff-file-main {
   left: 10px;
   right: 10px;
   height: 2px;
-  border-radius: 999px;
+  border-radius: var(--tmd-radius-pill);
   background: var(--interactive-accent);
 }
 
@@ -600,7 +609,7 @@ button.tmd-diff-file-main {
 .tmd-preset-handle-dot {
   width: 4px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--tmd-radius-pill);
   background: currentColor;
 }
 
@@ -758,23 +767,23 @@ button.tmd-diff-file-main {
 .tmd-diff-file-chevron {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  color: var(--text-normal);
+  color: var(--text-muted);
   line-height: 0;
   cursor: pointer;
 }
 
 .tmd-diff-file-chevron svg {
-  width: 20px;
-  height: 20px;
-  stroke-width: 2.2px;
+  width: 18px;
+  height: 18px;
+  stroke-width: 2px;
 }
 
 .tmd-diff-file-chevron:hover {
@@ -784,12 +793,12 @@ button.tmd-diff-file-main {
 .tmd-diff-file-chevron:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--interactive-accent) 44%, transparent);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: var(--tmd-radius-xs);
 }
 
 .tmd-diff-file-body {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   padding: 0;
   background: transparent;
 }
@@ -802,22 +811,25 @@ button.tmd-diff-file-main {
 }
 
 .tmd-diff-file-actions > button {
-  padding: 6px 14px;
-  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 74%, transparent);
-  border-radius: 999px;
-  background: var(--background-primary);
-  color: var(--text-normal);
+  padding: 5px 10px;
+  border: 0;
+  border-radius: var(--tmd-radius-pill);
+  background: color-mix(in srgb, var(--background-modifier-hover) 32%, transparent);
+  color: var(--text-muted);
   box-shadow: none;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .tmd-diff-file-actions > button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--background-primary) 72%, var(--interactive-hover) 28%);
+  background: color-mix(in srgb, var(--background-modifier-hover) 52%, transparent);
+  color: var(--text-normal);
 }
 
 .tmd-diff-patch {
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 78%, transparent);
-  background: var(--background-primary);
+  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 42%, transparent);
+  background: color-mix(in srgb, var(--background-primary) 72%, transparent);
   white-space: normal;
 }
 
@@ -826,9 +838,9 @@ button.tmd-diff-file-main {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 68%, transparent);
-  background: color-mix(in srgb, var(--background-primary) 98%, var(--background-secondary) 2%);
+  padding: 7px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 44%, transparent);
+  background: color-mix(in srgb, var(--background-secondary) 18%, transparent);
 }
 
 .tmd-diff-patch-title {
@@ -847,14 +859,14 @@ button.tmd-diff-file-main {
 }
 
 .tmd-diff-patch .tmd-diff-hunk + .tmd-diff-hunk {
-  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 68%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 44%, transparent);
 }
 
 .tmd-diff-hunk-header {
-  padding: 8px 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 68%, transparent);
-  background: color-mix(in srgb, var(--background-secondary-alt) 76%, var(--background-primary) 24%);
-  color: var(--text-accent);
+  padding: 7px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 44%, transparent);
+  background: color-mix(in srgb, var(--background-secondary) 18%, transparent);
+  color: var(--text-muted);
   font-family: var(--font-monospace);
   font-size: 11px;
   letter-spacing: 0.02em;
@@ -869,15 +881,15 @@ button.tmd-diff-file-main {
 }
 
 .tmd-diff-line.is-context {
-  background: color-mix(in srgb, var(--background-primary) 98%, var(--background-secondary) 2%);
+  background: transparent;
 }
 
 .tmd-diff-line.is-add {
-  background: color-mix(in srgb, var(--color-green) 12%, var(--background-primary) 88%);
+  background: color-mix(in srgb, var(--color-green) 6%, transparent);
 }
 
 .tmd-diff-line.is-remove {
-  background: color-mix(in srgb, var(--color-red) 12%, var(--background-primary) 88%);
+  background: color-mix(in srgb, var(--color-red) 6%, transparent);
 }
 
 .tmd-diff-gutter {
@@ -921,6 +933,7 @@ button.tmd-diff-file-main {
   padding: 1px 12px 1px 0;
   white-space: pre-wrap;
   word-break: break-word;
+  font-size: 12px;
 }
 
 @media (max-width: 720px) {
@@ -972,13 +985,16 @@ button.tmd-diff-file-main {
   --tmd-chat-panel: color-mix(in srgb, var(--background-secondary) 92%, var(--background-primary) 8%);
   --tmd-chat-panel-strong: color-mix(in srgb, var(--background-secondary) 84%, var(--background-primary) 16%);
   --tmd-chat-line: color-mix(in srgb, var(--background-modifier-border) 78%, transparent);
+  --tmd-chat-line-strong: color-mix(in srgb, var(--background-modifier-border) 92%, transparent);
   --tmd-chat-user: color-mix(in srgb, var(--interactive-accent) 12%, var(--background-primary) 88%);
   --tmd-chat-user-accent: color-mix(in srgb, var(--interactive-accent) 54%, var(--text-normal) 46%);
   --tmd-chat-assistant: color-mix(in srgb, var(--background-primary) 98%, white 2%);
   --tmd-chat-assistant-accent: color-mix(in srgb, var(--text-accent) 28%, var(--background-primary) 72%);
+  --tmd-chat-approval: color-mix(in srgb, var(--color-orange) 12%, var(--background-primary) 88%);
   --tmd-chat-rail-width: 68px;
-  --tmd-chat-sidebar-panel-width: 280px;
-  --tmd-chat-sidebar-ease: 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  --tmd-chat-sidebar-panel-width: 248px;
+  --tmd-chat-sidebar-ease: 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  --tmd-chat-composer-offset: 180px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -1014,16 +1030,19 @@ button.tmd-diff-file-main {
   height: 100%;
   min-height: 0;
   border: 1px solid var(--tmd-chat-line);
-  border-radius: 28px;
+  border-radius: var(--tmd-radius-lg);
   overflow: hidden;
   background: linear-gradient(180deg, color-mix(in srgb, var(--tmd-chat-paper) 98%, white 2%), color-mix(in srgb, var(--tmd-chat-panel) 92%, var(--tmd-chat-paper) 8%));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 30%, transparent),
+    0 14px 30px color-mix(in srgb, black 6%, transparent);
   transition:
     grid-template-columns var(--tmd-chat-sidebar-ease),
-    border-color 180ms ease;
+    border-color 580ms ease;
 }
 
 .tmd-chat-shell.tmd-chat-sidebar-collapsed {
-  grid-template-columns: var(--tmd-chat-rail-width) minmax(0, 1fr);
+  grid-template-columns: 0 minmax(0, 1fr);
 }
 
 .tmd-chat-sidebar {
@@ -1066,24 +1085,27 @@ button.tmd-diff-file-main {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 14px;
-  padding: 8px 16px 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--tmd-chat-line) 55%, transparent);
+  gap: 12px;
+  padding: 8px 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--tmd-chat-line) 62%, transparent);
 }
 
 .tmd-chat-sidebar-toggle {
   justify-content: flex-start;
-  width: 40px;
-  height: 40px;
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
   color: var(--text-normal);
 }
 
 .tmd-chat-sidebar-new {
   justify-content: flex-start;
   width: 100%;
-  padding: 8px 0 10px;
+  padding: 10px 12px;
+  border-radius: var(--tmd-radius-sm);
+  background: transparent !important;
   color: var(--text-normal);
-  font-size: 1rem;
+  font-size: 0.96rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1106,19 +1128,23 @@ button.tmd-diff-file-main {
   overflow-y: auto;
 }
 
+.tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-sidebar {
+  border-right: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .tmd-chat-sidebar.tmd-is-collapsed .tmd-chat-sidebar-list {
   display: none;
   pointer-events: none;
 }
 
 .tmd-chat-sidebar.tmd-is-collapsed .tmd-chat-sidebar-header {
-  align-items: center;
-  padding-left: 14px;
-  padding-right: 14px;
+  align-items: stretch;
+  padding: 0;
   border-bottom: 0;
 }
 
-.tmd-chat-sidebar.tmd-is-collapsed .tmd-chat-sidebar-toggle,
 .tmd-chat-sidebar.tmd-is-collapsed .tmd-chat-sidebar-new {
   margin: 0 auto;
   justify-content: center;
@@ -1142,7 +1168,7 @@ button.tmd-diff-file-main {
 .tmd-chat-conversation {
   display: block;
   width: 100%;
-  padding: 12px 16px;
+  padding: 10px 18px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -1164,13 +1190,16 @@ button.tmd-diff-file-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 
 .tmd-chat-conversation.tmd-is-active {
   color: var(--text-normal);
-  background: color-mix(in srgb, var(--background-modifier-hover) 44%, transparent);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--interactive-accent) 10%, transparent), transparent 60%),
+    color-mix(in srgb, var(--background-modifier-hover) 44%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--interactive-accent) 52%, transparent);
 }
 
 .tmd-chat-conversation:hover {
@@ -1187,18 +1216,19 @@ button.tmd-diff-file-main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
-  font-size: 1rem;
+  font-weight: 520;
+  font-size: 0.92rem;
+  line-height: 1.3;
 }
 
 .tmd-chat-conversation-delete {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  min-width: 26px;
-  margin-right: 4px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  margin-right: 2px;
   padding: 0;
   border: 0 !important;
   background: transparent !important;
@@ -1228,18 +1258,31 @@ button.tmd-diff-file-main {
 
 .tmd-chat-main {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  position: relative;
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  border-radius: var(--tmd-radius-lg) 0 0 var(--tmd-radius-lg);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--tmd-chat-paper) 97%, white 3%), color-mix(in srgb, var(--tmd-chat-panel) 96%, var(--tmd-chat-paper) 4%));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 24%, transparent);
 }
 
 .tmd-chat-header {
-  padding: 16px 20px 14px;
-  border-bottom: 1px solid var(--tmd-chat-line);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
   background: color-mix(in srgb, var(--tmd-chat-paper) 96%, white 4%);
+}
+
+.tmd-chat-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
 }
 
 .tmd-chat-header h2 {
@@ -1252,37 +1295,65 @@ button.tmd-diff-file-main {
 .tmd-chat-header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-left: auto;
+  gap: 0;
+  min-height: 32px;
+}
+
+.tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-header-actions .tmd-chat-sidebar-toggle {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+}
+
+.tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-header-actions .tmd-chat-sidebar-new {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  font-size: 0;
+}
+
+.tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-header-actions .tmd-chat-sidebar-new-icon {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
 }
 
 .tmd-chat-contextbar {
-  padding: 10px 20px 12px;
+  padding: 8px 20px 10px;
   background: transparent;
 }
 
 .tmd-chat-context-title {
-  margin-bottom: 2px;
+  margin-bottom: 1px;
   color: color-mix(in srgb, var(--text-muted) 82%, transparent);
-  font-size: var(--tmd-type-kicker-size);
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .tmd-chat-context-value {
   color: color-mix(in srgb, var(--text-muted) 88%, var(--text-normal) 12%);
-  font-size: 0.84rem;
-  font-weight: 500;
-  line-height: 1.45;
+  font-size: 0.8rem;
+  font-weight: 450;
+  line-height: 1.35;
 }
 
 .tmd-chat-context-snippet {
-  margin-top: 6px;
+  margin-top: 4px;
   color: color-mix(in srgb, var(--text-muted) 84%, transparent);
-  font-size: 0.9rem;
-  line-height: 1.55;
+  font-size: 0.84rem;
+  line-height: 1.45;
   white-space: pre-wrap;
+}
+
+.tmd-chat-contextbar > * {
+  max-width: 84ch;
 }
 
 .tmd-chat-body {
@@ -1294,10 +1365,10 @@ button.tmd-diff-file-main {
 .tmd-chat-timeline {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 26px;
   min-height: 0;
   overflow-y: auto;
-  padding: 22px 20px 28px;
+  padding: 24px 20px calc(var(--tmd-chat-composer-offset) + 24px);
   user-select: text;
   -webkit-user-select: text;
   scrollbar-width: thin;
@@ -1307,6 +1378,14 @@ button.tmd-diff-file-main {
 .tmd-chat-load-more {
   align-self: center;
   cursor: pointer;
+  padding: 7px 14px;
+  border: 1px solid color-mix(in srgb, var(--tmd-chat-line) 74%, transparent);
+  border-radius: var(--tmd-radius-pill);
+  background: color-mix(in srgb, var(--tmd-chat-paper) 92%, transparent);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .tmd-chat-timeline::-webkit-scrollbar {
@@ -1318,7 +1397,7 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-timeline::-webkit-scrollbar-thumb {
-  border-radius: 999px;
+  border-radius: var(--tmd-radius-pill);
   background: color-mix(in srgb, var(--text-muted) 38%, transparent);
 }
 
@@ -1344,25 +1423,26 @@ button.tmd-diff-file-main {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   width: min(100%, 760px);
   min-width: 0;
-  padding: 14px 16px 15px;
-  border-radius: 22px;
+  padding: 15px 16px 16px;
+  border-radius: var(--tmd-radius-lg);
   box-shadow: none;
 }
 
 .tmd-chat-message.tmd-is-user .tmd-chat-bubble {
   max-width: min(100%, 760px);
   background: linear-gradient(180deg, color-mix(in srgb, var(--tmd-chat-user) 90%, white 10%), color-mix(in srgb, var(--tmd-chat-user-accent) 8%, var(--tmd-chat-user) 92%));
-  border: 1px solid var(--tmd-chat-line);
-  border-top-right-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--tmd-chat-line-strong) 76%, transparent);
+  border-top-right-radius: var(--tmd-radius-sm);
 }
 
 .tmd-chat-message.tmd-is-assistant .tmd-chat-bubble {
   width: min(100%, 860px);
-  padding: 0;
+  padding: 0 0 0 16px;
   border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--tmd-chat-line) 78%, transparent);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -1378,6 +1458,7 @@ button.tmd-diff-file-main {
 .tmd-chat-stamp {
   color: var(--text-muted);
   font-size: 0.78rem;
+  white-space: nowrap;
 }
 
 .tmd-chat-role {
@@ -1470,6 +1551,7 @@ button.tmd-diff-file-main {
   gap: 6px;
   margin-top: 2px;
   padding: 10px 0 0;
+  border-top: 1px dashed color-mix(in srgb, var(--tmd-chat-line) 58%, transparent);
 }
 
 .tmd-chat-process-line {
@@ -1486,23 +1568,35 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-composer {
-  padding: 16px 20px 18px;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  padding: 14px 20px 18px;
+  background: transparent;
+  pointer-events: none;
 }
 
 .tmd-chat-input-shell {
   position: relative;
+  background: transparent;
+  pointer-events: auto;
 }
 
 .tmd-chat-input {
   width: 100%;
-  min-height: 112px;
-  padding: 14px 60px 16px 16px;
-  border: 1px solid var(--tmd-chat-line);
-  border-radius: 18px;
+  min-height: 124px;
+  padding: 16px 62px 18px 16px;
+  border: 1px solid color-mix(in srgb, var(--tmd-chat-line-strong) 74%, transparent);
+  border-radius: var(--tmd-radius-lg);
   background: color-mix(in srgb, var(--tmd-chat-paper) 98%, white 2%);
   color: var(--text-normal);
   line-height: 1.55;
   resize: vertical;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 30%, transparent),
+    0 10px 24px color-mix(in srgb, black 4%, transparent);
 }
 
 .tmd-chat-input:focus {
@@ -1522,9 +1616,9 @@ button.tmd-diff-file-main {
   min-width: 34px;
   padding: 0;
   border: 0 !important;
-  border-radius: 999px;
-  background: #111111 !important;
-  color: #ffffff !important;
+  border-radius: var(--tmd-radius-pill);
+  background: color-mix(in srgb, var(--text-normal) 94%, black 6%) !important;
+  color: color-mix(in srgb, var(--background-primary) 96%, white 4%) !important;
   box-shadow: none !important;
   cursor: pointer;
   transition:
@@ -1535,7 +1629,7 @@ button.tmd-diff-file-main {
 
 .tmd-chat-primary-action:hover,
 .tmd-chat-primary-action:focus-visible {
-  background: #222222 !important;
+  background: color-mix(in srgb, var(--text-normal) 84%, var(--interactive-accent) 16%) !important;
 }
 
 .tmd-chat-primary-action:disabled {
@@ -1543,7 +1637,7 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-primary-action .svg-icon {
-  color: #ffffff !important;
+  color: inherit !important;
 }
 
 .tmd-chat-primary-action svg {
@@ -1552,11 +1646,24 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-empty {
-  padding: 28px 18px;
-  border: 1px dashed var(--tmd-chat-line);
-  border-radius: 22px;
-  background: color-mix(in srgb, var(--tmd-chat-panel) 78%, transparent);
+  padding: 8px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
+  max-width: 68ch;
+}
+
+.tmd-chat-empty p {
+  margin: 0;
+}
+
+.tmd-chat-empty p + p {
+  margin-top: 12px;
+}
+
+.tmd-chat-empty .tmd-meta {
+  max-width: 54ch;
 }
 
 .tmd-empty-actions {
@@ -1600,6 +1707,10 @@ button.tmd-diff-file-main {
   .tmd-chat-message {
     gap: 0;
   }
+
+  .tmd-chat-message.tmd-is-assistant .tmd-chat-bubble {
+    padding-left: 12px;
+  }
 }
 
 .tmd-terminal-frame {
@@ -1608,7 +1719,7 @@ button.tmd-diff-file-main {
   min-height: 620px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--tmd-terminal-border) 88%, black 12%);
-  border-radius: 18px;
+  border-radius: var(--tmd-radius-lg);
   background: linear-gradient(180deg, color-mix(in srgb, var(--tmd-terminal-bg) 97%, black 3%), color-mix(in srgb, var(--tmd-terminal-bg-2) 94%, black 6%));
   box-shadow: 0 22px 48px color-mix(in srgb, black 18%, transparent);
 }
@@ -1619,7 +1730,7 @@ button.tmd-diff-file-main {
   margin: 0 0 14px;
   padding: 14px 16px;
   border: 1px solid color-mix(in srgb, var(--background-modifier-border) 72%, transparent);
-  border-radius: 16px;
+  border-radius: var(--tmd-radius-md);
   background: color-mix(in srgb, var(--background-primary) 96%, white 4%);
 }
 
@@ -1708,7 +1819,7 @@ button.tmd-diff-file-main {
   gap: 7px;
   padding: 4px 10px;
   border: 1px solid color-mix(in srgb, oklch(0.72 0.16 25) 72%, white 28%);
-  border-radius: 999px;
+  border-radius: var(--tmd-radius-pill);
   color: color-mix(in srgb, oklch(0.84 0.09 24) 88%, white 12%);
   background: color-mix(in srgb, oklch(0.34 0.08 22) 68%, black 32%);
   font-family: var(--font-monospace);
@@ -1766,7 +1877,7 @@ button.tmd-diff-file-main {
   gap: 10px;
   padding: 12px 14px;
   border: 1px solid color-mix(in srgb, var(--tmd-terminal-border) 72%, transparent);
-  border-radius: 14px;
+  border-radius: var(--tmd-radius-md);
   background: color-mix(in srgb, oklch(0.23 0.02 240) 84%, black 16%);
 }
 
@@ -1789,7 +1900,7 @@ button.tmd-diff-file-main {
   display: inline-flex;
   align-items: center;
   padding: 3px 8px;
-  border-radius: 999px;
+  border-radius: var(--tmd-radius-pill);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -1873,7 +1984,7 @@ button.tmd-diff-file-main {
 }
 
 .tmd-terminal-screen::-webkit-scrollbar-thumb {
-  border-radius: 999px;
+  border-radius: var(--tmd-radius-pill);
   background: color-mix(in srgb, var(--tmd-terminal-border) 86%, white 14%);
 }
 
@@ -1972,7 +2083,7 @@ button.tmd-diff-file-main {
   margin: 0 14px 14px;
   padding: 12px 14px;
   border: 1px solid color-mix(in srgb, oklch(0.58 0.09 78) 58%, white 42%);
-  border-radius: 12px;
+  border-radius: var(--tmd-radius-sm);
   background: color-mix(in srgb, oklch(0.28 0.03 78) 78%, black 22%);
   color: var(--tmd-terminal-text);
   font-family: var(--font-monospace);
@@ -2014,7 +2125,7 @@ button.tmd-diff-file-main {
   gap: 4px;
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--tmd-terminal-border) 72%, transparent);
-  border-radius: 10px;
+  border-radius: var(--tmd-radius-sm);
   background: color-mix(in srgb, var(--tmd-terminal-bg) 70%, black 30%);
 }
 
@@ -2043,7 +2154,7 @@ button.tmd-diff-file-main {
   justify-content: center;
   min-height: 30px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: var(--tmd-radius-pill);
   border: 1px solid color-mix(in srgb, var(--tmd-terminal-border) 78%, transparent);
   background: color-mix(in srgb, var(--tmd-terminal-bg) 76%, black 24%);
   color: var(--tmd-terminal-text);
