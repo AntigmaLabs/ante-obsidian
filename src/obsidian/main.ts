@@ -7,7 +7,7 @@ import { populateEditorMenu } from "./editor-menu";
 import { TmdSettingTab } from "./settings-tab";
 import { DEFAULT_SETTINGS, normalizeSettings, type TmdSettings } from "./settings";
 import type { AnteRuntime } from "../runtime/ante-runtime";
-import { createAnteRuntime } from "../runtime/create-ante-runtime";
+import { DEFAULT_ANTE_ARGS_JSON, createAnteRuntime } from "../runtime/create-ante-runtime";
 import { TMD_DIFF_VIEW_TYPE, TmdDiffView } from "./diff-view";
 import { TMD_CHAT_VIEW_TYPE, TmdChatView } from "./chat-view";
 import { TMD_TERMINAL_VIEW_TYPE, TmdTerminalView } from "./terminal-view";
@@ -59,14 +59,19 @@ export default class TmdPlugin extends Plugin {
     this.runtime = createAnteRuntime(() => {
       const resolved = this.getResolvedAnteTarget();
       const geminiEnvKey = normalizeEnvVarName(this.settings.geminiApiKeyEnvKey);
+      const anthropicEnvKey = normalizeEnvVarName(this.settings.anthropicApiKeyEnvKey);
       const geminiApiKey =
         this.settings.geminiApiKey.trim() ||
         (geminiEnvKey ? this.shellEnv[geminiEnvKey]?.trim() ?? "" : "") ||
         (geminiEnvKey ? process.env[geminiEnvKey]?.trim() ?? "" : "");
+      const anthropicApiKey =
+        this.settings.anthropicApiKey.trim() ||
+        (anthropicEnvKey ? this.shellEnv[anthropicEnvKey]?.trim() ?? "" : "") ||
+        (anthropicEnvKey ? process.env[anthropicEnvKey]?.trim() ?? "" : "");
       return {
         connectionMode: this.settings.connectionMode,
         command: "ante",
-        argsJson: this.settings.argsJson,
+        argsJson: DEFAULT_ANTE_ARGS_JSON,
         cwd: "",
         wsAddress: this.settings.wsAddress,
         model: resolved.model,
@@ -75,7 +80,9 @@ export default class TmdPlugin extends Plugin {
         env:
           resolved.provider === "gemini" && geminiEnvKey && geminiApiKey
             ? { [geminiEnvKey]: geminiApiKey }
-            : {}
+            : resolved.provider === "anthropic" && anthropicEnvKey && anthropicApiKey
+              ? { [anthropicEnvKey]: anthropicApiKey }
+              : {}
       };
     });
     this.taskEngine = new TaskEngine(
@@ -228,14 +235,20 @@ export default class TmdPlugin extends Plugin {
   }
 
   async loadShellEnv(): Promise<void> {
-    const envKey = normalizeEnvVarName(this.settings.geminiApiKeyEnvKey);
     this.resolvedAnteCommand = await readCommandPathFromLoginShell("ante");
-    if (!envKey) {
-      this.shellEnv = {};
-      return;
+    const envMap: Record<string, string> = {};
+    const envKeys = [
+      normalizeEnvVarName(this.settings.geminiApiKeyEnvKey),
+      normalizeEnvVarName(this.settings.anthropicApiKeyEnvKey)
+    ].filter((key, index, keys) => key && keys.indexOf(key) === index);
+
+    for (const envKey of envKeys) {
+      const value = await readEnvVarFromLoginShell(envKey);
+      if (value) {
+        envMap[envKey] = value;
+      }
     }
-    const value = await readEnvVarFromLoginShell(envKey);
-    this.shellEnv = value ? { [envKey]: value } : {};
+    this.shellEnv = envMap;
   }
 
   async refreshAnteEnvironment(): Promise<void> {

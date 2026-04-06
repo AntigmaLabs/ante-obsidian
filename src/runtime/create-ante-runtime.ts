@@ -3,6 +3,8 @@ import type { AnteRuntime } from "./ante-runtime";
 import { AnteStdioTransport } from "./transport/ante-stdio-transport";
 import { AnteWebSocketTransport, normalizeWsListenAddress } from "./transport/ante-websocket-transport";
 
+export const DEFAULT_ANTE_ARGS_JSON = JSON.stringify(["serve", "--stdio", "--yolo"]);
+
 const ensureServeArgs = (args: string[]): string[] => {
   if (!args.includes("serve")) {
     args.unshift("serve");

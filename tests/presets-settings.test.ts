@@ -71,3 +71,11 @@ test("normalizeSettings enables chat runtime details by default and preserves ex
   assert.equal(normalizeSettings(undefined).showChatRuntimeDetails, true);
   assert.equal(normalizeSettings({ showChatRuntimeDetails: false }).showChatRuntimeDetails, false);
 });
+
+test("normalizeSettings provides default credential env keys for Gemini and Anthropic", () => {
+  const settings = normalizeSettings(undefined);
+  assert.equal(settings.geminiApiKeyEnvKey, "GEMINI_API_KEY");
+  assert.equal(settings.anthropicApiKeyEnvKey, "ANTHROPIC_API_KEY");
+  assert.equal(settings.geminiApiKey, "");
+  assert.equal(settings.anthropicApiKey, "");
+});

@@ -37,7 +37,6 @@ export interface BuiltinPresetPreference {
 
 export interface TmdSettings {
   connectionMode: AnteConnectionMode;
-  argsJson: string;
   wsAddress: string;
   useAnteDefaults: boolean;
   anteModel: string;
@@ -47,6 +46,8 @@ export interface TmdSettings {
   showChatRuntimeDetails: boolean;
   geminiApiKey: string;
   geminiApiKeyEnvKey: string;
+  anthropicApiKey: string;
+  anthropicApiKeyEnvKey: string;
   mentionTriggerDebug: boolean;
   customPresets: CustomPresetConfig[];
   builtinPresetPreferences: BuiltinPresetPreference[];
@@ -54,7 +55,6 @@ export interface TmdSettings {
 
 export const DEFAULT_SETTINGS: TmdSettings = {
   connectionMode: "stdio",
-  argsJson: JSON.stringify(["serve", "--stdio", "--yolo"]),
   wsAddress: "127.0.0.1:8765",
   useAnteDefaults: true,
   anteModel: getDefaultModelForProvider(OPENAI_PROVIDER),
@@ -64,6 +64,8 @@ export const DEFAULT_SETTINGS: TmdSettings = {
   showChatRuntimeDetails: true,
   geminiApiKey: "",
   geminiApiKeyEnvKey: "GEMINI_API_KEY",
+  anthropicApiKey: "",
+  anthropicApiKeyEnvKey: "ANTHROPIC_API_KEY",
   mentionTriggerDebug: false,
   customPresets: [],
   builtinPresetPreferences: [
@@ -150,7 +152,6 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
 
   return {
     connectionMode,
-    argsJson: typeof raw.argsJson === "string" ? raw.argsJson : DEFAULT_SETTINGS.argsJson,
     wsAddress:
       typeof raw.wsAddress === "string" && raw.wsAddress.trim()
         ? raw.wsAddress.trim()
@@ -166,6 +167,11 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
       typeof raw.geminiApiKeyEnvKey === "string" && raw.geminiApiKeyEnvKey.trim()
         ? raw.geminiApiKeyEnvKey.trim()
         : DEFAULT_SETTINGS.geminiApiKeyEnvKey,
+    anthropicApiKey: typeof raw.anthropicApiKey === "string" ? raw.anthropicApiKey : DEFAULT_SETTINGS.anthropicApiKey,
+    anthropicApiKeyEnvKey:
+      typeof raw.anthropicApiKeyEnvKey === "string" && raw.anthropicApiKeyEnvKey.trim()
+        ? raw.anthropicApiKeyEnvKey.trim()
+        : DEFAULT_SETTINGS.anthropicApiKeyEnvKey,
     mentionTriggerDebug: raw.mentionTriggerDebug === true,
     customPresets: normalizeCustomPresets(raw.customPresets),
     builtinPresetPreferences: normalizeBuiltinPresetPreferences(raw.builtinPresetPreferences)

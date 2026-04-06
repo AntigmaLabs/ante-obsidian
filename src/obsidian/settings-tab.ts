@@ -13,6 +13,8 @@ import {
   normalizeProvider
 } from "./settings";
 
+type SettingsTabId = "updates" | "runtime" | "model" | "presets" | "more";
+
 export class TmdSettingTab extends PluginSettingTab {
   private draggingPresetId: string | null = null;
   private anteVersionState: AnteVersionCheckResult | null = null;
@@ -20,6 +22,7 @@ export class TmdSettingTab extends PluginSettingTab {
   private checkingAnteVersion = false;
   private checkingPluginVersion = false;
   private upgradingAnte = false;
+  private activeTab: SettingsTabId = "updates";
 
   constructor(private readonly pluginRef: TmdPlugin) {
     super(pluginRef.app, pluginRef);
@@ -31,9 +34,34 @@ export class TmdSettingTab extends PluginSettingTab {
     containerEl.addClass("tmd-settings");
     containerEl.createEl("h2", { text: "Ante md Settings" });
 
-    this.renderUpdatesSection(containerEl);
+    const tabsEl = containerEl.createDiv({ cls: "tmd-settings-tabs" });
+    const panelsEl = containerEl.createDiv({ cls: "tmd-settings-panels" });
 
-    new Setting(containerEl)
+    const updatesSectionEl = this.renderUpdatesSection(panelsEl);
+    const runtimeSectionEl = this.createSettingsSection(
+      panelsEl,
+      "Runtime",
+      "Connection, transport, execution behavior, and runtime diagnostics."
+    );
+    const modelSectionEl = this.createSettingsSection(
+      panelsEl,
+      "Model",
+      "These settings override Ante defaults for this plugin. Actual availability still depends on your local Ante runtime."
+    );
+    const presetsSectionEl = this.renderPresetSection(panelsEl);
+    const advancedSectionEl = this.createSettingsSection(
+      panelsEl,
+      "More",
+      "Low-level diagnostics and development-only helpers."
+    );
+
+    this.createTabButton(tabsEl, "updates", "Updates", updatesSectionEl);
+    this.createTabButton(tabsEl, "runtime", "Runtime", runtimeSectionEl);
+    this.createTabButton(tabsEl, "model", "Model", modelSectionEl);
+    this.createTabButton(tabsEl, "presets", "Presets", presetsSectionEl);
+    this.createTabButton(tabsEl, "more", "More", advancedSectionEl);
+
+    new Setting(runtimeSectionEl)
       .setName("Ante connection mode")
       .setDesc("Choose whether Ante md talks to Ante over stdin/stdout or WebSocket.")
       .addDropdown((dropdown) =>
@@ -48,18 +76,8 @@ export class TmdSettingTab extends PluginSettingTab {
           })
       );
 
-    if (this.pluginRef.settings.connectionMode === "stdio") {
-      new Setting(containerEl)
-        .setName("Ante arguments JSON")
-        .setDesc('JSON string array passed to Ante. Default: `["serve","--stdio","--yolo"]`.')
-        .addTextArea((text) =>
-          text.setValue(this.pluginRef.settings.argsJson).onChange(async (value) => {
-            this.pluginRef.settings.argsJson = value;
-            await this.pluginRef.saveSettings();
-          })
-        );
-    } else {
-      new Setting(containerEl)
+    if (this.pluginRef.settings.connectionMode === "websocket") {
+      new Setting(runtimeSectionEl)
         .setName("Ante WebSocket address")
         .setDesc("Socket address passed to `ante serve --ws`. Example: `127.0.0.1:8765`.")
         .addText((text) =>
@@ -68,19 +86,9 @@ export class TmdSettingTab extends PluginSettingTab {
             await this.pluginRef.saveSettings();
           })
         );
-
-      new Setting(containerEl)
-        .setName("Ante arguments JSON")
-        .setDesc('Additional JSON string array passed to Ante. Transport flags are managed by Ante md in WebSocket mode, so keep only extras such as `["--yolo"]`.')
-        .addTextArea((text) =>
-          text.setValue(this.pluginRef.settings.argsJson).onChange(async (value) => {
-            this.pluginRef.settings.argsJson = value;
-            await this.pluginRef.saveSettings();
-          })
-        );
     }
 
-    new Setting(containerEl)
+    new Setting(runtimeSectionEl)
       .setName("Auto-approve Ante tools")
       .setDesc("Automatically approve Ante tool calls inside Ante md. Default: on.")
       .addToggle((toggle) =>
@@ -90,7 +98,7 @@ export class TmdSettingTab extends PluginSettingTab {
         })
       );
 
-    new Setting(containerEl)
+    new Setting(runtimeSectionEl)
       .setName("Show full process logs")
       .setDesc("Show detailed runtime process information without hiding noisy system logs or truncating streamed output. Default: off.")
       .addToggle((toggle) =>
@@ -100,7 +108,7 @@ export class TmdSettingTab extends PluginSettingTab {
         })
       );
 
-    new Setting(containerEl)
+    new Setting(runtimeSectionEl)
       .setName("Show chat runtime details")
       .setDesc("Show structured telemetry like thinking, token usage, and compaction events in Chat with Ante. Default: on.")
       .addToggle((toggle) =>
@@ -110,11 +118,12 @@ export class TmdSettingTab extends PluginSettingTab {
         })
       );
 
+    const anteDefaultTarget = this.pluginRef.anteDefaults;
     const resolvedAnteTarget = this.pluginRef.getResolvedAnteTarget();
 
-    new Setting(containerEl)
-      .setName("Use Ante defaults")
-      .setDesc(`Read provider/model from ~/.ante/settings.json. Current detected: \`${resolvedAnteTarget.provider}\` / \`${resolvedAnteTarget.model}\`.`)
+    new Setting(modelSectionEl)
+      .setName("Follow Ante")
+      .setDesc("Use provider and model from Ante.")
       .addToggle((toggle) =>
         toggle.setValue(this.pluginRef.settings.useAnteDefaults).onChange(async (value) => {
           this.pluginRef.settings.useAnteDefaults = value;
@@ -123,10 +132,12 @@ export class TmdSettingTab extends PluginSettingTab {
         })
       );
 
+    new Setting(modelSectionEl).setName("Ante default").setDesc(`\`${anteDefaultTarget.provider}\` / \`${anteDefaultTarget.model}\``);
+
     if (!this.pluginRef.settings.useAnteDefaults) {
-      new Setting(containerEl)
-        .setName("Ante provider")
-        .setDesc("Matches Ante provider naming. `openai-subscription` uses your ChatGPT subscription; `gemini` uses Gemini API credentials.")
+      new Setting(modelSectionEl)
+        .setName("Provider override")
+        .setDesc("Ask Ante to use this provider. Final support and auth still depend on Ante.")
         .addDropdown((dropdown) =>
           dropdown
             .addOption(OPENAI_PROVIDER, "OpenAI Subscription")
@@ -142,9 +153,9 @@ export class TmdSettingTab extends PluginSettingTab {
             })
         );
 
-      new Setting(containerEl)
-        .setName("Ante model")
-        .setDesc("Model options follow the selected Ante provider.")
+      new Setting(modelSectionEl)
+        .setName("Model override")
+        .setDesc("Ask Ante to use this model for the selected provider.")
         .addDropdown((dropdown) =>
           this.addModelOptions(dropdown)
             .setValue(this.getSelectedModel())
@@ -153,40 +164,53 @@ export class TmdSettingTab extends PluginSettingTab {
               await this.pluginRef.saveSettings();
             })
         );
+
+      new Setting(modelSectionEl).setName("Scope").setDesc("Overrides apply only in this plugin. Final availability depends on Ante.");
     }
 
-    if ((this.pluginRef.settings.useAnteDefaults ? resolvedAnteTarget.provider : this.pluginRef.settings.anteProvider) === GEMINI_PROVIDER) {
-      const geminiSetting = new Setting(containerEl)
-        .setName("Gemini credentials")
-        .setDesc("Configure the env var name Ante reads for `x-goog-api-key`, and optionally override the Gemini API key locally.");
+    const effectiveProvider = this.pluginRef.settings.useAnteDefaults ? resolvedAnteTarget.provider : this.pluginRef.settings.anteProvider;
 
-      geminiSetting.controlEl.addClass("tmd-gemini-setting");
-
-      const envFieldEl = geminiSetting.controlEl.createDiv({ cls: "tmd-gemini-field" });
-      envFieldEl.createSpan({ text: "Env key", cls: "tmd-gemini-field-label" });
-      new Setting(envFieldEl).addText((text) => {
-        text.inputEl.addClass("tmd-gemini-field-input");
-        text.setPlaceholder("GEMINI_API_KEY").setValue(this.pluginRef.settings.geminiApiKeyEnvKey).onChange(async (value) => {
+    if (effectiveProvider === GEMINI_PROVIDER) {
+      this.renderCredentialSetting(
+        modelSectionEl,
+        "Gemini API key",
+        "Set the env var name Ante reads for x-goog-api-key, and optionally override the local Gemini key here.",
+        "GEMINI_API_KEY",
+        "AIza...",
+        this.pluginRef.settings.geminiApiKeyEnvKey,
+        this.pluginRef.settings.geminiApiKey,
+        async (value) => {
           this.pluginRef.settings.geminiApiKeyEnvKey = value.trim() || "GEMINI_API_KEY";
           await this.pluginRef.saveSettings();
-        });
-      });
-
-      const keyFieldEl = geminiSetting.controlEl.createDiv({ cls: "tmd-gemini-field" });
-      keyFieldEl.createSpan({ text: "API key", cls: "tmd-gemini-field-label" });
-      new Setting(keyFieldEl).addText((text) => {
-        text.inputEl.type = "password";
-        text.inputEl.addClass("tmd-gemini-field-input");
-        text.setPlaceholder("AIza...").setValue(this.pluginRef.settings.geminiApiKey).onChange(async (value) => {
+        },
+        async (value) => {
           this.pluginRef.settings.geminiApiKey = value.trim();
           await this.pluginRef.saveSettings();
-        });
-      });
+        }
+      );
     }
 
-    this.renderPresetSection(containerEl);
+    if (effectiveProvider === ANTHROPIC_PROVIDER) {
+      this.renderCredentialSetting(
+        modelSectionEl,
+        "Anthropic API key",
+        "Set the env var name Ante reads for Anthropic, and optionally override the local API key here.",
+        "ANTHROPIC_API_KEY",
+        "sk-ant-...",
+        this.pluginRef.settings.anthropicApiKeyEnvKey,
+        this.pluginRef.settings.anthropicApiKey,
+        async (value) => {
+          this.pluginRef.settings.anthropicApiKeyEnvKey = value.trim() || "ANTHROPIC_API_KEY";
+          await this.pluginRef.saveSettings();
+        },
+        async (value) => {
+          this.pluginRef.settings.anthropicApiKey = value.trim();
+          await this.pluginRef.saveSettings();
+        }
+      );
+    }
 
-    new Setting(containerEl)
+    new Setting(advancedSectionEl)
       .setName("Mention trigger debug")
       .setDesc("Show a Notice when a mention trigger is detected.")
       .addToggle((toggle) =>
@@ -197,9 +221,61 @@ export class TmdSettingTab extends PluginSettingTab {
       );
   }
 
-  private renderUpdatesSection(containerEl: HTMLElement): void {
+  private createTabButton(containerEl: HTMLElement, tabId: SettingsTabId, label: string, panelEl: HTMLElement): void {
+    const buttonEl = containerEl.createEl("button", {
+      text: label,
+      cls: `tmd-settings-tab${this.activeTab === tabId ? " is-active" : ""}`
+    });
+    panelEl.toggleClass("is-active", this.activeTab === tabId);
+    buttonEl.addEventListener("click", () => {
+      this.activeTab = tabId;
+      this.display();
+    });
+  }
+
+  private createSettingsSection(containerEl: HTMLElement, title: string, summary: string): HTMLDivElement {
+    const sectionEl = containerEl.createDiv({ cls: "tmd-settings-section" });
+    const copyEl = sectionEl.createDiv({ cls: "tmd-settings-section-copy" });
+    copyEl.createEl("p", { text: summary, cls: "tmd-settings-section-summary" });
+    return sectionEl;
+  }
+
+  private renderCredentialSetting(
+    containerEl: HTMLElement,
+    name: string,
+    description: string,
+    envPlaceholder: string,
+    keyPlaceholder: string,
+    envValue: string,
+    keyValue: string,
+    onEnvChange: (value: string) => Promise<void>,
+    onKeyChange: (value: string) => Promise<void>
+  ): void {
+    const credentialSetting = new Setting(containerEl).setName(name).setDesc(description);
+    credentialSetting.controlEl.addClass("tmd-gemini-setting");
+
+    const envFieldEl = credentialSetting.controlEl.createDiv({ cls: "tmd-gemini-field" });
+    envFieldEl.createSpan({ text: "Env key", cls: "tmd-gemini-field-label" });
+    new Setting(envFieldEl).addText((text) => {
+      text.inputEl.addClass("tmd-gemini-field-input");
+      text.setPlaceholder(envPlaceholder).setValue(envValue).onChange((value) => {
+        void onEnvChange(value);
+      });
+    });
+
+    const keyFieldEl = credentialSetting.controlEl.createDiv({ cls: "tmd-gemini-field" });
+    keyFieldEl.createSpan({ text: "API key", cls: "tmd-gemini-field-label" });
+    new Setting(keyFieldEl).addText((text) => {
+      text.inputEl.type = "password";
+      text.inputEl.addClass("tmd-gemini-field-input");
+      text.setPlaceholder(keyPlaceholder).setValue(keyValue).onChange((value) => {
+        void onKeyChange(value);
+      });
+    });
+  }
+
+  private renderUpdatesSection(containerEl: HTMLElement): HTMLDivElement {
     const sectionEl = containerEl.createDiv({ cls: "tmd-updates-section" });
-    sectionEl.createEl("h3", { text: "Updates", cls: "tmd-ante-update-title" });
     sectionEl.createEl("p", {
       text: "Check plugin and local runtime update status.",
       cls: "tmd-ante-update-summary"
@@ -215,6 +291,7 @@ export class TmdSettingTab extends PluginSettingTab {
     if (!this.anteVersionState && !this.checkingAnteVersion) {
       void this.refreshAnteVersionState();
     }
+    return sectionEl;
   }
 
   private renderPluginUpdateItem(containerEl: HTMLElement): void {
@@ -563,14 +640,19 @@ export class TmdSettingTab extends PluginSettingTab {
     }
   }
 
-  private renderPresetSection(containerEl: HTMLElement): void {
-    const sectionEl = containerEl.createDiv({ cls: "tmd-preset-section" });
+  private renderPresetSection(containerEl: HTMLElement): HTMLDivElement {
+    const sectionEl = this.createSettingsSection(
+      containerEl,
+      "Presets",
+      "Manage reusable actions, visibility, and the order shown in the editor menu."
+    );
+    sectionEl.addClass("tmd-preset-section");
     const headerRow = sectionEl.createDiv({ cls: "tmd-preset-toolbar" });
     const titleGroup = headerRow.createDiv({ cls: "tmd-preset-toolbar-copy" });
-    titleGroup.createEl("h3", { text: "Presets", cls: "tmd-preset-title" });
+    titleGroup.createEl("div", { text: "Preset Library", cls: "tmd-preset-title" });
 
     const summary = titleGroup.createEl("p", { cls: "tmd-preset-summary" });
-    summary.setText("Visible presets appear in the editor context menu. Built-in presets can be reordered or hidden.");
+    summary.setText("Built-in and custom presets share one ordered library.");
 
     const newPresetButton = headerRow.createEl("button", { text: "New preset", cls: "mod-cta" });
     newPresetButton.addClass("tmd-preset-new-button");
@@ -679,6 +761,7 @@ export class TmdSettingTab extends PluginSettingTab {
         });
       }
     }
+    return sectionEl;
   }
 
   private async setPresetEnabled(presetId: string, enabled: boolean, isBuiltin: boolean): Promise<void> {

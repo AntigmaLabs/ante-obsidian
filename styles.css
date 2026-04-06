@@ -255,30 +255,57 @@ button.tmd-diff-file-main {
   letter-spacing: -0.02em;
 }
 
-.tmd-settings > .setting-item {
-  padding-top: 14px;
-  padding-bottom: 14px;
+.tmd-settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0 var(--size-4-4);
 }
 
-.tmd-settings > .setting-item .setting-item-name {
-  color: var(--text-normal);
-  font-size: 0.96rem;
-  font-weight: 600;
-  line-height: 1.35;
-}
-
-.tmd-settings > .setting-item .setting-item-description {
+.tmd-settings-tab {
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 78%, transparent);
+  border-radius: var(--tmd-radius-pill);
+  background: color-mix(in srgb, var(--background-secondary) 70%, transparent);
   color: var(--text-muted);
   font-size: 0.84rem;
-  line-height: 1.45;
+  font-weight: 600;
+  line-height: 1;
+  padding: 8px 12px;
+  box-shadow: none;
 }
 
-.tmd-updates-section,
-.tmd-ante-update-section {
+.tmd-settings-tab:hover:not(:disabled) {
+  color: var(--text-normal);
+  background: color-mix(in srgb, var(--background-modifier-hover) 72%, transparent);
+}
+
+.tmd-settings-tab.is-active {
+  border-color: color-mix(in srgb, var(--interactive-accent) 36%, var(--background-modifier-border) 64%);
+  background: color-mix(in srgb, var(--interactive-accent) 14%, var(--background-secondary) 86%);
+  color: var(--text-normal);
+}
+
+.tmd-settings-panels {
+  min-width: 0;
+}
+
+.tmd-settings-section {
+  display: none;
   margin: 0 0 24px;
   padding: 0 var(--size-4-4);
 }
 
+.tmd-settings-section.is-active,
+.tmd-updates-section.is-active {
+  display: block;
+}
+
+.tmd-settings-section-copy {
+  margin: 0 0 8px;
+}
+
+.tmd-settings-section-title,
 .tmd-settings .tmd-ante-update-title,
 .tmd-settings .tmd-preset-title,
 .tmd-settings .tmd-preset-modal-title {
@@ -291,12 +318,39 @@ button.tmd-diff-file-main {
   letter-spacing: -0.01em;
 }
 
-.tmd-ante-update-summary {
+.tmd-settings-section-summary,
+.tmd-ante-update-summary,
+.tmd-preset-summary {
   margin: 4px 0 12px;
   color: var(--text-muted);
   font-size: 0.84rem;
   line-height: 1.45;
   max-width: 56ch;
+}
+
+.tmd-settings-section > .setting-item {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.tmd-settings-section > .setting-item .setting-item-name {
+  color: var(--text-normal);
+  font-size: 0.96rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.tmd-settings-section > .setting-item .setting-item-description {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.tmd-updates-section,
+.tmd-ante-update-section {
+  display: none;
+  margin: 0 0 24px;
+  padding: 0 var(--size-4-4);
 }
 
 .tmd-update-item-button,
@@ -483,14 +537,6 @@ button.tmd-diff-file-main {
   flex-direction: column;
   gap: 6px;
   padding-top: 2px;
-}
-
-.tmd-preset-summary {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.84rem;
-  line-height: 1.45;
-  max-width: 56ch;
 }
 
 .tmd-preset-new-button {
@@ -1033,9 +1079,7 @@ button.tmd-diff-file-main {
   border-radius: var(--tmd-radius-lg);
   overflow: hidden;
   background: linear-gradient(180deg, color-mix(in srgb, var(--tmd-chat-paper) 98%, white 2%), color-mix(in srgb, var(--tmd-chat-panel) 92%, var(--tmd-chat-paper) 8%));
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 30%, transparent),
-    0 14px 30px color-mix(in srgb, black 6%, transparent);
+  box-shadow: 0 14px 30px color-mix(in srgb, black 6%, transparent);
   transition:
     grid-template-columns var(--tmd-chat-sidebar-ease),
     border-color 580ms ease;
@@ -1266,7 +1310,6 @@ button.tmd-diff-file-main {
   border-radius: var(--tmd-radius-lg) 0 0 var(--tmd-radius-lg);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--tmd-chat-paper) 97%, white 3%), color-mix(in srgb, var(--tmd-chat-panel) 96%, var(--tmd-chat-paper) 4%));
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 24%, transparent);
 }
 
 .tmd-chat-header {
@@ -1712,6 +1755,7 @@ button.tmd-diff-file-main {
   position: relative;
   background: inherit;
   pointer-events: auto;
+  background: transparent;
 }
 
 .tmd-chat-input {
