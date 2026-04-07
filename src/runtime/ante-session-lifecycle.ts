@@ -138,12 +138,12 @@ export class AnteSessionLifecycle {
       this.sessionId = null;
     }
 
-    await this.ensureRequestSession(request, config, observer, beginSession, beginResumeSession);
+    const transitionAction = await this.ensureRequestSession(request, config, observer, beginSession, beginResumeSession);
 
     if (!hasCompatibleTransport) {
       return "launch";
     }
-    if (hasReadySession) {
+    if (transitionAction === "none" && hasReadySession) {
       return "reuse";
     }
     return "boot";
@@ -334,20 +334,23 @@ export class AnteSessionLifecycle {
     observer: RuntimeObserver,
     beginSession: (config: AnteRuntimeConfig) => void,
     beginResumeSession: (targetSessionId: string) => void
-  ): Promise<void> {
+  ): Promise<"none" | "start" | "resume"> {
     const requestedSessionId = request.runtimeSessionId?.trim() ?? "";
 
     if (requestedSessionId) {
       if (this.sessionId === requestedSessionId) {
-        return;
+        return "none";
       }
       await this.resumeSession(requestedSessionId, observer, beginResumeSession);
-      return;
+      return "resume";
     }
 
     if (this.shouldStartFreshSession(request) || !this.sessionId) {
       await this.startFreshSession(config, observer, beginSession);
+      return "start";
     }
+
+    return "none";
   }
 
   private async startFreshSession(

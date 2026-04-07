@@ -290,16 +290,20 @@ export class AnteSessionDriver implements AnteRuntime {
       onClose: (info) => {
         console.info("[tmd transport] close", info ?? {});
         this.clearInterruptTimer();
-        const shutdownResolved = this.lifecycle.handleSessionEnd();
+        const closeError = new Error(
+          info?.reason === "SIGTERM" ? "Ante server exited after SIGTERM" : `Ante server exited with code ${info?.code ?? "unknown"}`
+        );
+        const errorWithDiagnostics = this.lifecycle.withStartupDiagnostics(closeError);
         const activeRun = this.activeRun;
-        this.lifecycle.stopTransport();
+        const shutdownResolved = this.lifecycle.handleSessionEnd();
         if (shutdownResolved) {
           return;
         }
-        this.lifecycle.rejectSessionTransition(new Error("Ante server closed during session transition"));
+        this.lifecycle.rejectSessionTransition(errorWithDiagnostics);
         if (!activeRun || activeRun.completed) {
-          this.lifecycle.rejectWarmup(new Error("Ante server closed before the warm session became ready"));
+          this.lifecycle.rejectWarmup(errorWithDiagnostics);
           this.activeRun = null;
+          this.lifecycle.stopTransport();
           return;
         }
         this.lifecycle.flushStartupDiagnostics((entry) => {
@@ -307,9 +311,10 @@ export class AnteSessionDriver implements AnteRuntime {
         });
         activeRun.observer.onExit({
           status: info?.reason === "SIGTERM" ? "cancelled" : "failed",
-          error: info?.reason === "SIGTERM" ? undefined : `Ante server exited with code ${info?.code ?? "unknown"}`
+          error: info?.reason === "SIGTERM" ? undefined : errorWithDiagnostics.message
         });
         this.activeRun = null;
+        this.lifecycle.stopTransport();
       }
     };
   }

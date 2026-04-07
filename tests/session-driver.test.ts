@@ -405,6 +405,34 @@ test("initial chat requests start a fresh session instead of reusing the current
   });
 });
 
+test("resuming a different saved session on a compatible transport does not report reuse", async () => {
+  const transport = new FakeTransport();
+  const driver = new TestSessionDriver(() => config, () => transport);
+  driver.primeSession(transport, "ses_current");
+
+  const logs: string[] = [];
+  driver.run(
+    {
+      ...request,
+      kind: "chat",
+      triggerSource: "chat",
+      mode: "followup",
+      runtimeSessionId: "ses_other"
+    },
+    {
+      onEvent: (event) => {
+        if (event.type === "log" && event.stream === "system") {
+          logs.push(event.text);
+        }
+      },
+      onExit: () => {}
+    }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(logs.some((entry) => entry.includes("Reusing existing Ante session")), false);
+});
+
 test("persistActiveSession sends Shutdown and waits for transport close", async () => {
   const transport = new FakeTransport();
   const driver = new TestSessionDriver(() => config, () => transport);
