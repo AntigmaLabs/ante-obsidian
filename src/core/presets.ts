@@ -1,4 +1,4 @@
-import type { TmdSettings } from "../obsidian/settings";
+import type { PresetSettings } from "./preset-config";
 import type { PresetDefinition, PresetId } from "./types";
 
 export const DEFAULT_PRESET_ID: PresetId = "default";
@@ -52,7 +52,7 @@ export const BUILTIN_PRESETS: Record<PresetId, PresetDefinition> = {
 
 export const listBuiltinPresets = (): PresetDefinition[] => Object.values(BUILTIN_PRESETS);
 
-export const listResolvedPresets = (settings: TmdSettings): PresetDefinition[] => {
+export const listResolvedPresets = (settings: PresetSettings): PresetDefinition[] => {
   const builtinPreferences = new Map(settings.builtinPresetPreferences.map((preset) => [preset.id, preset]));
   const builtin = listBuiltinPresets().map((preset, index) => {
     const preference = builtinPreferences.get(preset.id);
@@ -83,7 +83,7 @@ export const listResolvedPresets = (settings: TmdSettings): PresetDefinition[] =
   });
 };
 
-export const getResolvedPreset = (settings: TmdSettings, presetId: PresetId): PresetDefinition => {
+export const getResolvedPreset = (settings: PresetSettings, presetId: PresetId): PresetDefinition => {
   const preset = listResolvedPresets(settings).find((entry) => entry.id === presetId);
   if (!preset) {
     throw new Error(`Unknown preset: ${presetId}`);

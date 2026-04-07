@@ -8,18 +8,9 @@ import {
   TFolder,
   normalizePath
 } from "obsidian";
+import type { HostAdapter } from "../core/host-adapter";
 import type { ContextSnapshot, DocumentChangeArtifact } from "../core/types";
 import { getArtifactTargetPath } from "../core/artifacts";
-
-export interface HostAdapter {
-  getActiveContext(): Promise<ContextSnapshot | null>;
-  getPreferredContext(): Promise<ContextSnapshot | null>;
-  capturePreferredContext(): Promise<ContextSnapshot | null>;
-  readFile(path: string): Promise<string | null>;
-  applyDocumentChange(change: DocumentChangeArtifact): Promise<void>;
-  revertDocumentChange(change: DocumentChangeArtifact): Promise<void>;
-  revealDocumentChange(change: DocumentChangeArtifact): Promise<void>;
-}
 
 export class ObsidianHostAdapter implements HostAdapter {
   private lastKnownContext: ContextSnapshot | null = null;

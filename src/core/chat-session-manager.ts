@@ -1,4 +1,4 @@
-import type TmdPlugin from "../obsidian/main";
+import type { ChatStatePersistence } from "./chat-persistence";
 import type {
   ChatConversationRecord,
   ChatMessageRecord,
@@ -267,7 +267,7 @@ export class ChatSessionManager {
   private saveTimer: number | null = null;
   private lastTaskState = new Map<string, string>();
 
-  constructor(private readonly plugin: TmdPlugin, persisted?: ChatPersistenceState | null) {
+  constructor(private readonly persistence: ChatStatePersistence, persisted?: ChatPersistenceState | null) {
     for (const conversation of persisted?.conversations ?? []) {
       this.conversations.set(conversation.id, {
         ...conversation,
@@ -722,7 +722,7 @@ export class ChatSessionManager {
     }
     this.saveTimer = window.setTimeout(() => {
       this.saveTimer = null;
-      void this.plugin.saveChatState(this.serialize());
+      void this.persistence.saveChatState(this.serialize());
     }, 150);
   }
 

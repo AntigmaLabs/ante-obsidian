@@ -2,6 +2,7 @@ import { App, MarkdownView, Notice, Plugin, type WorkspaceLeaf } from "obsidian"
 import { TaskEngine } from "../core/task-engine";
 import type { ContextSnapshot, PresetId } from "../core/types";
 import { MentionTriggerService } from "./mention-trigger";
+import type { HostAdapter } from "../core/host-adapter";
 import { ObsidianHostAdapter } from "./host-adapter";
 import { populateEditorMenu } from "./editor-menu";
 import { TmdSettingTab } from "./settings-tab";
@@ -36,7 +37,7 @@ export default class TmdPlugin extends Plugin {
   };
   shellEnv: Record<string, string> = {};
   resolvedAnteCommand = "";
-  hostAdapter!: ObsidianHostAdapter;
+  hostAdapter!: HostAdapter;
   taskEngine!: TaskEngine;
   chatManager!: ChatSessionManager;
   mentionTrigger!: MentionTriggerService;
@@ -91,7 +92,7 @@ export default class TmdPlugin extends Plugin {
       (presetId) => this.getPresetById(presetId),
       () => this.shouldShowFullProcessLogs()
     );
-    this.chatManager = new ChatSessionManager(this, this.pluginData.chatState);
+    this.chatManager = new ChatSessionManager({ saveChatState: (chatState) => this.saveChatState(chatState) }, this.pluginData.chatState);
     this.taskEngine.subscribe((state) => {
       this.chatManager.syncFromTaskState(state);
     });

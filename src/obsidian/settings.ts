@@ -1,3 +1,5 @@
+import type { BuiltinPresetPreference, CustomPresetConfig, PresetSettings } from "../core/preset-config";
+
 export const OPENAI_PROVIDER = "openai-subscription";
 export const GEMINI_PROVIDER = "gemini";
 export const ANTHROPIC_PROVIDER = "anthropic";
@@ -20,22 +22,7 @@ export const normalizeProvider = (provider: string): AnteProvider =>
       ? ANTHROPIC_PROVIDER
       : OPENAI_PROVIDER;
 
-export interface CustomPresetConfig {
-  id: string;
-  name: string;
-  instruction: string;
-  enabled: boolean;
-  sortOrder: number;
-  interactionMode?: "inline" | "panel";
-}
-
-export interface BuiltinPresetPreference {
-  id: string;
-  enabled: boolean;
-  sortOrder: number;
-}
-
-export interface TmdSettings {
+export interface TmdSettings extends PresetSettings {
   connectionMode: AnteConnectionMode;
   wsAddress: string;
   useAnteDefaults: boolean;
@@ -49,8 +36,6 @@ export interface TmdSettings {
   anthropicApiKey: string;
   anthropicApiKeyEnvKey: string;
   mentionTriggerDebug: boolean;
-  customPresets: CustomPresetConfig[];
-  builtinPresetPreferences: BuiltinPresetPreference[];
 }
 
 export const DEFAULT_SETTINGS: TmdSettings = {

@@ -1,4 +1,4 @@
-import type { HostAdapter } from "../obsidian/host-adapter";
+import type { HostAdapter } from "./host-adapter";
 import type { AnteRuntime } from "../runtime/ante-runtime";
 import { getArtifactTargetPath, toDocumentChangeArtifact } from "./artifacts";
 import type {
