@@ -9,7 +9,6 @@ import { TmdSettingTab } from "./settings-tab";
 import { DEFAULT_SETTINGS, normalizeSettings, type TmdSettings } from "./settings";
 import type { AnteRuntime } from "../runtime/ante-runtime";
 import { DEFAULT_ANTE_ARGS_JSON, createAnteRuntime } from "../runtime/create-ante-runtime";
-import { TMD_DIFF_VIEW_TYPE, TmdDiffView } from "./diff-view";
 import { TMD_CHAT_VIEW_TYPE, TmdChatView } from "./chat-view";
 import { TMD_TERMINAL_VIEW_TYPE, TmdTerminalView } from "./terminal-view";
 import type { TaskRecord } from "../core/types";
@@ -77,7 +76,6 @@ export default class TmdPlugin extends Plugin {
     });
     this.mentionTrigger = new MentionTriggerService(this.app, this, () => this.settings.mentionTriggerDebug);
 
-    this.registerView(TMD_DIFF_VIEW_TYPE, (leaf) => new TmdDiffView(leaf, this));
     this.registerView(TMD_CHAT_VIEW_TYPE, (leaf) => new TmdChatView(leaf, this));
     this.registerView(TMD_TERMINAL_VIEW_TYPE, (leaf) => new TmdTerminalView(leaf, this));
 
@@ -93,7 +91,6 @@ export default class TmdPlugin extends Plugin {
     await this.runtime?.persistActiveSession().catch(() => {});
     this.chatManager?.dispose();
     this.runtime?.dispose();
-    this.app.workspace.detachLeavesOfType(TMD_DIFF_VIEW_TYPE);
     this.app.workspace.detachLeavesOfType(TMD_CHAT_VIEW_TYPE);
     this.app.workspace.detachLeavesOfType(TMD_TERMINAL_VIEW_TYPE);
   }
@@ -298,10 +295,6 @@ export default class TmdPlugin extends Plugin {
     this.notifyAnteMissing("Ante Terminal");
   }
 
-  async openResultsView(): Promise<void> {
-    await this.openDiffView();
-  }
-
   watchTaskForAutoApply(taskId: string, sourceLabel: string): void {
     let settled = false;
     const unsubscribe = this.taskEngine.subscribe((state) => {
@@ -329,7 +322,6 @@ export default class TmdPlugin extends Plugin {
           } catch (error) {
             settled = true;
             unsubscribe();
-            void this.openResultsView();
             new Notice(error instanceof Error ? error.message : "Failed to apply Ante changes");
           }
         })();
@@ -343,7 +335,6 @@ export default class TmdPlugin extends Plugin {
       unsubscribe();
       const failedArtifact = task.artifacts.find((artifact) => artifact.applyState === "failed");
       if (failedArtifact?.applyError) {
-        void this.openResultsView();
         new Notice(failedArtifact.applyError);
         return;
       }
@@ -351,41 +342,13 @@ export default class TmdPlugin extends Plugin {
     });
   }
 
-  watchTaskForResults(taskId: string, sourceLabel: string): void {
-    let settled = false;
-    const unsubscribe = this.taskEngine.subscribe((state) => {
-      if (settled) {
-        return;
-      }
-      const task = state.tasks.find((entry) => entry.id === taskId);
-      if (!task || task.status === "running") {
-        return;
-      }
-
-      settled = true;
-      unsubscribe();
-
-      if (task.artifacts.length > 0) {
-        void this.openResultsView();
-        new Notice(`${sourceLabel} Ante diff is ready in Results`);
-        return;
-      }
-      if (task.error) {
-        new Notice(task.error);
-        return;
-      }
-    });
-  }
-
   private handleNonArtifactTaskCompletion(task: TaskRecord, sourceLabel: string): void {
     if (task.textResult?.text.trim()) {
-      void this.openResultsView();
-      new Notice(`${sourceLabel} Ante result is ready in Results`);
+      new Notice(`${sourceLabel} Ante result is ready`);
       return;
     }
 
     if (task.error) {
-      void this.openResultsView();
       new Notice(task.error);
       return;
     }
@@ -432,12 +395,6 @@ export default class TmdPlugin extends Plugin {
   }
 
   private registerCommands(): void {
-    this.addCommand({
-      id: "open-tmd-results",
-      name: "Open Results",
-      callback: async () => this.openDiffView()
-    });
-
     this.addCommand({
       id: "open-ante-chat",
       name: "Chat with Ante",
@@ -489,12 +446,6 @@ export default class TmdPlugin extends Plugin {
         void this.mentionTrigger.handleEditorChange(editor);
       })
     );
-  }
-
-  private async openDiffView(): Promise<void> {
-    const leaf = await this.ensureLeaf(TMD_DIFF_VIEW_TYPE);
-    await leaf.setViewState({ type: TMD_DIFF_VIEW_TYPE, active: true });
-    this.app.workspace.revealLeaf(leaf);
   }
 
   private async ensureLeaf(viewType: string): Promise<WorkspaceLeaf> {

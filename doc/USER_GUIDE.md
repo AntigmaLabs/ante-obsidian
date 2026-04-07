@@ -6,19 +6,18 @@ This guide is written for end users. It focuses on what Ante md can do today, wh
 
 ## What The Plugin Does
 
-Ante md currently provides 7 main user-facing capabilities:
+Ante md currently provides 6 main user-facing capabilities:
 
-1. Trigger inline note actions with `@ante`.
+1. Trigger inline note actions by typing `@ante` and pressing `Enter` to submit the line.
 2. Run built-in or custom presets from the editor context menu.
-3. Review text output and Markdown diffs in `Results`.
-4. Ask follow-up questions in `Chat with Ante`.
-5. Use `Ante Terminal` for a more terminal-style prompt flow.
-6. Configure the local Ante runtime, connection mode, provider, model, and currently supported credential options from plugin settings.
-7. Manage preset visibility, ordering, and custom preset definitions from plugin settings.
+3. Ask follow-up questions in `Chat with Ante`.
+4. Use `Ante Terminal` for a more terminal-style prompt flow.
+5. Configure the local Ante runtime, connection mode, provider, model, and currently supported credential options from plugin settings.
+6. Manage preset visibility, ordering, and custom preset definitions from plugin settings.
 
 ## Feature 1: Inline Trigger Inside Notes
 
-You can type this trigger directly in a Markdown note:
+You can type this trigger directly in a Markdown note and press `Enter` to start it:
 
 - `@ante`
 
@@ -35,11 +34,11 @@ For more structured research, planning, or summarization, use presets from the c
 - The plugin inserts a temporary running placeholder into the note.
 - If Ante returns plain text, the placeholder is replaced with the final content.
 - If Ante returns inline Markdown changes, Ante md applies the changes directly and leaves a success message in the note.
-- If Ante returns file-level or multi-file changes, Ante md applies them directly and you can open `Results` afterward if you want to inspect or revert the diff.
+- If Ante returns file-level or multi-file changes, Ante md applies them directly.
 
 ### Typical Uses
 
-- Add `@ante` after a rough paragraph to rewrite it.
+- Add `@ante` after a rough paragraph, then press `Enter` to rewrite it.
 - Select a checklist or draft section and ask Ante md to clean up the wording.
 - Use presets when the task already fits a repeatable pattern.
 
@@ -72,7 +71,6 @@ The same menu also includes:
 
 Ante md also registers these commands in the Obsidian command palette:
 
-- `Open Results`
 - `Chat with Ante`
 - `Open Ante Terminal`
 - `Run @ante on current note`
@@ -83,39 +81,10 @@ Ante md also registers these commands in the Obsidian command palette:
 ### Good Use Cases
 
 - You prefer keyboard-driven workflows.
-- You want to reopen the results, chat, or terminal panel quickly.
+- You want to reopen the chat or terminal panel quickly.
 - You repeatedly run the same built-in preset on the current note.
 
-## Feature 4: Results
-
-`Results` is the main panel for reviewing task output. It can show plain text output, diff summaries, and full Markdown diffs.
-For many document tasks started from `@ante`, the editor context menu, or command palette actions, changes may already be auto-applied. In that case, `Results` is mainly where you inspect scope, confirm the outcome, and revert if needed.
-
-### What You Can See There
-
-- The current task status
-- Plain text results
-- The target file or selection location for each change
-- Addition and removal counts
-- Unified diff previews
-- Status and actions for applied or pending changes
-
-### Supported Change Types
-
-Ante md currently supports these Markdown change operations:
-
-- `replace-selection`
-- `append-block`
-- `replace-file`
-- `create-file`
-
-Ante md can also display a grouped `changes` result when Ante returns multiple Markdown edits in one response.
-
-### Why The Results Panel Matters
-
-When Ante returns structured document edits instead of plain text, `Results` is the primary place to inspect scope, target, and effect before or while applying changes.
-
-## Feature 5: Chat with Ante
+## Feature 4: Chat with Ante
 
 `Chat with Ante` is a note-aware multi-turn conversation panel. It is useful when you want to discuss a note, ask follow-up questions, or inspect generated changes without immediately editing the document inline.
 
@@ -142,7 +111,7 @@ When Ante returns structured document edits instead of plain text, `Results` is 
 - Chat can reuse pinned context from the current conversation.
 - Recent updates added richer vault-aware context, so note path and vault path are available to Ante during chat tasks.
 
-## Feature 6: Ante Terminal
+## Feature 5: Ante Terminal
 
 `Ante Terminal` provides a more terminal-like interaction model. It shows prompts, streamed output previews, system logs, task status, and tool approval controls.
 
@@ -152,8 +121,6 @@ When Ante returns structured document edits instead of plain text, `Results` is 
 - View streaming output while the task is running
 - Inspect system messages and errors
 - Approve or deny Ante tool calls when required
-- Open `Results` when a task produces Markdown artifacts
-
 ### Tool Approval
 
 If Ante asks to use tools during a run, the terminal view can show an approval card with these actions:
@@ -162,7 +129,7 @@ If Ante asks to use tools during a run, the terminal view can show an approval c
 - `Allow session`
 - `Deny`
 
-## Feature 7: Settings And Preset Management
+## Feature 6: Settings And Preset Management
 
 Besides runtime configuration, Ante md now includes dedicated update checks and preset management sections in settings.
 
@@ -197,11 +164,10 @@ Besides runtime configuration, Ante md now includes dedicated update checks and 
 
 1. Open a Markdown note.
 2. Select text or place the cursor in the target paragraph.
-3. Trigger Ante md with `@ante`, a preset from the context menu, or a command palette action.
+3. Trigger Ante md with `@ante` plus `Enter`, a preset from the context menu, or a command palette action.
 4. If the result is inline text, it appears in the note.
-5. If the result is plain text or a file diff, inspect it in `Results`.
-6. If you need follow-up discussion, continue in `Chat with Ante`.
-7. If you want a more runtime-focused flow, use `Ante Terminal`.
+5. If you need follow-up discussion, continue in `Chat with Ante`.
+6. If you want a more runtime-focused flow, use `Ante Terminal`.
 
 ## Requirements
 
@@ -224,7 +190,6 @@ In one sentence, Ante md is:
 
 For day-to-day use, the most important things to learn first are:
 
-- `@ante` for quick inline edits
+- `@ante` plus `Enter` for quick inline edits
 - Built-in and custom presets from the context menu
-- `Results` for reviewing generated changes
 - `Chat with Ante` for note-aware follow-up conversations

@@ -1,6 +1,6 @@
 import { Editor, MarkdownView, Notice, type App } from "obsidian";
 import { formatLoadingLabel } from "../core/loading-label";
-import { parseMentionLine } from "../core/mention-parser";
+import { resolveMentionTrigger } from "../core/mention-trigger-state";
 import { buildParagraphSelection } from "../core/paragraph-selection";
 import type { ContextSnapshot, PresetId, TaskTriggerSource } from "../core/types";
 import type TmdPlugin from "./main";
@@ -40,16 +40,27 @@ export class MentionTriggerService {
     }
 
     const cursor = editor.getCursor();
-    const line = editor.getLine(cursor.line);
-    const match = parseMentionLine(line);
-    const lineKey = `${view.file.path}:${cursor.line}:${line}`;
+    const currentLine = editor.getLine(cursor.line);
+    const previousLine = cursor.line > 0 ? editor.getLine(cursor.line - 1) : "";
+    const { match, matchLine, matchText, lineKey, releaseHandledPrefix } = resolveMentionTrigger(
+      view.file.path,
+      cursor.line,
+      currentLine,
+      previousLine
+    );
 
     if (!match) {
-      for (const key of [...this.handledKeys]) {
-        if (key.startsWith(`${view.file.path}:${cursor.line}:`)) {
-          this.handledKeys.delete(key);
+      if (releaseHandledPrefix) {
+        for (const key of [...this.handledKeys]) {
+          if (key.startsWith(releaseHandledPrefix)) {
+            this.handledKeys.delete(key);
+          }
         }
       }
+      return;
+    }
+
+    if (!lineKey) {
       return;
     }
 
@@ -57,13 +68,13 @@ export class MentionTriggerService {
       return;
     }
 
-    const paragraphSelection = buildParagraphSelection(editor, cursor.line, match.start);
+    const paragraphSelection = buildParagraphSelection(editor, matchLine, match.start);
     const mentionSelection = paragraphSelection
       ? {
           ...paragraphSelection,
           to: {
-            line: cursor.line,
-            ch: line.length
+            line: matchLine,
+            ch: matchText.length
           }
         }
       : null;
@@ -94,17 +105,17 @@ export class MentionTriggerService {
     this.running = true;
 
     if (this.isDebugEnabled()) {
-      new Notice(`Triggered ${line.slice(match.start, match.end)}`);
+      new Notice(`Triggered ${matchText.slice(match.start, match.end)}`);
     }
 
     try {
-      const triggerLineText = editor.getLine(cursor.line);
+      const triggerLineText = editor.getLine(matchLine);
       const replaceFrom = {
-        line: cursor.line,
+        line: matchLine,
         ch: match.start
       };
       const replaceTo = {
-        line: cursor.line,
+        line: matchLine,
         ch: triggerLineText.length
       };
 
@@ -237,7 +248,7 @@ export class MentionTriggerService {
                   this.replacePlaceholderWhole(
                     editor,
                     markers,
-                    `> [!success]\n> \n> Applied directly. Open Results (via Command Palette) if you want to inspect the diff or revert the change.`
+                    `> [!success]\n> \n> Applied directly.`
                   );
                 }
               } catch (error) {
@@ -266,7 +277,7 @@ export class MentionTriggerService {
           this.replacePlaceholderWhole(
             editor,
             markers,
-            `> [!success]\n> \n> Applied directly. Open Results if you want to inspect the diff or revert the change.`
+            `> [!success]\n> \n> Applied directly.`
           );
           return;
         }

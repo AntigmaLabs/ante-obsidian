@@ -3,17 +3,15 @@ Ante md is an Obsidian desktop plugin for Ante-powered Markdown workflows. It co
 
 ## Features
 
-- Trigger document tasks from Markdown with `@ante`
+- Trigger document tasks from Markdown with `@ante` followed by `Enter`
 - Run visible presets from the editor right-click menu, including built-ins such as `@ante`, `@ante research`, `@ante plan`, and `@ante summary`
 - Create custom presets in settings, then reorder or hide built-in and custom presets with drag and drop
 - Open `Chat with Ante` from the editor menu or command palette for multi-turn note-aware conversations
 - Use `Ante Terminal` for a more terminal-style prompt flow when you want streaming output and approval controls
-- Preview Markdown changes as unified diffs in `Results`, including multi-file changes, before applying them
 - Support edits to existing `.md` files and creation of new Markdown files
 
 ## Main Views
 
-- `Results`: review text output, diff summaries, and apply generated Markdown changes
 - `Chat with Ante`: keep conversation history, switch between conversations from the sidebar, reuse note context, and render Markdown replies
 - `Ante Terminal`: send terminal-style prompts, inspect runtime logs, and approve or deny tool calls when needed
 
