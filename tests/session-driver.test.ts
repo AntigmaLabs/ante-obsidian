@@ -94,20 +94,26 @@ class TestSessionDriver extends AnteSessionDriver {
 
   primeSession(transport: FakeTransport, sessionId: string): void {
     (this as unknown as {
-      transport: FakeTransport;
-      transportSignature: string;
-      sessionId: string;
-    }).transport = transport;
+      lifecycle: {
+        transport: FakeTransport;
+        transportSignature: string;
+        sessionId: string;
+      };
+    }).lifecycle.transport = transport;
     (this as unknown as {
-      transport: FakeTransport;
-      transportSignature: string;
-      sessionId: string;
-    }).transportSignature = configSignature(config);
+      lifecycle: {
+        transport: FakeTransport;
+        transportSignature: string;
+        sessionId: string;
+      };
+    }).lifecycle.transportSignature = configSignature(config);
     (this as unknown as {
-      transport: FakeTransport;
-      transportSignature: string;
-      sessionId: string;
-    }).sessionId = sessionId;
+      lifecycle: {
+        transport: FakeTransport;
+        transportSignature: string;
+        sessionId: string;
+      };
+    }).lifecycle.sessionId = sessionId;
     transport.connected = true;
   }
 }
