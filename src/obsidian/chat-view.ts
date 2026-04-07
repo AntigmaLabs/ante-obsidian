@@ -22,14 +22,30 @@ import type {
   TmdState,
 } from "../core/types"
 import {
-  renderArtifactDiff,
-  renderDiffSummary,
   resolveArtifactDiffs,
   resolveArtifactsToDiffs,
   type ResolvedArtifactDiff,
 } from "./diff-block"
 import { formatLoadingLabel } from "../core/loading-label"
-import { shouldHandlePromptEnter } from "../core/terminal-input"
+import {
+  buildApprovalSignature,
+  renderApprovalCard,
+} from "./approval-card-renderer"
+import {
+  renderRuntimeDetails,
+  buildRuntimeDetailsSections,
+  shouldAutoExpandRuntimeDetails,
+} from "./runtime-details-renderer"
+import {
+  renderMissingAnteState,
+  renderSimpleEmptyState,
+} from "./empty-state-renderer"
+import { renderArtifactDiffList } from "./artifact-diff-renderer"
+import { renderChatLayout } from "./chat-layout-renderer"
+import {
+  wireChatComposer,
+  wireChatSidebar,
+} from "./chat-shell-wiring"
 
 export const TMD_CHAT_VIEW_TYPE = "tmd-chat-view"
 
@@ -297,97 +313,64 @@ export class TmdChatView extends ItemView {
   }
 
   private buildShell(): void {
-    this.contentEl.empty()
-    this.shellEl = this.contentEl.createDiv({ cls: "tmd-chat-shell" })
-
-    this.sidebarEl = this.shellEl.createDiv({ cls: "tmd-chat-sidebar" })
-    this.sidebarHeaderEl = this.sidebarEl.createDiv({
-      cls: "tmd-chat-sidebar-header",
-    })
-    this.sidebarToggleEl = this.sidebarHeaderEl.createEl("button", {
-      cls: "tmd-chat-sidebar-toggle",
-    })
+    const layout = renderChatLayout(this.contentEl)
+    this.shellEl = layout.shellEl
+    this.sidebarEl = layout.sidebarEl
+    this.sidebarHeaderEl = layout.sidebarHeaderEl
+    this.sidebarToggleEl = layout.sidebarToggleEl
     setIcon(this.sidebarToggleEl, "menu")
-    this.sidebarToggleEl.addEventListener("click", () => {
-      this.isSidebarCollapsed = !this.isSidebarCollapsed
-      this.syncSidebarCollapsedState()
-    })
 
-    this.newChatButtonEl = this.sidebarHeaderEl.createEl("button", {
-      cls: "tmd-chat-sidebar-new",
-      text: "New chat",
+    this.newChatButtonEl = layout.newChatButtonEl
+    setIcon(layout.newChatIconEl, "square-pen")
+    this.newChatButtonEl.prepend(layout.newChatIconEl)
+    wireChatSidebar({
+      sidebarToggleEl: this.sidebarToggleEl,
+      newChatButtonEl: this.newChatButtonEl,
+      onToggleSidebar: () => {
+        this.isSidebarCollapsed = !this.isSidebarCollapsed
+        this.syncSidebarCollapsedState()
+      },
+      onCreateChat: () => {
+        void this.plugin
+          .createChatConversation(this.liveContext)
+          .catch((error) => {
+            new Notice(error instanceof Error ? error.message : String(error))
+          })
+      },
     })
-    const newChatIcon = this.newChatButtonEl.createSpan({
-      cls: "tmd-chat-sidebar-new-icon",
-    })
-    setIcon(newChatIcon, "square-pen")
-    this.newChatButtonEl.prepend(newChatIcon)
-    this.newChatButtonEl.addEventListener("click", () => {
-      void this.plugin
-        .createChatConversation(this.liveContext)
-        .catch((error) => {
-          new Notice(error instanceof Error ? error.message : String(error))
-        })
-    })
-    this.conversationListEl = this.sidebarEl.createDiv({
-      cls: "tmd-chat-sidebar-list",
-    })
+    this.conversationListEl = layout.conversationListEl
 
-    const main = this.shellEl.createDiv({ cls: "tmd-chat-main" })
-    const titleRow = main.createDiv({ cls: "tmd-title-row tmd-chat-header" })
-    this.headerActionsEl = titleRow.createDiv({ cls: "tmd-chat-header-actions" })
-    const headerCopy = titleRow.createDiv({ cls: "tmd-chat-header-copy" })
-    headerCopy.createEl("h2", { text: "Chat with Ante" })
-
-    this.contextEl = main.createDiv({ cls: "tmd-chat-contextbar" })
+    this.headerActionsEl = layout.headerActionsEl
+    this.contextEl = layout.contextEl
     this.contextNodes = {
-      titleEl: this.contextEl.createDiv({ cls: "tmd-chat-context-title" }),
-      valueEl: this.contextEl.createDiv({ cls: "tmd-chat-context-value" }),
+      titleEl: layout.contextTitleEl,
+      valueEl: layout.contextValueEl,
       snippetEl: null,
     }
     this.contextNodes.titleEl.setText("Current context")
 
-    this.timelineEl = main.createDiv({ cls: "tmd-chat-timeline" })
-
-    this.composerContainerEl = main.createDiv({ cls: "tmd-chat-composer" })
-    const inputShell = this.composerContainerEl.createDiv({ cls: "tmd-chat-input-shell" })
-    this.composerEl = inputShell.createEl("textarea", { cls: "tmd-chat-input" })
+    this.timelineEl = layout.timelineEl
+    this.composerContainerEl = layout.composerContainerEl
+    this.composerEl = layout.composerEl
     this.composerEl.placeholder =
       "Ask about the current note, rewrite a selection, or plan the next edit."
-    this.composerEl.addEventListener("compositionstart", () => {
-      this.isComposing = true
-    })
-    this.composerEl.addEventListener("compositionend", () => {
-      this.isComposing = false
-    })
-    this.composerEl.addEventListener("input", () => {
-      this.syncComposerActionButton(this.hasRunningChatTask())
-    })
-    this.composerEl.addEventListener("keydown", (event) => {
-      if (
-        !shouldHandlePromptEnter({
-          isComposing: this.isComposing,
-          eventIsComposing: event.isComposing,
-          keyCode: event.keyCode,
-        })
-      ) {
-        return
-      }
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault()
+    this.composerActionButtonEl = layout.composerActionButtonEl
+    wireChatComposer({
+      composerEl: this.composerEl,
+      composerActionButtonEl: this.composerActionButtonEl,
+      getIsComposing: () => this.isComposing,
+      setIsComposing: (value) => {
+        this.isComposing = value
+      },
+      onInput: () => {
+        this.syncComposerActionButton(this.hasRunningChatTask())
+      },
+      onSubmit: () => {
         this.runPrompt()
-      }
-    })
-
-    this.composerActionButtonEl = inputShell.createEl("button", {
-      cls: "tmd-chat-primary-action",
-    })
-    this.composerActionButtonEl.addEventListener("click", () => {
-      if (this.composerActionButtonEl.dataset.action === "stop") {
+      },
+      onStop: () => {
         this.plugin.taskEngine.cancelActiveTask()
-        return
-      }
-      this.runPrompt()
+      },
     })
     this.syncComposerActionButton(false)
     this.composerResizeObserver?.disconnect()
@@ -715,34 +698,22 @@ export class TmdChatView extends ItemView {
     if (this.emptyStateEl) {
       return
     }
-    const empty = this.timelineEl.createDiv({ cls: "tmd-empty tmd-chat-empty" })
     if (!this.plugin.isAnteInstalled()) {
-      empty.createEl("p", { text: "Ante is not installed yet." })
-      empty.createEl("p", {
-        cls: "tmd-meta",
-        text: "Open Ante md Settings to install the local Ante CLI before starting chat.",
-      })
-      const actionsEl = empty.createDiv({ cls: "tmd-empty-actions" })
-      const settingsButton = actionsEl.createEl("button", {
-        text: "Open settings",
-        cls: "mod-cta",
-      })
-      settingsButton.addEventListener("click", () => {
-        void this.plugin.openPluginSettings()
-      })
-      const refreshButton = actionsEl.createEl("button", {
-        text: "Refresh runtime",
-      })
-      refreshButton.addEventListener("click", () => {
-        void this.plugin.refreshAnteEnvironment().then(() => this.render())
+      const empty = renderMissingAnteState(this.timelineEl, {
+        className: "tmd-chat-empty",
+        title: "Ante is not installed yet.",
+        description:
+          "Open Ante md Settings to install the local Ante CLI before starting chat.",
+        onOpenSettings: () => this.plugin.openPluginSettings(),
+        onRefresh: () => this.plugin.refreshAnteEnvironment().then(() => this.render()),
       })
       this.emptyStateEl = empty
       return
     }
-    empty.createEl("p", { text: "No messages yet." })
-    empty.createEl("p", {
-      cls: "tmd-meta",
-      text: "Use the current note as context and start chatting with Ante.",
+    const empty = renderSimpleEmptyState(this.timelineEl, {
+      className: "tmd-chat-empty",
+      title: "No messages yet.",
+      description: "Use the current note as context and start chatting with Ante.",
     })
     this.emptyStateEl = empty
   }
@@ -1159,48 +1130,23 @@ export class TmdChatView extends ItemView {
     task: TaskRecord | null,
     resolvedArtifacts: ResolvedArtifactDiff[],
   ): void {
-    const isApplyAllDisabled =
-      resolvedArtifacts.every(
-        ({ artifact }) =>
-          artifact.applyState === "applied" ||
-          artifact.applyState === "discarded",
-      ) || !task
-    const applyAllArtifacts = task
-      ? () => {
-          void this.plugin.taskEngine
-            .applyAllArtifacts(task.id)
-            .catch((error) => {
-              new Notice(
-                error instanceof Error
-                  ? error.message
-                  : "Failed to apply all changes",
-              )
-            })
+    renderArtifactDiffList(container, {
+      plugin: this.plugin,
+      task,
+      resolvedArtifacts,
+      expandedArtifactIds: this.expandedArtifactIds,
+      onApplyAll: task
+        ? () => this.plugin.taskEngine.applyAllArtifacts(task.id)
+        : undefined,
+      onToggleExpanded: (artifactId) => {
+        if (this.expandedArtifactIds.has(artifactId)) {
+          this.expandedArtifactIds.delete(artifactId)
+        } else {
+          this.expandedArtifactIds.add(artifactId)
         }
-      : undefined
-    const diffList = renderDiffSummary(container, resolvedArtifacts, {
-      actionLabel: "Apply all",
-      onAction: applyAllArtifacts,
-      isActionDisabled: isApplyAllDisabled,
+        void this.render()
+      },
     })
-
-    for (const resolvedArtifact of resolvedArtifacts) {
-      renderArtifactDiff(
-        diffList,
-        this.plugin,
-        task,
-        resolvedArtifact,
-        this.expandedArtifactIds,
-        () => {
-          if (this.expandedArtifactIds.has(resolvedArtifact.artifact.id)) {
-            this.expandedArtifactIds.delete(resolvedArtifact.artifact.id)
-          } else {
-            this.expandedArtifactIds.add(resolvedArtifact.artifact.id)
-          }
-          void this.render()
-        },
-      )
-    }
   }
 
   private syncApproval(
@@ -1208,13 +1154,7 @@ export class TmdChatView extends ItemView {
     task: TaskRecord,
     approval: NonNullable<ChatMessageRecord["runtime"]>["approval"],
   ): void {
-    const signature = [
-      approval?.turnId ?? "",
-      approval?.message ?? "",
-      ...(approval?.tools ?? []).map(
-        (tool) => `${tool.id}:${tool.name}:${tool.argsText ?? ""}`,
-      ),
-    ].join("|")
+    const signature = buildApprovalSignature(approval, task.id)
     if (elements.approvalHostEl && elements.approvalValue === signature) {
       return
     }
@@ -1224,54 +1164,9 @@ export class TmdChatView extends ItemView {
       elements.bubbleEl.createDiv({ cls: "tmd-chat-approval-host" })
     host.empty()
     if (approval) {
-      const approvalCard = host.createDiv({ cls: "tmd-terminal-approval" })
-      approvalCard.createDiv({
-        cls: "tmd-terminal-approval-title",
-        text: "Tool approval required",
+      renderApprovalCard(host, approval, (decision) => {
+        this.respondToApproval(task.id, decision)
       })
-      approvalCard.createDiv({
-        cls: "tmd-terminal-approval-message",
-        text: approval.message,
-      })
-      for (const tool of approval.tools) {
-        const toolRow = approvalCard.createDiv({
-          cls: "tmd-terminal-approval-tool",
-        })
-        toolRow.createDiv({
-          cls: "tmd-terminal-approval-tool-name",
-          text: `${tool.name} · ${tool.id}`,
-        })
-        if (tool.argsText) {
-          toolRow.createDiv({
-            cls: "tmd-terminal-approval-tool-args",
-            text: tool.argsText,
-          })
-        }
-      }
-      const actionRow = approvalCard.createDiv({
-        cls: "tmd-terminal-approval-actions",
-      })
-      this.renderApprovalAction(
-        actionRow,
-        task.id,
-        "Approve once",
-        "Accept",
-        "tmd-is-approve",
-      )
-      this.renderApprovalAction(
-        actionRow,
-        task.id,
-        "Allow session",
-        "AcceptForSession",
-        "tmd-is-approve-session",
-      )
-      this.renderApprovalAction(
-        actionRow,
-        task.id,
-        "Deny",
-        "Skip",
-        "tmd-is-deny",
-      )
     }
     elements.approvalHostEl = host
     elements.approvalValue = signature
@@ -1296,13 +1191,19 @@ export class TmdChatView extends ItemView {
     }
 
     const telemetry = message.runtime?.telemetry
-    const sections = this.buildRuntimeDetailsSections(telemetry)
+    const sections = buildRuntimeDetailsSections(telemetry, {
+      clampPreview,
+      formatTime,
+    })
     if (sections.length === 0) {
       this.removeRuntimeDetails(elements)
       return
     }
 
-    const shouldOpen = this.shouldAutoExpandRuntimeDetails(message, telemetry)
+    const shouldOpen = shouldAutoExpandRuntimeDetails(
+      message.status === "streaming",
+      telemetry,
+    )
     const signature = `${sections.join("\n\n")}`
     if (
       elements.runtimeDetailsHostEl &&
@@ -1315,21 +1216,7 @@ export class TmdChatView extends ItemView {
       elements.runtimeDetailsHostEl ??
       elements.bubbleEl.createDiv({ cls: "tmd-chat-runtime-details-host" })
     host.empty()
-    const detailsEl = host.createEl("details", {
-      cls: "tmd-chat-runtime-details",
-    })
-    detailsEl.open = shouldOpen
-    detailsEl.createEl("summary", {
-      cls: "tmd-chat-runtime-summary",
-      text: "Runtime details",
-    })
-    const bodyEl = detailsEl.createDiv({ cls: "tmd-chat-runtime-body" })
-    for (const section of sections) {
-      bodyEl.createEl("pre", {
-        cls: "tmd-chat-runtime-block",
-        text: section,
-      })
-    }
+    renderRuntimeDetails(host, sections, shouldOpen)
     elements.runtimeDetailsHostEl = host
     elements.runtimeDetailsValue = signature
   }
@@ -1338,71 +1225,6 @@ export class TmdChatView extends ItemView {
     elements.runtimeDetailsHostEl?.remove()
     elements.runtimeDetailsHostEl = null
     elements.runtimeDetailsValue = null
-  }
-
-  private buildRuntimeDetailsSections(
-    telemetry: RuntimeTelemetryState | undefined,
-  ): string[] {
-    if (!telemetry) {
-      return []
-    }
-
-    const sections: string[] = []
-    const statusLines: string[] = []
-    if (telemetry.compacting) {
-      statusLines.push("status compacting context")
-    }
-    if (telemetry.usage) {
-      statusLines.push(
-        `usage prompt=${telemetry.usage.promptTokens ?? "?"} completion=${telemetry.usage.completionTokens ?? "?"} total=${telemetry.usage.totalTokens ?? "?"}`,
-      )
-    }
-    if (telemetry.lastInfo) {
-      statusLines.push(
-        `${telemetry.lastInfo.level} ${formatTime(telemetry.lastInfo.timestamp)}${telemetry.lastInfo.message ? ` · ${telemetry.lastInfo.message}` : ""}`,
-      )
-    }
-    if (statusLines.length > 0) {
-      sections.push(statusLines.join("\n"))
-    }
-
-    const thinking = clampPreview(telemetry.thinkingText ?? "")
-    if (thinking) {
-      sections.push(`thinking\n${thinking}`)
-    }
-
-    if (telemetry.timeline.length > 0) {
-      sections.push(
-        [
-          "timeline",
-          ...telemetry.timeline.map(
-            (entry) =>
-              `${formatTime(entry.timestamp)} · ${entry.kind}${entry.message ? ` · ${entry.message}` : ""}`,
-          ),
-        ].join("\n"),
-      )
-    }
-
-    return sections
-  }
-
-  private shouldAutoExpandRuntimeDetails(
-    message: ChatMessageRecord,
-    telemetry: RuntimeTelemetryState | undefined,
-  ): boolean {
-    if (!telemetry || message.status !== "streaming") {
-      return false
-    }
-    if (telemetry.compacting) {
-      return true
-    }
-    if ((telemetry.thinkingText ?? "").trim()) {
-      return true
-    }
-    if (telemetry.lastInfo?.message?.trim()) {
-      return true
-    }
-    return telemetry.timeline.length > 0
   }
 
   private syncError(elements: ChatMessageElements, error: string): void {
@@ -1476,28 +1298,17 @@ export class TmdChatView extends ItemView {
     ].join("|")
   }
 
-  private renderApprovalAction(
-    container: HTMLElement,
+  private respondToApproval(
     taskId: string,
-    label: string,
     decision: RuntimeApprovalDecision,
-    cls: string,
   ): void {
-    const button = container.createEl("button", {
-      cls: `tmd-terminal-approval-button ${cls}`,
-      text: label,
-    })
-    button.addEventListener("click", () => {
-      try {
-        this.plugin.taskEngine.respondToTaskApproval(taskId, decision)
-      } catch (error) {
-        new Notice(
-          error instanceof Error
-            ? error.message
-            : "Failed to send Ante approval",
-        )
-      }
-    })
+    try {
+      this.plugin.taskEngine.respondToTaskApproval(taskId, decision)
+    } catch (error) {
+      new Notice(
+        error instanceof Error ? error.message : "Failed to send Ante approval",
+      )
+    }
   }
 
   private syncMessageFooter(

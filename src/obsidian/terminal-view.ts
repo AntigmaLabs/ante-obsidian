@@ -10,16 +10,20 @@ import type {
 import { formatLoadingLabel } from "../core/loading-label"
 import {
   navigatePromptHistory as computePromptHistoryNavigation,
-  shouldHandlePromptEnter,
-  shouldStopFromPromptShortcut,
 } from "../core/terminal-input"
 import { terminalStatus, terminalStatusClass } from "../core/terminal-status"
 import {
-  renderArtifactDiff,
-  renderDiffSummary,
   resolveArtifactDiffs,
   type ResolvedArtifactDiff,
 } from "./diff-block"
+import {
+  buildApprovalSignature,
+  renderApprovalCard,
+} from "./approval-card-renderer"
+import { renderMissingAnteState } from "./empty-state-renderer"
+import { renderArtifactDiffList } from "./artifact-diff-renderer"
+import { renderTerminalLayout } from "./terminal-layout-renderer"
+import { wireTerminalPrompt } from "./terminal-shell-wiring"
 
 export const TMD_TERMINAL_VIEW_TYPE = "tmd-terminal-view"
 
@@ -538,6 +542,7 @@ export class TmdTerminalView extends ItemView {
   private promptEl!: HTMLDivElement
   private editorEl!: HTMLDivElement
   private approvalEl: HTMLDivElement | null = null
+  private approvalSignature = ""
   private inlineArtifactsEl!: HTMLDivElement
   private promptHistory: string[] = []
   private historyIndex: number = -1
@@ -609,105 +614,43 @@ export class TmdTerminalView extends ItemView {
   }
 
   private buildShell(): void {
-    const { contentEl } = this
-    contentEl.empty()
-    contentEl.createEl("h2", { text: "Ante Workspace" })
-
-    this.runtimeHelpEl = contentEl.createDiv({ cls: "tmd-runtime-help" })
-    this.runtimeHelpEl.hide()
-
-    this.frameEl = contentEl.createDiv({ cls: "tmd-terminal-frame" })
-    const chrome = this.frameEl.createDiv({ cls: "tmd-terminal-chrome" })
-    chrome.createDiv({
-      cls: "tmd-terminal-chrome-title",
-      text: "markdown context agent",
-    })
-    const chromeActions = chrome.createDiv({
-      cls: "tmd-terminal-chrome-actions",
-    })
-    const stopButton = chromeActions.createEl("button", {
-      cls: "tmd-terminal-stop-button",
-    })
-    stopButton.setAttr("aria-label", "Stop active Ante task")
-    stopButton.createSpan({ cls: "tmd-terminal-stop-icon", text: "■" })
-    stopButton.createSpan({ cls: "tmd-terminal-stop-label", text: "Stop" })
-    stopButton.addEventListener("click", () =>
-      this.plugin.taskEngine.cancelActiveTask(),
-    )
-    this.statusEl = chromeActions.createDiv({ cls: "tmd-terminal-status" })
-
-    const meta = this.frameEl.createDiv({ cls: "tmd-terminal-meta" })
-    this.metaLineEl = meta.createDiv({ cls: "tmd-terminal-meta-line" })
-
-    this.screenEl = this.frameEl.createDiv({ cls: "tmd-terminal-screen" })
-    this.streamEl = this.screenEl.createDiv({ cls: "tmd-terminal-stream" })
-    this.promptEl = this.screenEl.createDiv({
-      cls: "tmd-terminal-row tmd-terminal-promptline",
-    })
-    this.editorEl = this.promptEl.createDiv({
-      cls: "tmd-terminal-shell-editor tmd-is-empty",
-    })
-    this.editorEl.setAttr("role", "textbox")
-    this.editorEl.setAttr("aria-label", "Ante terminal prompt")
-    this.editorEl.addEventListener("input", () => {
-      const text = this.getEditorText()
-      this.editorEl.classList.toggle("tmd-is-empty", text.length === 0)
-      if (this.historyIndex === -1) {
-        this.draftPrompt = text
-      }
-    })
-    this.editorEl.addEventListener("compositionstart", () => {
-      this.isComposing = true
-    })
-    this.editorEl.addEventListener("compositionend", () => {
-      this.isComposing = false
-    })
-    this.editorEl.addEventListener("keydown", (event) => {
-      if (
-        shouldStopFromPromptShortcut({
-          ctrlKey: event.ctrlKey,
-          metaKey: event.metaKey,
-          shiftKey: event.shiftKey,
-          altKey: event.altKey,
-          key: event.key,
-        })
-      ) {
-        const hasRunningTask = (
-          this.latestState ?? this.plugin.taskEngine.getState()
-        ).tasks.some((task) => task.status === "running")
-        if (hasRunningTask) {
-          event.preventDefault()
-          this.plugin.taskEngine.cancelActiveTask()
-          return
+    const layout = renderTerminalLayout(this.contentEl)
+    this.runtimeHelpEl = layout.runtimeHelpEl
+    this.frameEl = layout.frameEl
+    this.statusEl = layout.statusEl
+    this.metaLineEl = layout.metaLineEl
+    this.screenEl = layout.screenEl
+    this.streamEl = layout.streamEl
+    this.promptEl = layout.promptEl
+    this.editorEl = layout.editorEl
+    wireTerminalPrompt({
+      editorEl: this.editorEl,
+      stopButtonEl: layout.stopButtonEl,
+      getEditorText: () => this.getEditorText(),
+      getIsComposing: () => this.isComposing,
+      setIsComposing: (value) => {
+        this.isComposing = value
+      },
+      getHasRunningTask: () =>
+        (this.latestState ?? this.plugin.taskEngine.getState()).tasks.some(
+          (task) => task.status === "running",
+        ),
+      onDraftChange: (text) => {
+        if (this.historyIndex === -1) {
+          this.draftPrompt = text
         }
-      }
-      if (
-        !shouldHandlePromptEnter({
-          isComposing: this.isComposing,
-          eventIsComposing: event.isComposing,
-          keyCode: (event as KeyboardEvent).keyCode,
-        })
-      ) {
-        return
-      }
-      if (event.key === "Enter") {
-        event.preventDefault()
+      },
+      onStop: () => {
+        this.plugin.taskEngine.cancelActiveTask()
+      },
+      onSubmit: () => {
         this.runPrompt()
-        return
-      }
-      if (event.key === "ArrowUp") {
-        event.preventDefault()
-        this.navigatePromptHistory("up")
-        return
-      }
-      if (event.key === "ArrowDown") {
-        event.preventDefault()
-        this.navigatePromptHistory("down")
-      }
+      },
+      onNavigateHistory: (direction) => {
+        this.navigatePromptHistory(direction)
+      },
     })
-    this.inlineArtifactsEl = contentEl.createDiv({
-      cls: "tmd-terminal-inline-container",
-    })
+    this.inlineArtifactsEl = layout.inlineArtifactsEl
   }
 
   private render(state: TmdState): void {
@@ -878,71 +821,21 @@ export class TmdTerminalView extends ItemView {
     if (!approval || !task) {
       this.approvalEl?.remove()
       this.approvalEl = null
+      this.approvalSignature = ""
       return
     }
 
-    const existing = this.approvalEl
-    if (existing) {
-      existing.remove()
+    const signature = buildApprovalSignature(approval, task.id)
+    if (this.approvalEl && this.approvalSignature === signature) {
+      return
     }
 
-    const approvalCard = this.frameEl.createDiv({
-      cls: "tmd-terminal-approval",
-    })
-    approvalCard.createDiv({
-      cls: "tmd-terminal-approval-title",
-      text: "Tool approval required",
-    })
-    approvalCard.createDiv({
-      cls: "tmd-terminal-approval-message",
-      text: approval.message,
-    })
+    this.approvalEl?.remove()
 
-    for (const tool of approval.tools) {
-      const toolRow = approvalCard.createDiv({
-        cls: "tmd-terminal-approval-tool",
-      })
-      toolRow.createDiv({
-        cls: "tmd-terminal-approval-tool-name",
-        text: `${tool.name} · ${tool.id}`,
-      })
-      if (tool.argsText) {
-        toolRow.createDiv({
-          cls: "tmd-terminal-approval-tool-args",
-          text: tool.argsText,
-        })
-      }
-    }
-
-    const actionRow = approvalCard.createDiv({
-      cls: "tmd-terminal-approval-actions",
+    this.approvalEl = renderApprovalCard(this.frameEl, approval, (decision) => {
+      this.respondToApproval(task.id, decision)
     })
-    const renderAction = (
-      label: string,
-      decision: RuntimeApprovalDecision,
-      cls: string,
-    ) => {
-      const button = actionRow.createEl("button", {
-        cls: `tmd-terminal-approval-button ${cls}`,
-        text: label,
-      })
-      button.addEventListener("click", () => {
-        try {
-          this.plugin.taskEngine.respondToTaskApproval(task.id, decision)
-        } catch (error) {
-          new Notice(
-            error instanceof Error
-              ? error.message
-              : "Failed to send Ante approval",
-          )
-        }
-      })
-    }
-
-    renderAction("Approve once", "Accept", "tmd-is-approve")
-    renderAction("Allow session", "AcceptForSession", "tmd-is-approve-session")
-    renderAction("Deny", "Skip", "tmd-is-deny")
-    this.approvalEl = approvalCard
+    this.approvalSignature = signature
   }
 
   private runPrompt(): void {
@@ -1048,43 +941,22 @@ export class TmdTerminalView extends ItemView {
     resolvedArtifacts: ResolvedArtifactDiff[],
   ): void {
     this.inlineArtifactsEl.empty()
-    const diffList = renderDiffSummary(
-      this.inlineArtifactsEl,
+    renderArtifactDiffList(this.inlineArtifactsEl, {
+      plugin: this.plugin,
+      task,
       resolvedArtifacts,
-      {
-        actionLabel: "Apply all",
-        isActionDisabled: resolvedArtifacts.every(
-          ({ artifact }) =>
-            artifact.applyState === "applied" ||
-            artifact.applyState === "discarded",
-        ),
-        onAction: () => {
-          void this.plugin.taskEngine
-            .applyAllArtifacts(task.id)
-            .catch((error) => {
-              handleError(error, "Failed to apply all changes")
-            })
-        },
+      expandedArtifactIds: this.inlineExpandedArtifactIds,
+      onApplyAll: () => this.plugin.taskEngine.applyAllArtifacts(task.id),
+      onApplyAllError: "Failed to apply all changes",
+      onToggleExpanded: (artifactId) => {
+        if (this.inlineExpandedArtifactIds.has(artifactId)) {
+          this.inlineExpandedArtifactIds.delete(artifactId)
+        } else {
+          this.inlineExpandedArtifactIds.add(artifactId)
+        }
+        this.renderInlineArtifacts(task, this.inlineResolvedArtifacts)
       },
-    )
-    for (const resolved of resolvedArtifacts) {
-      const { artifact } = resolved
-      renderArtifactDiff(
-        diffList,
-        this.plugin,
-        task,
-        resolved,
-        this.inlineExpandedArtifactIds,
-        () => {
-          if (this.inlineExpandedArtifactIds.has(artifact.id)) {
-            this.inlineExpandedArtifactIds.delete(artifact.id)
-          } else {
-            this.inlineExpandedArtifactIds.add(artifact.id)
-          }
-          this.renderInlineArtifacts(task, this.inlineResolvedArtifacts)
-        },
-      )
-    }
+    })
   }
 
   private syncLoadingTimer(state: TmdState): void {
@@ -1166,29 +1038,28 @@ export class TmdTerminalView extends ItemView {
 
     helpEl.empty()
     helpEl.show()
-    helpEl.createDiv({
-      cls: "tmd-runtime-help-title",
-      text: "Ante CLI is missing"
+    renderMissingAnteState(helpEl, {
+      title: "Ante CLI is missing",
+      description:
+        "Open Ante md Settings to install Ante, then refresh runtime detection here.",
+      onOpenSettings: () => this.plugin.openPluginSettings(),
+      onRefresh: () =>
+        this.plugin.refreshAnteEnvironment().then(() => {
+          this.syncRuntimeHelp()
+        }),
     })
-    helpEl.createDiv({
-      cls: "tmd-runtime-help-text",
-      text: "Open Ante md Settings to install Ante, then refresh runtime detection here."
-    })
-    const actionsEl = helpEl.createDiv({ cls: "tmd-runtime-help-actions" })
-    const settingsButton = actionsEl.createEl("button", {
-      text: "Open settings",
-      cls: "mod-cta"
-    })
-    settingsButton.addEventListener("click", () => {
-      void this.plugin.openPluginSettings()
-    })
-    const refreshButton = actionsEl.createEl("button", {
-      text: "Refresh runtime"
-    })
-    refreshButton.addEventListener("click", () => {
-      void this.plugin.refreshAnteEnvironment().then(() => {
-        this.syncRuntimeHelp()
-      })
-    })
+  }
+
+  private respondToApproval(
+    taskId: string,
+    decision: RuntimeApprovalDecision,
+  ): void {
+    try {
+      this.plugin.taskEngine.respondToTaskApproval(taskId, decision)
+    } catch (error) {
+      new Notice(
+        error instanceof Error ? error.message : "Failed to send Ante approval",
+      )
+    }
   }
 }

@@ -3,7 +3,9 @@ import { handleError } from "./utils";
 import type TmdPlugin from "./main";
 import type { TaskRecord, TmdState } from "../core/types";
 import { formatLoadingLabel } from "../core/loading-label";
-import { renderArtifactDiff, renderDiffSummary, resolveArtifactDiffs, type ResolvedArtifactDiff } from "./diff-block";
+import { resolveArtifactDiffs, type ResolvedArtifactDiff } from "./diff-block";
+import { renderArtifactDiffList } from "./artifact-diff-renderer";
+import { renderSimpleEmptyState } from "./empty-state-renderer";
 
 export const TMD_DIFF_VIEW_TYPE = "tmd-diff-view";
 
@@ -50,7 +52,7 @@ export class TmdDiffView extends ItemView {
       const { contentEl } = this;
       contentEl.empty();
       contentEl.createEl("h2", { text: "Results" });
-      contentEl.createDiv({ cls: "tmd-empty", text: "No task has run yet." });
+      renderSimpleEmptyState(contentEl, { title: "No task has run yet." });
       return;
     }
 
@@ -88,21 +90,24 @@ export class TmdDiffView extends ItemView {
       return;
     }
 
-    const diffList = renderDiffSummary(contentEl, resolvedArtifacts, {
-      actionLabel: "Apply all",
-      isActionDisabled: resolvedArtifacts.every(
-        ({ artifact }) => artifact.applyState === "applied" || artifact.applyState === "discarded"
-      ),
-      onAction: () => {
-        void this.plugin.taskEngine.applyAllArtifacts(currentTask.id).catch((error) => {
-          handleError(error, "Failed to apply all changes");
-        });
+    renderArtifactDiffList(contentEl, {
+      plugin: this.plugin,
+      task: currentTask,
+      resolvedArtifacts,
+      expandedArtifactIds: this.expandedArtifactIds,
+      onApplyAll: () => this.plugin.taskEngine.applyAllArtifacts(currentTask.id),
+      onApplyAllError: "Failed to apply all changes",
+      onToggleExpanded: (artifactId) => {
+        if (this.expandedArtifactIds.has(artifactId)) {
+          this.expandedArtifactIds.delete(artifactId);
+        } else {
+          this.expandedArtifactIds.add(artifactId);
+        }
+        if (this.latestState) {
+          void this.render(this.latestState);
+        }
       }
     });
-
-    for (const resolvedArtifact of resolvedArtifacts) {
-      this.renderArtifact(diffList, currentTask, resolvedArtifact);
-    }
   }
 
   private ensureExpandedArtifacts(task: TaskRecord): void {
@@ -138,19 +143,5 @@ export class TmdDiffView extends ItemView {
     if (task.error) {
       section.createDiv({ cls: "tmd-error", text: task.error });
     }
-  }
-
-  private renderArtifact(container: HTMLElement, task: TaskRecord, resolved: ResolvedArtifactDiff): void {
-    const { artifact } = resolved;
-    renderArtifactDiff(container, this.plugin, task, resolved, this.expandedArtifactIds, () => {
-      if (this.expandedArtifactIds.has(artifact.id)) {
-        this.expandedArtifactIds.delete(artifact.id);
-      } else {
-        this.expandedArtifactIds.add(artifact.id);
-      }
-      if (this.latestState) {
-        void this.render(this.latestState);
-      }
-    });
   }
 }

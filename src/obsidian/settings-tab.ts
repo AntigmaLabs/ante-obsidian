@@ -12,6 +12,12 @@ import {
   getDefaultModelForProvider,
   normalizeProvider
 } from "./settings";
+import { renderSettingsSection } from "./settings-section-renderer";
+import {
+  applyProviderOverrideSelection,
+  getSelectedModelForProvider,
+  normalizeConnectionModeValue,
+} from "./settings-tab-helpers";
 
 type SettingsTabId = "updates" | "runtime" | "model" | "presets" | "more";
 
@@ -70,7 +76,7 @@ export class TmdSettingTab extends PluginSettingTab {
           .addOption("websocket", "WebSocket")
           .setValue(this.pluginRef.settings.connectionMode)
           .onChange(async (value) => {
-            this.pluginRef.settings.connectionMode = this.normalizeConnectionMode(value);
+            this.pluginRef.settings.connectionMode = normalizeConnectionModeValue(value);
             await this.pluginRef.saveSettings();
             this.display();
           })
@@ -145,9 +151,7 @@ export class TmdSettingTab extends PluginSettingTab {
             .addOption(ANTHROPIC_PROVIDER, "Anthropic API")
             .setValue(this.pluginRef.settings.anteProvider)
             .onChange(async (value) => {
-              const provider = normalizeProvider(value);
-              this.pluginRef.settings.anteProvider = provider;
-              this.pluginRef.settings.anteModel = getDefaultModelForProvider(provider);
+              applyProviderOverrideSelection(this.pluginRef.settings, value);
               await this.pluginRef.saveSettings();
               this.display();
             })
@@ -158,7 +162,12 @@ export class TmdSettingTab extends PluginSettingTab {
         .setDesc("Ask Ante to use this model for the selected provider.")
         .addDropdown((dropdown) =>
           this.addModelOptions(dropdown)
-            .setValue(this.getSelectedModel())
+            .setValue(
+              getSelectedModelForProvider(
+                this.pluginRef.settings.anteProvider,
+                this.pluginRef.settings.anteModel,
+              ),
+            )
             .onChange(async (value) => {
               this.pluginRef.settings.anteModel = value;
               await this.pluginRef.saveSettings();
@@ -234,10 +243,7 @@ export class TmdSettingTab extends PluginSettingTab {
   }
 
   private createSettingsSection(containerEl: HTMLElement, title: string, summary: string): HTMLDivElement {
-    const sectionEl = containerEl.createDiv({ cls: "tmd-settings-section" });
-    const copyEl = sectionEl.createDiv({ cls: "tmd-settings-section-copy" });
-    copyEl.createEl("p", { text: summary, cls: "tmd-settings-section-summary" });
-    return sectionEl;
+    return renderSettingsSection(containerEl, { title, summary });
   }
 
   private renderCredentialSetting(
@@ -849,14 +855,14 @@ export class TmdSettingTab extends PluginSettingTab {
   }
 
   private getSelectedModel(): string {
-    const models = PROVIDER_MODELS[this.pluginRef.settings.anteProvider];
-    return models.includes(this.pluginRef.settings.anteModel as (typeof models)[number])
-      ? this.pluginRef.settings.anteModel
-      : getDefaultModelForProvider(this.pluginRef.settings.anteProvider);
+    return getSelectedModelForProvider(
+      this.pluginRef.settings.anteProvider,
+      this.pluginRef.settings.anteModel,
+    );
   }
 
   private normalizeConnectionMode(value: string): AnteConnectionMode {
-    return value === "websocket" ? "websocket" : "stdio";
+    return normalizeConnectionModeValue(value);
   }
 }
 

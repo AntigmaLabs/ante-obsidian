@@ -20,6 +20,7 @@ import type { ChatPersistenceState } from "../core/chat-types";
 import { getResolvedPreset, listResolvedPresets } from "../core/presets";
 import { AnteUpdater } from "./ante-updater";
 import { PluginUpdater } from "./plugin-updater";
+import { buildAnteRuntimeConfig } from "./main-runtime-config";
 
 interface TmdPluginData {
   settings?: Partial<TmdSettings>;
@@ -58,33 +59,11 @@ export default class TmdPlugin extends Plugin {
     this.anteUpdater = new AnteUpdater();
     this.pluginUpdater = new PluginUpdater(this.manifest.version);
     this.runtime = createAnteRuntime(() => {
-      const resolved = this.getResolvedAnteTarget();
-      const geminiEnvKey = normalizeEnvVarName(this.settings.geminiApiKeyEnvKey);
-      const anthropicEnvKey = normalizeEnvVarName(this.settings.anthropicApiKeyEnvKey);
-      const geminiApiKey =
-        this.settings.geminiApiKey.trim() ||
-        (geminiEnvKey ? this.shellEnv[geminiEnvKey]?.trim() ?? "" : "") ||
-        (geminiEnvKey ? process.env[geminiEnvKey]?.trim() ?? "" : "");
-      const anthropicApiKey =
-        this.settings.anthropicApiKey.trim() ||
-        (anthropicEnvKey ? this.shellEnv[anthropicEnvKey]?.trim() ?? "" : "") ||
-        (anthropicEnvKey ? process.env[anthropicEnvKey]?.trim() ?? "" : "");
-      return {
-        connectionMode: this.settings.connectionMode,
-        command: "ante",
-        argsJson: DEFAULT_ANTE_ARGS_JSON,
-        cwd: "",
-        wsAddress: this.settings.wsAddress,
-        model: resolved.model,
-        provider: resolved.provider,
-        autoApproveTools: this.settings.autoApproveAnteTools,
-        env:
-          resolved.provider === "gemini" && geminiEnvKey && geminiApiKey
-            ? { [geminiEnvKey]: geminiApiKey }
-            : resolved.provider === "anthropic" && anthropicEnvKey && anthropicApiKey
-              ? { [anthropicEnvKey]: anthropicApiKey }
-              : {}
-      };
+      return buildAnteRuntimeConfig({
+        settings: this.settings,
+        resolvedTarget: this.getResolvedAnteTarget(),
+        shellEnv: this.shellEnv,
+      });
     });
     this.taskEngine = new TaskEngine(
       this.runtime,
