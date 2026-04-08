@@ -272,6 +272,7 @@ export class ChatSessionManager {
       this.conversations.set(conversation.id, {
         ...conversation,
         pinnedContext: cloneContext(conversation.pinnedContext),
+        runtimeTarget: conversation.runtimeTarget ? { ...conversation.runtimeTarget } : undefined,
         messageIds: [...conversation.messageIds]
       });
     }
@@ -343,6 +344,7 @@ export class ChatSessionManager {
       createdAt: timestamp,
       updatedAt: timestamp,
       pinnedContext: cloneContext(options?.context),
+      runtimeTarget: undefined,
       messageIds: [],
       archived: false
     };
@@ -421,6 +423,48 @@ export class ChatSessionManager {
       }
     }
     return null;
+  }
+
+  getConversationRuntimeTarget(
+    conversationId: string
+  ): { provider: string; model: string } | null {
+    const conversation = this.conversations.get(conversationId);
+    return conversation?.runtimeTarget ? { ...conversation.runtimeTarget } : null;
+  }
+
+  setConversationRuntimeTarget(
+    conversationId: string,
+    target: { provider: string; model: string }
+  ): void {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation) {
+      return;
+    }
+    if (
+      conversation.runtimeTarget?.provider === target.provider &&
+      conversation.runtimeTarget?.model === target.model
+    ) {
+      return;
+    }
+    conversation.runtimeTarget = { ...target };
+    conversation.updatedAt = new Date().toISOString();
+    this.persistAndNotify();
+  }
+
+  appendAssistantNotice(conversationId: string, text: string): string | null {
+    const conversation = this.conversations.get(conversationId);
+    const trimmed = text.trim();
+    if (!conversation || !trimmed) {
+      return null;
+    }
+    const message = this.pushMessage(conversation, {
+      role: "assistant",
+      status: "completed",
+      text: trimmed,
+      context: null
+    });
+    this.persistAndNotify();
+    return message.id;
   }
 
   clearConversationRuntimeSessionId(conversationId: string, sessionId: string): void {
@@ -731,6 +775,7 @@ export class ChatSessionManager {
       conversations: [...this.conversations.values()].map((conversation) => ({
         ...conversation,
         pinnedContext: cloneContext(conversation.pinnedContext),
+        runtimeTarget: conversation.runtimeTarget ? { ...conversation.runtimeTarget } : undefined,
         messageIds: [...conversation.messageIds]
       })),
       messages: [...this.messages.values()].map((message) => cloneMessage(message)),

@@ -7,8 +7,8 @@ export type AnteProvider = typeof OPENAI_PROVIDER | typeof GEMINI_PROVIDER | typ
 export type AnteConnectionMode = "stdio" | "websocket";
 
 export const PROVIDER_MODELS: Record<AnteProvider, readonly string[]> = {
-  [OPENAI_PROVIDER]: ["gpt-5.4", "gpt-5.3-codex", "gpt-5.4-pro", "gpt-5-mini", "gpt-5-nano"],
-  [GEMINI_PROVIDER]: ["gemini-3-flash-preview", "gemini-3.1-pro-preview"],
+  [OPENAI_PROVIDER]: ["gpt-5.1-codex", "gpt-5.3-codex", "gpt-5.4"],
+  [GEMINI_PROVIDER]: ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-3.1-pro-preview"],
   [ANTHROPIC_PROVIDER]: ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-6"]
 };
 

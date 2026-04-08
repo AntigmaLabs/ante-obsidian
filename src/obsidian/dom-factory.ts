@@ -1,4 +1,4 @@
-type ElementTag = "div" | "span" | "button" | "textarea" | "h2"
+type ElementTag = "div" | "span" | "button" | "textarea" | "h2" | "select"
 
 type FactoryOptions = {
   cls?: string
@@ -50,3 +50,7 @@ export const textarea = (
 
 export const h2 = (options?: FactoryOptions): FactoryNode<HTMLHeadingElement> =>
   createFactoryNode("h2", options)
+
+export const select = (
+  options?: FactoryOptions,
+): FactoryNode<HTMLSelectElement> => createFactoryNode("select", options)

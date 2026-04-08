@@ -5,7 +5,7 @@ import { buildApprovalResponseOperation } from "./ante-approval";
 import { reduceRunVariant, type ActiveRun } from "./ante-run-event-reducer";
 import type { AnteRuntime, RuntimeObserver } from "./ante-runtime";
 import type { AnteRuntimeConfig } from "./ante-runtime-config";
-import { configSignature } from "./ante-runtime-config";
+import { configSignature, sessionTargetSignature } from "./ante-runtime-config";
 import { AnteSessionLifecycle, type AnteTransportHooks } from "./ante-session-lifecycle";
 import { generateOpId, parseEnvelope, serializeOperation } from "./ante-protocol";
 import type { AnteTransport } from "./transport/ante-transport";
@@ -47,6 +47,7 @@ export class AnteSessionDriver implements AnteRuntime {
   private activeRun: ActiveRun | null = null;
   private interruptState: InterruptState | null = null;
   private lastSentContextFingerprint: string | null = null;
+  private pendingSessionTargetSignature: string | null = null;
 
   constructor(
     private readonly getConfig: () => AnteRuntimeConfig,
@@ -188,7 +189,7 @@ export class AnteSessionDriver implements AnteRuntime {
   }
 
   private async runInternal(request: TaskRequest, observer: RuntimeObserver): Promise<void> {
-    const config = this.getConfig();
+    const config = this.resolveConfigForRequest(request);
     if (!config.command.trim()) {
       observer.onExit({ status: "failed", error: "Ante command is required" });
       return;
@@ -237,6 +238,7 @@ export class AnteSessionDriver implements AnteRuntime {
         `Session prep start · requested=${request.runtimeSessionId?.trim() || "new"} · current=${this.lifecycle.getActiveSessionId() ?? "none"} · mode=${request.mode ?? "initial"}`
       );
       emitDiagnosticLog(observer, `Session prep ready · active=${this.lifecycle.getActiveSessionId() ?? "none"}`);
+      await this.ensureSessionTarget(request, config, observer);
     } catch (error) {
       const startupError =
         error instanceof Error
@@ -376,6 +378,11 @@ export class AnteSessionDriver implements AnteRuntime {
         );
         return true;
       case "SessionUpdated":
+        this.lifecycle.handleSessionUpdated(emitDiagnosticLog);
+        if (this.pendingSessionTargetSignature) {
+          this.lifecycle.setSessionTargetSignature(this.pendingSessionTargetSignature);
+          this.pendingSessionTargetSignature = null;
+        }
         if (this.activeRun) {
           this.activeRun.observer.onEvent({
             type: "session.info",
@@ -432,6 +439,7 @@ export class AnteSessionDriver implements AnteRuntime {
     op:
       | { StartSession: { model: string; provider: string; streaming: boolean } }
       | { ResumeSession: { session_id: string } }
+      | { UpdateSession: { model: { name: string }; provider: string } }
       | { UserInput: string }
       | { ApprovalResponse: { turn_id: string; responses: Array<[string, RuntimeApprovalDecision]> } }
       | "Interrupt"
@@ -443,6 +451,7 @@ export class AnteSessionDriver implements AnteRuntime {
   }
 
   private beginSession(config: AnteRuntimeConfig): void {
+    this.lifecycle.setSessionTargetSignature(sessionTargetSignature(config));
     this.sendOperation({
       StartSession: {
         model: config.model.trim(),
@@ -456,6 +465,18 @@ export class AnteSessionDriver implements AnteRuntime {
     this.sendOperation({
       ResumeSession: {
         session_id: targetSessionId
+      }
+    });
+  }
+
+  private beginUpdateSession(config: AnteRuntimeConfig): void {
+    this.pendingSessionTargetSignature = sessionTargetSignature(config);
+    this.sendOperation({
+      UpdateSession: {
+        model: {
+          name: config.model.trim()
+        },
+        provider: config.provider.trim()
       }
     });
   }
@@ -504,6 +525,43 @@ export class AnteSessionDriver implements AnteRuntime {
       noteTitle: request.context.noteTitle,
       documentText: request.context.documentText,
       selection: request.context.selection
+    });
+  }
+
+  private resolveConfigForRequest(request: TaskRequest): AnteRuntimeConfig {
+    const config = this.getConfig();
+    if (!request.runtimeTarget) {
+      return config;
+    }
+    return {
+      ...config,
+      provider: request.runtimeTarget.provider.trim(),
+      model: request.runtimeTarget.model.trim()
+    };
+  }
+
+  private async ensureSessionTarget(
+    request: TaskRequest,
+    config: AnteRuntimeConfig,
+    observer: RuntimeObserver
+  ): Promise<void> {
+    if (!request.runtimeTarget) {
+      return;
+    }
+    if (!this.lifecycle.getActiveSessionId()) {
+      return;
+    }
+    const nextTargetSignature = sessionTargetSignature(config);
+    if (this.lifecycle.getSessionTargetSignature() === nextTargetSignature) {
+      return;
+    }
+    observer.onEvent({
+      type: "log",
+      stream: "system",
+      text: `Updating Ante session · provider=${config.provider.trim()} · model=${config.model.trim()}`
+    });
+    await this.lifecycle.updateSession(config, observer, (nextConfig) => {
+      this.beginUpdateSession(nextConfig);
     });
   }
 }

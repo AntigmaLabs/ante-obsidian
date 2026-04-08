@@ -53,13 +53,11 @@ export const buildAnteRuntimeConfig = (
     model: input.resolvedTarget.model,
     provider: input.resolvedTarget.provider,
     autoApproveTools: input.settings.autoApproveAnteTools,
-    env:
-      input.resolvedTarget.provider === "gemini" && geminiEnvKey && geminiApiKey
-        ? { [geminiEnvKey]: geminiApiKey }
-        : input.resolvedTarget.provider === "anthropic" &&
-            anthropicEnvKey &&
-            anthropicApiKey
-          ? { [anthropicEnvKey]: anthropicApiKey }
-          : {}
+    env: {
+      ...(geminiEnvKey && geminiApiKey ? { [geminiEnvKey]: geminiApiKey } : {}),
+      ...(anthropicEnvKey && anthropicApiKey
+        ? { [anthropicEnvKey]: anthropicApiKey }
+        : {}),
+    }
   }
 }

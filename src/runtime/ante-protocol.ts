@@ -19,6 +19,14 @@ export type AnteOperation =
       };
     }
   | {
+      UpdateSession: {
+        model: {
+          name: string;
+        };
+        provider: string;
+      };
+    }
+  | {
       UserInput: string;
     }
   | {

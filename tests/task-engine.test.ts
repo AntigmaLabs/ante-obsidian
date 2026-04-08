@@ -280,12 +280,37 @@ test("startChatTask creates a chat task with chat trigger source", async () => {
   assert.equal(capturedRequest?.kind, "chat");
   assert.equal(capturedRequest?.triggerSource, "chat");
   assert.equal(capturedRequest?.mode, "initial");
+  assert.equal(capturedRequest?.runtimeTarget, undefined);
 
   const task = engine.getState().tasks[0];
   assert.ok(task);
   assert.equal(task?.kind, "chat");
   assert.equal(task?.triggerSource, "chat");
   assert.equal(task?.textResult?.text, "hello from chat");
+});
+
+test("queueChatTask forwards runtime target overrides", async () => {
+  let capturedRequest: TaskRequest | null = null;
+  const runtime = new RuntimeStub((request, onEvent) => {
+    capturedRequest = request;
+    onEvent({ type: "result.text", text: "done" });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  await engine.queueChatTask(
+    "task-1",
+    "Use Gemini",
+    false,
+    context,
+    null,
+    { provider: "gemini", model: "gemini-3-flash-preview" }
+  );
+
+  assert.deepEqual(capturedRequest?.runtimeTarget, {
+    provider: "gemini",
+    model: "gemini-3-flash-preview"
+  });
 });
 
 test("startChatTask follow-up reuses the latest chat session id", async () => {

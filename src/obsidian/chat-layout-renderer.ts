@@ -22,6 +22,9 @@ export interface ChatLayoutNodes {
   timelineEl: HTMLDivElement
   composerContainerEl: HTMLDivElement
   inputShellEl: HTMLDivElement
+  composerMetaEl: HTMLDivElement
+  providerButtonEl: HTMLButtonElement
+  modelButtonEl: HTMLButtonElement
   composerEl: HTMLTextAreaElement
   composerActionButtonEl: HTMLButtonElement
 }
@@ -48,6 +51,9 @@ interface ChatContextNodes {
 interface ChatComposerNodes {
   composerContainerEl: HTMLDivElement
   inputShellEl: HTMLDivElement
+  composerMetaEl: HTMLDivElement
+  providerButtonEl: HTMLButtonElement
+  modelButtonEl: HTMLButtonElement
   composerEl: HTMLTextAreaElement
   composerActionButtonEl: HTMLButtonElement
 }
@@ -118,6 +124,15 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
     composerContainerEl,
   )
   const composerEl = textarea({ cls: "tmd-chat-input" }).appendTo(inputShellEl)
+  const composerMetaEl = div({ cls: "tmd-chat-composer-meta" }).appendTo(
+    inputShellEl,
+  )
+  const providerButtonEl = button({
+    cls: "tmd-chat-picker tmd-chat-provider-picker",
+  }).appendTo(composerMetaEl)
+  const modelButtonEl = button({
+    cls: "tmd-chat-picker tmd-chat-model-picker",
+  }).appendTo(composerMetaEl)
   const composerActionButtonEl = button({
     cls: "tmd-chat-primary-action",
   }).appendTo(inputShellEl)
@@ -125,6 +140,9 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
   return {
     composerContainerEl,
     inputShellEl,
+    composerMetaEl,
+    providerButtonEl,
+    modelButtonEl,
     composerEl,
     composerActionButtonEl,
   }
@@ -178,6 +196,9 @@ export const renderChatLayout = (
     timelineEl: main.timelineEl,
     composerContainerEl: main.composer.composerContainerEl,
     inputShellEl: main.composer.inputShellEl,
+    composerMetaEl: main.composer.composerMetaEl,
+    providerButtonEl: main.composer.providerButtonEl,
+    modelButtonEl: main.composer.modelButtonEl,
     composerEl: main.composer.composerEl,
     composerActionButtonEl: main.composer.composerActionButtonEl,
   }

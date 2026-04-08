@@ -2,6 +2,7 @@ import {
   Component,
   ItemView,
   MarkdownRenderer,
+  Menu,
   Notice,
   WorkspaceLeaf,
   setIcon,
@@ -46,8 +47,20 @@ import {
   wireChatComposer,
   wireChatSidebar,
 } from "./chat-shell-wiring"
+import {
+  PROVIDER_MODELS,
+  getDefaultModelForProvider,
+  normalizeProvider,
+  type AnteProvider,
+} from "./settings"
 
 export const TMD_CHAT_VIEW_TYPE = "tmd-chat-view"
+
+const PROVIDER_LABELS: Record<AnteProvider, string> = {
+  gemini: "Gemini",
+  "openai-subscription": "OpenAI",
+  anthropic: "Anthropic",
+}
 
 const MAX_CHAT_PREVIEW_CHARS = 12000
 const MAX_CHAT_PREVIEW_LINES = 160
@@ -243,6 +256,8 @@ export class TmdChatView extends ItemView {
   private timelineEl!: HTMLDivElement
   private emptyStateEl: HTMLDivElement | null = null
   private composerActionButtonEl!: HTMLButtonElement
+  private providerButtonEl!: HTMLButtonElement
+  private modelButtonEl!: HTMLButtonElement
   private composerEl!: HTMLTextAreaElement
   private composerContainerEl!: HTMLDivElement
   private composerResizeObserver: ResizeObserver | null = null
@@ -251,6 +266,8 @@ export class TmdChatView extends ItemView {
   private shouldAutoScrollToBottom = true
   private isComposing = false
   private isSidebarCollapsed = true
+  private selectedProvider: AnteProvider = "openai-subscription"
+  private selectedModel = getDefaultModelForProvider("openai-subscription")
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -351,10 +368,13 @@ export class TmdChatView extends ItemView {
 
     this.timelineEl = layout.timelineEl
     this.composerContainerEl = layout.composerContainerEl
+    this.providerButtonEl = layout.providerButtonEl
+    this.modelButtonEl = layout.modelButtonEl
     this.composerEl = layout.composerEl
     this.composerEl.placeholder =
       "Ask about the current note, rewrite a selection, or plan the next edit."
     this.composerActionButtonEl = layout.composerActionButtonEl
+    this.initializeRuntimeTargetControls()
     wireChatComposer({
       composerEl: this.composerEl,
       composerActionButtonEl: this.composerActionButtonEl,
@@ -380,6 +400,132 @@ export class TmdChatView extends ItemView {
     this.composerResizeObserver.observe(this.composerContainerEl)
     this.syncComposerOffset()
     this.syncSidebarCollapsedState()
+  }
+
+  private initializeRuntimeTargetControls(): void {
+    const resolvedTarget = this.plugin.getResolvedAnteTarget()
+    this.selectedProvider = normalizeProvider(resolvedTarget.provider)
+    this.selectedModel = PROVIDER_MODELS[this.selectedProvider].includes(
+      resolvedTarget.model as (typeof PROVIDER_MODELS)[AnteProvider][number],
+    )
+      ? resolvedTarget.model
+      : getDefaultModelForProvider(this.selectedProvider)
+
+    this.populateProviderSelect()
+    this.populateModelSelect()
+    this.providerButtonEl.addEventListener("click", (event) => {
+      const menu = new Menu()
+      const providers: AnteProvider[] = ["gemini", "openai-subscription"]
+      for (const provider of providers) {
+        menu.addItem((item) => {
+          item
+            .setTitle(PROVIDER_LABELS[provider])
+            .setChecked(provider === this.selectedProvider)
+            .onClick(() => {
+              this.selectedProvider = provider
+              this.selectedModel = getDefaultModelForProvider(this.selectedProvider)
+              this.populateProviderSelect()
+              this.populateModelSelect()
+            })
+        })
+      }
+      menu.showAtMouseEvent(event)
+    })
+    this.modelButtonEl.addEventListener("click", (event) => {
+      const menu = new Menu()
+      for (const model of PROVIDER_MODELS[this.selectedProvider]) {
+        menu.addItem((item) => {
+          item
+            .setTitle(model)
+            .setChecked(model === this.selectedModel)
+            .onClick(() => {
+              this.selectedModel = model
+              this.populateModelSelect()
+            })
+        })
+      }
+      menu.showAtMouseEvent(event)
+    })
+  }
+
+  private populateProviderSelect(): void {
+    this.providerButtonEl.setText(PROVIDER_LABELS[this.selectedProvider])
+    this.providerButtonEl.setAttribute(
+      "title",
+      PROVIDER_LABELS[this.selectedProvider],
+    )
+  }
+
+  private populateModelSelect(): void {
+    this.modelButtonEl.setText(this.selectedModel)
+    this.modelButtonEl.setAttribute("title", this.selectedModel)
+  }
+
+  private getSelectedRuntimeTarget(): { provider: string; model: string } {
+    return {
+      provider: this.selectedProvider,
+      model: this.selectedModel,
+    }
+  }
+
+  private syncRuntimeTargetControls(
+    conversationId: string | null
+  ): void {
+    const conversationTarget = conversationId
+      ? this.plugin.chatManager.getConversationRuntimeTarget(conversationId)
+      : null
+    const fallbackTarget = this.plugin.getResolvedAnteTarget()
+    const provider = normalizeProvider(
+      conversationTarget?.provider ?? fallbackTarget.provider
+    )
+    const model = PROVIDER_MODELS[provider].includes(
+      (conversationTarget?.model ?? fallbackTarget.model) as (typeof PROVIDER_MODELS)[AnteProvider][number],
+    )
+      ? (conversationTarget?.model ?? fallbackTarget.model)
+      : getDefaultModelForProvider(provider)
+
+    const changed =
+      provider !== this.selectedProvider || model !== this.selectedModel
+    if (!changed) {
+      return
+    }
+
+    this.selectedProvider = provider
+    this.selectedModel = model
+    this.populateProviderSelect()
+    this.populateModelSelect()
+  }
+
+  private resolveConversationSendMode(
+    conversationId: string,
+    target: { provider: string; model: string }
+  ): {
+    runtimeSessionId: string | null
+    requiresSessionRestart: boolean
+    switchedProvider: boolean
+  } {
+    const currentTarget =
+      this.plugin.chatManager.getConversationRuntimeTarget(conversationId)
+    const runtimeSessionId =
+      this.plugin.chatManager.getConversationRuntimeSessionId(conversationId)
+
+    if (
+      runtimeSessionId &&
+      currentTarget?.provider &&
+      currentTarget.provider !== target.provider
+    ) {
+      return {
+        runtimeSessionId: null,
+        requiresSessionRestart: true,
+        switchedProvider: true,
+      }
+    }
+
+    return {
+      runtimeSessionId,
+      requiresSessionRestart: false,
+      switchedProvider: false,
+    }
   }
 
   private syncSidebarCollapsedState(): void {
@@ -495,6 +641,7 @@ export class TmdChatView extends ItemView {
     )
 
     this.syncConversationSidebar(chatState, activeConversation?.id ?? null)
+    this.syncRuntimeTargetControls(activeConversation?.id ?? null)
     this.syncContext(this.liveContext)
     const hasRunningTask = this.hasRunningChatTask()
     this.syncComposerActionButton(hasRunningTask)
@@ -751,7 +898,9 @@ export class TmdChatView extends ItemView {
     let elements = this.messageEls.get(message.id)
     if (!elements) {
       const rootEl = createDiv({
-        cls: `tmd-chat-message ${message.role === "user" ? "tmd-is-user" : "tmd-is-assistant"}`,
+        cls: `tmd-chat-message ${message.role === "user" ? "tmd-is-user" : "tmd-is-assistant"}${
+          message.role === "assistant" && !message.turn ? " tmd-is-note" : ""
+        }`,
       })
       const stackEl = rootEl.createDiv({ cls: "tmd-chat-stack" })
       const bubbleEl = stackEl.createDiv({ cls: "tmd-chat-bubble" })
@@ -1459,14 +1608,33 @@ export class TmdChatView extends ItemView {
     }
 
     this.plugin.chatManager.createAssistantTurn(request.conversationId, taskId)
+    const runtimeTarget = this.getSelectedRuntimeTarget()
+    const sendMode = this.resolveConversationSendMode(
+      request.conversationId,
+      runtimeTarget,
+    )
+    if (sendMode.requiresSessionRestart) {
+      await this.plugin.persistIdleAnteSession()
+    }
     try {
       await this.plugin.taskEngine.queueChatTask(
         taskId,
         request.prompt,
-        Boolean(request.runtimeSessionId),
+        Boolean(sendMode.runtimeSessionId),
         request.context,
-        request.runtimeSessionId,
+        sendMode.runtimeSessionId,
+        runtimeTarget,
       )
+      this.plugin.chatManager.setConversationRuntimeTarget(
+        request.conversationId,
+        runtimeTarget,
+      )
+      if (sendMode.switchedProvider) {
+        this.plugin.chatManager.appendAssistantNotice(
+          request.conversationId,
+          `Provider changed to ${runtimeTarget.provider}. Starting a new session for this turn.`,
+        )
+      }
     } catch (error) {
       const removedTaskIds = this.plugin.chatManager.rollbackPendingSend(
         request.conversationId,
@@ -1490,11 +1658,7 @@ export class TmdChatView extends ItemView {
     this.shouldAutoScrollToBottom = true
 
     const activeConversation = this.getActiveConversation(this.latestChatState)
-    const followUpSessionId = activeConversation
-      ? this.plugin.chatManager.getConversationRuntimeSessionId(
-          activeConversation.id,
-        )
-      : null
+    const runtimeTarget = this.getSelectedRuntimeTarget()
 
     void this.plugin.hostAdapter
       .capturePreferredContext()
@@ -1505,6 +1669,13 @@ export class TmdChatView extends ItemView {
           prompt,
           contextSnapshot,
         )
+        const sendMode = this.resolveConversationSendMode(
+          pendingSend.conversation.id,
+          runtimeTarget,
+        )
+        if (sendMode.requiresSessionRestart) {
+          await this.plugin.persistIdleAnteSession()
+        }
         this.plugin.chatManager.createAssistantTurn(
           pendingSend.conversation.id,
           taskId,
@@ -1513,10 +1684,21 @@ export class TmdChatView extends ItemView {
           await this.plugin.taskEngine.queueChatTask(
             taskId,
             prompt,
-            Boolean(followUpSessionId),
+            Boolean(sendMode.runtimeSessionId),
             contextSnapshot,
-            followUpSessionId,
+            sendMode.runtimeSessionId,
+            runtimeTarget,
           )
+          this.plugin.chatManager.setConversationRuntimeTarget(
+            pendingSend.conversation.id,
+            runtimeTarget,
+          )
+          if (sendMode.switchedProvider) {
+            this.plugin.chatManager.appendAssistantNotice(
+              pendingSend.conversation.id,
+              `Provider changed to ${runtimeTarget.provider}. Starting a new session for this turn.`,
+            )
+          }
         } catch (error) {
           const removedTaskIds = this.plugin.chatManager.rollbackPendingSend(
             pendingSend.conversation.id,

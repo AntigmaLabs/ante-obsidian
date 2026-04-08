@@ -112,8 +112,19 @@ export class TaskEngine {
     return request.taskId;
   }
 
-  async startChatTask(prompt: string, followUp = false, contextOverride?: ContextSnapshot | null): Promise<string> {
-    return this.startInteractiveTask("chat", prompt, followUp, contextOverride);
+  async startChatTask(
+    prompt: string,
+    followUp = false,
+    contextOverride?: ContextSnapshot | null,
+    runtimeTarget?: TaskRequest["runtimeTarget"]
+  ): Promise<string> {
+    return this.startInteractiveTask(
+      "chat",
+      prompt,
+      followUp,
+      contextOverride,
+      runtimeTarget
+    );
   }
 
   async queueChatTask(
@@ -121,7 +132,8 @@ export class TaskEngine {
     prompt: string,
     followUp = false,
     contextOverride?: ContextSnapshot | null,
-    runtimeSessionId?: string | null
+    runtimeSessionId?: string | null,
+    runtimeTarget?: TaskRequest["runtimeTarget"]
   ): Promise<string> {
     const context = contextOverride ?? (await this.host.getPreferredContext()) ?? {
       vaultPath: null,
@@ -140,7 +152,8 @@ export class TaskEngine {
       inlineInstruction: prompt.trim(),
       mode: followUp ? "followup" : "initial",
       followUpPrompt: followUp ? prompt.trim() : undefined,
-      runtimeSessionId: followUp ? runtimeSessionId ?? undefined : undefined
+      runtimeSessionId: followUp ? runtimeSessionId ?? undefined : undefined,
+      runtimeTarget
     };
     await this.runTask(request);
     return request.taskId;
@@ -154,7 +167,8 @@ export class TaskEngine {
     triggerSource: "chat" | "terminal",
     prompt: string,
     followUp: boolean,
-    contextOverride?: ContextSnapshot | null
+    contextOverride?: ContextSnapshot | null,
+    runtimeTarget?: TaskRequest["runtimeTarget"]
   ): Promise<string> {
     const context = contextOverride ?? (await this.host.getPreferredContext()) ?? {
       vaultPath: null,
@@ -176,7 +190,8 @@ export class TaskEngine {
       inlineInstruction: prompt.trim(),
       mode: followUp ? "followup" : "initial",
       followUpPrompt: followUp ? prompt.trim() : undefined,
-      runtimeSessionId: followUp ? latestSession?.sessionId : undefined
+      runtimeSessionId: followUp ? latestSession?.sessionId : undefined,
+      runtimeTarget
     };
     await this.runTask(request);
     return request.taskId;

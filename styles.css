@@ -1478,6 +1478,16 @@ button.tmd-diff-file-main {
   width: min(100%, 860px);
 }
 
+.tmd-chat-message.tmd-is-note {
+  justify-content: center;
+  margin: 6px 0 10px;
+}
+
+.tmd-chat-message.tmd-is-note .tmd-chat-stack {
+  width: auto;
+  max-width: min(100%, 560px);
+}
+
 .tmd-chat-bubble {
   position: relative;
   display: flex;
@@ -1502,6 +1512,26 @@ button.tmd-diff-file-main {
   border-radius: var(--tmd-radius-sm);
   background: transparent;
   box-shadow: none;
+}
+
+.tmd-chat-message.tmd-is-note .tmd-chat-bubble {
+  gap: 0;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--tmd-chat-line) 32%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tmd-chat-panel) 44%, transparent);
+}
+
+.tmd-chat-message.tmd-is-note .tmd-chat-meta,
+.tmd-chat-message.tmd-is-note .tmd-chat-footer {
+  display: none;
+}
+
+.tmd-chat-message.tmd-is-note .tmd-chat-text {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .tmd-chat-meta {
@@ -1758,10 +1788,84 @@ button.tmd-diff-file-main {
   background: transparent;
 }
 
+.tmd-chat-composer-meta {
+  position: absolute;
+  right: 60px;
+  bottom: 15px;
+  left: 18px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  z-index: 1;
+}
+
+.tmd-chat-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  height: 20px;
+  padding: 0 14px 0 0;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--text-muted) 90%, white 10%) !important;
+  font-family: var(--font-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: none !important;
+  outline: none;
+  opacity: 0.9;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+}
+
+.tmd-chat-provider-picker {
+  flex: 0 0 auto;
+  max-width: 72px;
+}
+
+.tmd-chat-model-picker {
+  flex: 0 0 auto;
+  max-width: 168px;
+  text-align: left;
+}
+
+.tmd-chat-picker:hover,
+.tmd-chat-picker:focus-visible {
+  color: var(--text-normal) !important;
+  opacity: 1;
+  background: transparent !important;
+}
+
+.tmd-chat-picker::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  margin-top: -5px;
+  border-right: 1.5px solid color-mix(in srgb, var(--text-muted) 84%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--text-muted) 84%, transparent);
+  transform: rotate(45deg);
+  transition:
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.tmd-chat-picker:hover::after,
+.tmd-chat-picker:focus-visible::after {
+  border-right-color: color-mix(in srgb, var(--text-normal) 92%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--text-normal) 92%, transparent);
+}
+
 .tmd-chat-input {
   width: 100%;
   height: 124px;
-  padding: 16px 62px 18px 16px;
+  padding: 16px 62px 50px 16px;
   border: 1px solid color-mix(in srgb, var(--tmd-chat-line-strong) 74%, transparent);
   border-radius: var(--tmd-radius-lg);
   background: color-mix(in srgb, var(--tmd-chat-paper) 98%, white 2%);

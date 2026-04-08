@@ -42,6 +42,10 @@ export interface ChatConversationRecord {
   createdAt: string;
   updatedAt: string;
   pinnedContext: ContextSnapshot | null;
+  runtimeTarget?: {
+    provider: string;
+    model: string;
+  };
   messageIds: string[];
   archived: boolean;
 }

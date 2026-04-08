@@ -195,6 +195,10 @@ export interface TaskRequest {
   followUpPrompt?: string;
   runtimeSessionId?: string;
   reusePriorContext?: boolean;
+  runtimeTarget?: {
+    provider: string;
+    model: string;
+  };
 }
 
 export type RuntimeEvent =

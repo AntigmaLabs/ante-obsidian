@@ -30,7 +30,10 @@ test("buildAnteRuntimeConfig prefers explicit gemini key and emits only selected
   assert.equal(config.connectionMode, "websocket")
   assert.equal(config.provider, "gemini")
   assert.equal(config.model, "gemini-3-flash-preview")
-  assert.deepEqual(config.env, { GEMINI_API_KEY: "gemini-inline" })
+  assert.deepEqual(config.env, {
+    GEMINI_API_KEY: "gemini-inline",
+    ANTHROPIC_API_KEY: "anthropic-inline",
+  })
 })
 
 test("buildAnteRuntimeConfig falls back from shell env to process env for anthropic", () => {

@@ -1,7 +1,7 @@
 import type { TaskRequest } from "../core/types";
 import type { RuntimeObserver } from "./ante-runtime";
 import type { AnteRuntimeConfig } from "./ante-runtime-config";
-import { configSignature } from "./ante-runtime-config";
+import { configSignature, sessionTargetSignature } from "./ante-runtime-config";
 import type { AnteTransport } from "./transport/ante-transport";
 
 type WarmupState = {
@@ -10,7 +10,7 @@ type WarmupState = {
   reject: (error: Error) => void;
 };
 
-type SessionTransitionKind = "start" | "resume";
+type SessionTransitionKind = "start" | "resume" | "update";
 
 type SessionTransitionState = {
   kind: SessionTransitionKind;
@@ -43,6 +43,7 @@ export class AnteSessionLifecycle {
   private transportSignature: string | null = null;
   private transportStarting: { signature: string; promise: Promise<void> } | null = null;
   private sessionId: string | null = null;
+  private currentSessionTargetSignature: string | null = null;
   private sessionStarting = false;
   private sessionTransition: SessionTransitionState | null = null;
   private shutdownState: ShutdownState | null = null;
@@ -53,6 +54,14 @@ export class AnteSessionLifecycle {
 
   getActiveSessionId(): string | null {
     return this.sessionId;
+  }
+
+  getSessionTargetSignature(): string | null {
+    return this.currentSessionTargetSignature;
+  }
+
+  setSessionTargetSignature(signature: string | null): void {
+    this.currentSessionTargetSignature = signature;
   }
 
   isTransportConnected(): boolean {
@@ -187,6 +196,7 @@ export class AnteSessionLifecycle {
     this.transportSignature = null;
     this.transportStarting = null;
     this.sessionId = null;
+    this.currentSessionTargetSignature = null;
     this.sessionStarting = false;
     this.startupDiagnostics.length = 0;
   }
@@ -253,8 +263,19 @@ export class AnteSessionLifecycle {
     this.scheduleSessionTransitionSettle();
   }
 
+  handleSessionUpdated(emitDiagnostic: (observer: RuntimeObserver, text: string) => void): void {
+    const transition = this.sessionTransition;
+    if (!transition || transition.kind !== "update") {
+      return;
+    }
+    transition.hasSeenTargetSession = true;
+    emitDiagnostic(transition.observer, "Session transition updated active target");
+    this.scheduleSessionTransitionSettle();
+  }
+
   handleSessionEnd(): boolean {
     this.sessionId = null;
+    this.currentSessionTargetSignature = null;
     const shutdown = this.shutdownState;
     if (!shutdown) {
       return false;
@@ -363,6 +384,7 @@ export class AnteSessionLifecycle {
     }
     const transition = this.createSessionTransition("start", observer);
     this.sessionTransition = transition;
+    this.currentSessionTargetSignature = sessionTargetSignature(config);
     beginSession(config);
     await transition.promise;
   }
@@ -377,8 +399,24 @@ export class AnteSessionLifecycle {
     }
     const transition = this.createSessionTransition("resume", observer, targetSessionId);
     this.sessionTransition = transition;
+    this.currentSessionTargetSignature = null;
     beginResumeSession(targetSessionId);
     await transition.promise;
+  }
+
+  async updateSession(
+    config: AnteRuntimeConfig,
+    observer: RuntimeObserver,
+    beginUpdateSession: (config: AnteRuntimeConfig) => void
+  ): Promise<void> {
+    if (this.sessionTransition) {
+      await this.sessionTransition.promise;
+    }
+    const transition = this.createSessionTransition("update", observer);
+    this.sessionTransition = transition;
+    beginUpdateSession(config);
+    await transition.promise;
+    this.currentSessionTargetSignature = sessionTargetSignature(config);
   }
 
   private createWarmupState(): WarmupState {

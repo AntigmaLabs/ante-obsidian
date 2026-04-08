@@ -23,3 +23,11 @@ export const configSignature = (config: AnteRuntimeConfig): string =>
       .filter(([, value]) => value.trim())
       .sort(([left], [right]) => left.localeCompare(right))
   });
+
+export const sessionTargetSignature = (
+  config: Pick<AnteRuntimeConfig, "model" | "provider">,
+): string =>
+  JSON.stringify({
+    model: config.model.trim(),
+    provider: config.provider.trim(),
+  });
