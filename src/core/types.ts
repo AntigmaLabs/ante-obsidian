@@ -190,6 +190,7 @@ export interface TaskRequest {
   preset: PresetDefinition;
   context: ContextSnapshot;
   inlineInstruction: string;
+  obsidianCliPromptBlock?: string;
   captureChangesAsArtifacts?: boolean;
   mode?: "initial" | "followup";
   followUpPrompt?: string;

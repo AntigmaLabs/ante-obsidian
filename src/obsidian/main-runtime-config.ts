@@ -45,7 +45,7 @@ export const buildAnteRuntimeConfig = (
     (anthropicEnvKey ? processEnv[anthropicEnvKey]?.trim() ?? "" : "")
 
   return {
-    connectionMode: input.settings.connectionMode,
+    connectionMode: "stdio",
     command: "ante",
     argsJson: DEFAULT_ANTE_ARGS_JSON,
     cwd: "",

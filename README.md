@@ -17,10 +17,7 @@ Ante md is an Obsidian desktop plugin for Ante-powered Markdown workflows. It co
 
 ## Runtime
 
-Ante md talks to `ante serve` using one of two transports:
-
-- `stdio`: `ante serve --stdio` over stdin/stdout
-- `websocket`: `ante serve --ws <ADDR>` plus a WebSocket client connection
+Ante md talks to `ante serve --stdio` over stdin/stdout.
 
 It does not use PTY, `xterm`, or other terminal emulation.
 
@@ -62,12 +59,6 @@ npm run build
 npm run build:release
 npm run smoke
 npm run probe
-```
-
-WebSocket smoke test example:
-
-```bash
-ANTE_TRANSPORT=websocket ANTE_WS_ADDRESS=127.0.0.1:8765 npm run smoke
 ```
 
 ## Portable Config
@@ -123,7 +114,7 @@ That creates `.release/ante-md-<version>.zip`, which expands to an `ante-md/` fo
 After installation:
 
 1. Enable `Ante md` in `Settings -> Community plugins`.
-2. Confirm the local Ante command and connection mode settings if needed.
+2. Confirm the local Ante runtime status and provider/model settings if needed.
 3. By default, Ante md follows `~/.ante/settings.json` for provider and model.
 4. Review preset visibility and ordering in `Ante md Settings -> Presets` if you want to customize the editor menu.
 5. If you switch Ante md to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.
@@ -134,8 +125,6 @@ Current defaults that are still opinionated but not machine-bound:
 
 - Plugin default command: `ante`
 - Plugin default args: `["serve","--stdio","--yolo"]`
-- Plugin default connection mode: `stdio`
-- Plugin default WebSocket address: `127.0.0.1:8765`
 - Plugin default model: `gpt-5.4`
 - Plugin default provider: `openai-subscription`
 

@@ -20,6 +20,7 @@ import { getResolvedPreset, listResolvedPresets } from "../core/presets";
 import { AnteUpdater } from "./ante-updater";
 import { PluginUpdater } from "./plugin-updater";
 import { buildAnteRuntimeConfig } from "./main-runtime-config";
+import { ObsidianCliService, type ObsidianCliStatus } from "./obsidian-cli-service";
 
 interface TmdPluginData {
   settings?: Partial<TmdSettings>;
@@ -43,6 +44,8 @@ export default class TmdPlugin extends Plugin {
   mentionTrigger!: MentionTriggerService;
   anteUpdater!: AnteUpdater;
   pluginUpdater!: PluginUpdater;
+  obsidianCliStatus: ObsidianCliStatus = { available: false };
+  private readonly obsidianCli = new ObsidianCliService();
   private runtime!: AnteRuntime;
   private pluginData: TmdPluginData = {};
   private pluginUpdateState: { lastNotifiedVersion: string | null } = {
@@ -68,7 +71,8 @@ export default class TmdPlugin extends Plugin {
       this.runtime,
       this.hostAdapter,
       (presetId) => this.getPresetById(presetId),
-      () => this.shouldShowFullProcessLogs()
+      () => this.shouldShowFullProcessLogs(),
+      () => this.getObsidianCliPromptBlock()
     );
     this.chatManager = new ChatSessionManager({ saveChatState: (chatState) => this.saveChatState(chatState) }, this.pluginData.chatState);
     this.taskEngine.subscribe((state) => {
@@ -84,6 +88,7 @@ export default class TmdPlugin extends Plugin {
     this.registerEditorMenu();
     this.registerMentionTrigger();
     void this.checkForPluginUpdateOnStartup();
+    void this.refreshObsidianCliStatus();
   }
 
   async onunload(): Promise<void> {
@@ -364,6 +369,30 @@ export default class TmdPlugin extends Plugin {
       provider: this.settings.anteProvider,
       model: this.settings.anteModel
     };
+  }
+
+  getObsidianCliStatus(): ObsidianCliStatus & { enabled: boolean } {
+    return {
+      ...this.obsidianCliStatus,
+      enabled: this.settings.allowObsidianCli
+    };
+  }
+
+  getObsidianCliPromptBlock(): string {
+    if (!this.settings.allowObsidianCli || !this.obsidianCliStatus.available) {
+      return "";
+    }
+
+    return [
+      "Obsidian CLI is available in this session.",
+      "If needed, you may use the `obsidian` command for vault-aware operations.",
+      "Reference: https://obsidian.md/zh/cli",
+      "Prefer the current note/selection first. For Markdown edits, prefer returning Ante md JSON changes instead of modifying files directly through shell."
+    ].join("\n");
+  }
+
+  async refreshObsidianCliStatus(): Promise<void> {
+    this.obsidianCliStatus = await this.obsidianCli.checkStatus();
   }
 
   getAvailablePresets() {

@@ -80,7 +80,8 @@ export class TaskEngine {
     private readonly runtime: AnteRuntime,
     private readonly host: HostAdapter,
     private readonly resolvePresetById: (presetId: PresetId) => PresetDefinition,
-    private readonly shouldPreserveFullStdout: () => boolean = () => false
+    private readonly shouldPreserveFullStdout: () => boolean = () => false,
+    private readonly getObsidianCliPromptBlock: () => string = () => ""
   ) {}
 
   getState(): TmdState {
@@ -106,6 +107,7 @@ export class TaskEngine {
       preset: this.resolvePresetById(input.presetId),
       context,
       inlineInstruction: input.inlineInstruction?.trim() ?? "",
+      obsidianCliPromptBlock: this.getObsidianCliPromptBlock(),
       captureChangesAsArtifacts: input.captureChangesAsArtifacts ?? true
     };
     await this.runTask(request);
@@ -150,6 +152,7 @@ export class TaskEngine {
       preset: this.resolvePresetById("default"),
       context,
       inlineInstruction: prompt.trim(),
+      obsidianCliPromptBlock: this.getObsidianCliPromptBlock(),
       mode: followUp ? "followup" : "initial",
       followUpPrompt: followUp ? prompt.trim() : undefined,
       runtimeSessionId: followUp ? runtimeSessionId ?? undefined : undefined,
@@ -188,6 +191,7 @@ export class TaskEngine {
       preset: this.resolvePresetById("default"),
       context,
       inlineInstruction: prompt.trim(),
+      obsidianCliPromptBlock: this.getObsidianCliPromptBlock(),
       mode: followUp ? "followup" : "initial",
       followUpPrompt: followUp ? prompt.trim() : undefined,
       runtimeSessionId: followUp ? latestSession?.sessionId : undefined,

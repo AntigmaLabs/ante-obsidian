@@ -3,13 +3,7 @@ import assert from "node:assert/strict"
 import {
   applyProviderOverrideSelection,
   getSelectedModelForProvider,
-  normalizeConnectionModeValue,
 } from "../src/obsidian/settings-tab-helpers"
-
-test("normalizeConnectionModeValue falls back to stdio", () => {
-  assert.equal(normalizeConnectionModeValue("websocket"), "websocket")
-  assert.equal(normalizeConnectionModeValue("invalid"), "stdio")
-})
 
 test("applyProviderOverrideSelection resets model to provider default", () => {
   const settings = {

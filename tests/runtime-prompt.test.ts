@@ -66,6 +66,18 @@ test("terminal prompt requires batched change JSON for multiple markdown file ed
   assert.match(prompt, /do not use Bash, Write, or other tools to modify files directly/i);
 });
 
+test("terminal prompt includes Obsidian CLI guidance when available", () => {
+  const prompt = buildInteractivePrompt(
+    terminalRequest({
+      obsidianCliPromptBlock:
+        "Obsidian CLI is available in this session.\nReference: https://obsidian.md/zh/cli"
+    })
+  );
+
+  assert.match(prompt, /Obsidian CLI is available in this session\./);
+  assert.match(prompt, /https:\/\/obsidian\.md\/zh\/cli/);
+});
+
 test("chat prompt uses the chat-specific framing and includes note context", () => {
   const prompt = buildInteractivePrompt(chatRequest());
 

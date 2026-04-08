@@ -1,14 +1,9 @@
 import type TmdPlugin from "./main"
 import {
-  type AnteConnectionMode,
   PROVIDER_MODELS,
   getDefaultModelForProvider,
   normalizeProvider,
 } from "./settings"
-
-export const normalizeConnectionModeValue = (
-  value: string,
-): AnteConnectionMode => (value === "websocket" ? "websocket" : "stdio")
 
 export const getSelectedModelForProvider = (
   provider: keyof typeof PROVIDER_MODELS,

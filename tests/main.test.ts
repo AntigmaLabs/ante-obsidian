@@ -27,7 +27,7 @@ test("buildAnteRuntimeConfig prefers explicit gemini key and emits only selected
     },
   })
 
-  assert.equal(config.connectionMode, "websocket")
+  assert.equal(config.connectionMode, "stdio")
   assert.equal(config.provider, "gemini")
   assert.equal(config.model, "gemini-3-flash-preview")
   assert.deepEqual(config.env, {

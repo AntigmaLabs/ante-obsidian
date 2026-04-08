@@ -25,7 +25,7 @@ Use this option after Ante md has been accepted into the official Obsidian commu
 4. Search for `Ante md`.
 5. Install the plugin.
 6. Enable the plugin.
-7. Open the Ante md settings and confirm the runtime status, connection mode, and provider/model configuration.
+7. Open the Ante md settings and confirm the runtime status and provider/model configuration.
 
 This is the simplest option for most users, but it only works after the plugin passes Obsidian's review process.
 
@@ -49,7 +49,7 @@ The final path should be:
 ```
 
 4. Open Obsidian and enable `Ante md` in `Settings -> Community plugins`.
-5. Open the Ante md settings and confirm the runtime status, connection mode, and provider/model configuration.
+5. Open the Ante md settings and confirm the runtime status and provider/model configuration.
 
 If the plugin does not appear, verify that the folder name matches the plugin id in `manifest.json`. For this project, the id is `ante-md`.
 
@@ -81,7 +81,7 @@ npm run build
 - `main.js`
 - `styles.css`
 6. Open Obsidian and enable `Ante md` in `Settings -> Community plugins`.
-7. Open the Ante md settings and confirm the runtime status, connection mode, and provider/model configuration.
+7. Open the Ante md settings and confirm the runtime status and provider/model configuration.
 
 For development, you can also place the repository directly in the plugin directory and rebuild in place.
 
@@ -90,12 +90,11 @@ For development, you can also place the repository directly in the plugin direct
 After installation, verify the runtime configuration:
 
 1. Open Ante md settings.
-2. Check the `Updates` section for plugin and local Ante Runtime status.
+2. Check the `Runtime` panel for plugin and local Ante Runtime status.
 3. If Ante is not installed locally yet, use `Install` directly from the settings page.
-4. Confirm the connection mode and any required launch arguments.
-5. Confirm the provider and model settings if you are not relying on Ante's own defaults.
-6. If you use Gemini, optionally fill in the API key or env var name.
-7. Try a simple Ante md action on a test note.
+4. Confirm the provider and model settings if you are not relying on Ante's own defaults.
+5. If you use Gemini, optionally fill in the API key or env var name.
+6. Try a simple Ante md action on a test note.
 
 Ante md still depends on a working local Ante Runtime, but it now assumes the standard `ante` executable and provides built-in status checks plus install/upgrade actions in settings.
 By default, Ante md follows Ante's local configuration when possible. If your Ante setup is broken, Ante md will also fail.
@@ -109,7 +108,7 @@ Most likely causes:
 - `ante` is not installed.
 - `ante` is not in your `PATH`.
 - Ante itself is not configured for your model provider.
-- The plugin settings use the wrong connection mode or launch arguments.
+- The plugin settings are not configured for your provider or model setup.
 
 ### The plugin does not appear in Obsidian
 

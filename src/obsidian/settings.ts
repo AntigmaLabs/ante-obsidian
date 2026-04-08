@@ -26,6 +26,7 @@ export interface TmdSettings extends PresetSettings {
   connectionMode: AnteConnectionMode;
   wsAddress: string;
   useAnteDefaults: boolean;
+  allowObsidianCli: boolean;
   anteModel: string;
   anteProvider: AnteProvider;
   autoApproveAnteTools: boolean;
@@ -42,6 +43,7 @@ export const DEFAULT_SETTINGS: TmdSettings = {
   connectionMode: "stdio",
   wsAddress: "127.0.0.1:8765",
   useAnteDefaults: true,
+  allowObsidianCli: true,
   anteModel: getDefaultModelForProvider(OPENAI_PROVIDER),
   anteProvider: OPENAI_PROVIDER,
   autoApproveAnteTools: true,
@@ -127,7 +129,6 @@ const normalizeBuiltinPresetPreferences = (raw: unknown): BuiltinPresetPreferenc
 
 export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefined): TmdSettings => {
   const raw = stored ?? {};
-  const connectionMode = raw.connectionMode === "websocket" ? "websocket" : "stdio";
   const anteProvider = normalizeProvider(typeof raw.anteProvider === "string" ? raw.anteProvider : DEFAULT_SETTINGS.anteProvider);
   const providerModels = PROVIDER_MODELS[anteProvider];
   const requestedModel = typeof raw.anteModel === "string" ? raw.anteModel.trim() : "";
@@ -136,12 +137,13 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
     : getDefaultModelForProvider(anteProvider);
 
   return {
-    connectionMode,
+    connectionMode: "stdio",
     wsAddress:
       typeof raw.wsAddress === "string" && raw.wsAddress.trim()
         ? raw.wsAddress.trim()
         : DEFAULT_SETTINGS.wsAddress,
     useAnteDefaults: raw.useAnteDefaults !== false,
+    allowObsidianCli: raw.allowObsidianCli !== false,
     anteModel,
     anteProvider,
     autoApproveAnteTools: raw.autoApproveAnteTools !== false,

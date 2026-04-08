@@ -17,7 +17,7 @@ test("normalizeSettings appends valid custom presets after builtin presets by de
   });
 
   assert.equal(settings.customPresets.length, 1);
-  assert.equal(settings.connectionMode, "websocket");
+  assert.equal(settings.connectionMode, "stdio");
   assert.equal(settings.wsAddress, "127.0.0.1:9000");
   assert.equal(settings.customPresets[0]?.sortOrder, DEFAULT_SETTINGS.builtinPresetPreferences.length);
   assert.equal(settings.customPresets[0]?.enabled, true);

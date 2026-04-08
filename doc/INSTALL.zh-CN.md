@@ -25,7 +25,7 @@ Ante md 仅支持 Obsidian 桌面版。插件实际运行仍依赖本机 Ante Ru
 4. 搜索 `Ante md`
 5. 安装插件
 6. 启用插件
-7. 打开 Ante md 设置，确认运行时状态、连接方式，以及 provider 和 model 配置
+7. 打开 Ante md 设置，确认运行时状态，以及 provider 和 model 配置
 
 这是最适合大多数用户的安装方式，但前提是插件已经通过 Obsidian 官方审核。
 
@@ -49,7 +49,7 @@ Ante md 仅支持 Obsidian 桌面版。插件实际运行仍依赖本机 Ante Ru
 ```
 
 4. 打开 Obsidian，在 `Settings -> Community plugins` 中启用 `Ante md`
-5. 打开 Ante md 设置，确认运行时状态、连接方式，以及 provider 和 model 配置
+5. 打开 Ante md 设置，确认运行时状态，以及 provider 和 model 配置
 
 如果插件没有显示，请确认目录名与 `manifest.json` 中的插件 id 一致。本项目的 id 是 `ante-md`。
 
@@ -81,7 +81,7 @@ npm run build
 - `main.js`
 - `styles.css`
 6. 打开 Obsidian，在 `Settings -> Community plugins` 中启用 `Ante md`
-7. 打开 Ante md 设置，确认运行时状态、连接方式，以及 provider 和 model 配置
+7. 打开 Ante md 设置，确认运行时状态，以及 provider 和 model 配置
 
 用于开发时，也可以直接把仓库放到插件目录中，再在原地重新构建。
 
@@ -90,12 +90,11 @@ npm run build
 安装完成后，建议检查以下运行配置：
 
 1. 打开 Ante md 设置
-2. 查看 `Updates` 区域，确认插件和本地 Ante Runtime 的状态
+2. 查看 `Runtime` 面板，确认插件和本地 Ante Runtime 的状态
 3. 如果本机还没有安装 Ante，可以直接在设置页中使用 `Install`
-4. 确认连接方式和所需的启动参数
-5. 如果不打算沿用 Ante 默认配置，请确认 provider 和 model 设置
-6. 如使用 Gemini，可按需填写 API Key 或环境变量名
-7. 在测试笔记中尝试执行一次简单的 Ante md 操作
+4. 如果不打算沿用 Ante 默认配置，请确认 provider 和 model 设置
+5. 如使用 Gemini，可按需填写 API Key 或环境变量名
+6. 在测试笔记中尝试执行一次简单的 Ante md 操作
 
 Ante md 仍然依赖本机可用的 Ante Runtime，但现在会固定使用标准 `ante` 可执行文件，并在设置页中提供检查、安装和升级入口。
 默认情况下，Ante md 会尽量沿用 Ante 的本地配置。如果 Ante 本身无法正常工作，Ante md 也无法工作。
@@ -109,7 +108,7 @@ Ante md 仍然依赖本机可用的 Ante Runtime，但现在会固定使用标�
 - 没有安装 `ante`
 - `ante` 不在系统 `PATH` 中
 - Ante 本身没有完成模型提供方配置
-- 插件设置中的连接方式或参数填写错误
+- 插件设置中的 provider 或 model 配置不正确
 
 ### 插件没有在 Obsidian 中出现
 

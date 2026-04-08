@@ -509,6 +509,19 @@ button.tmd-diff-file-main {
   background: color-mix(in srgb, var(--background-modifier-hover) 72%, transparent);
 }
 
+.tmd-update-item.is-neutral {
+  background: color-mix(in srgb, var(--background-secondary) 82%, var(--background-primary) 18%);
+}
+
+.tmd-update-item.is-neutral .tmd-update-item-title,
+.tmd-update-item.is-neutral .tmd-update-item-summary {
+  color: color-mix(in srgb, var(--text-muted) 88%, var(--text-normal) 12%);
+}
+
+.tmd-update-item.is-neutral .tmd-update-item-meta {
+  color: color-mix(in srgb, var(--text-faint) 76%, var(--text-muted) 24%);
+}
+
 @media (max-width: 720px) {
   .tmd-update-item {
     grid-template-columns: 20px minmax(0, 1fr);

@@ -4,7 +4,6 @@ import type TmdPlugin from "./main";
 import type { AnteVersionCheckResult } from "./ante-updater";
 import type { PluginVersionCheckResult } from "./plugin-updater";
 import {
-  type AnteConnectionMode,
   ANTHROPIC_PROVIDER,
   GEMINI_PROVIDER,
   OPENAI_PROVIDER,
@@ -16,10 +15,9 @@ import { renderSettingsSection } from "./settings-section-renderer";
 import {
   applyProviderOverrideSelection,
   getSelectedModelForProvider,
-  normalizeConnectionModeValue,
 } from "./settings-tab-helpers";
 
-type SettingsTabId = "updates" | "runtime" | "model" | "presets" | "more";
+type SettingsTabId = "runtime" | "model" | "presets" | "more";
 
 export class TmdSettingTab extends PluginSettingTab {
   private draggingPresetId: string | null = null;
@@ -28,7 +26,7 @@ export class TmdSettingTab extends PluginSettingTab {
   private checkingAnteVersion = false;
   private checkingPluginVersion = false;
   private upgradingAnte = false;
-  private activeTab: SettingsTabId = "updates";
+  private activeTab: SettingsTabId = "runtime";
 
   constructor(private readonly pluginRef: TmdPlugin) {
     super(pluginRef.app, pluginRef);
@@ -43,7 +41,6 @@ export class TmdSettingTab extends PluginSettingTab {
     const tabsEl = containerEl.createDiv({ cls: "tmd-settings-tabs" });
     const panelsEl = containerEl.createDiv({ cls: "tmd-settings-panels" });
 
-    const updatesSectionEl = this.renderUpdatesSection(panelsEl);
     const runtimeSectionEl = this.createSettingsSection(
       panelsEl,
       "Runtime",
@@ -61,38 +58,12 @@ export class TmdSettingTab extends PluginSettingTab {
       "Low-level diagnostics and development-only helpers."
     );
 
-    this.createTabButton(tabsEl, "updates", "Updates", updatesSectionEl);
     this.createTabButton(tabsEl, "runtime", "Runtime", runtimeSectionEl);
     this.createTabButton(tabsEl, "model", "Model", modelSectionEl);
     this.createTabButton(tabsEl, "presets", "Presets", presetsSectionEl);
     this.createTabButton(tabsEl, "more", "More", advancedSectionEl);
 
-    new Setting(runtimeSectionEl)
-      .setName("Ante connection mode")
-      .setDesc("Choose whether Ante md talks to Ante over stdin/stdout or WebSocket.")
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("stdio", "Local STDIO")
-          .addOption("websocket", "WebSocket")
-          .setValue(this.pluginRef.settings.connectionMode)
-          .onChange(async (value) => {
-            this.pluginRef.settings.connectionMode = normalizeConnectionModeValue(value);
-            await this.pluginRef.saveSettings();
-            this.display();
-          })
-      );
-
-    if (this.pluginRef.settings.connectionMode === "websocket") {
-      new Setting(runtimeSectionEl)
-        .setName("Ante WebSocket address")
-        .setDesc("Socket address passed to `ante serve --ws`. Example: `127.0.0.1:8765`.")
-        .addText((text) =>
-          text.setPlaceholder("127.0.0.1:8765").setValue(this.pluginRef.settings.wsAddress).onChange(async (value) => {
-            this.pluginRef.settings.wsAddress = value.trim() || "127.0.0.1:8765";
-            await this.pluginRef.saveSettings();
-          })
-        );
-    }
+    this.renderUpdatesSectionContent(runtimeSectionEl);
 
     new Setting(runtimeSectionEl)
       .setName("Auto-approve Ante tools")
@@ -280,8 +251,8 @@ export class TmdSettingTab extends PluginSettingTab {
     });
   }
 
-  private renderUpdatesSection(containerEl: HTMLElement): HTMLDivElement {
-    const sectionEl = containerEl.createDiv({ cls: "tmd-updates-section" });
+  private renderUpdatesSectionContent(containerEl: HTMLElement): void {
+    const sectionEl = containerEl.createDiv({ cls: "tmd-updates-section is-active" });
     sectionEl.createEl("p", {
       text: "Check plugin and local runtime update status.",
       cls: "tmd-ante-update-summary"
@@ -290,6 +261,7 @@ export class TmdSettingTab extends PluginSettingTab {
     const listEl = sectionEl.createDiv({ cls: "tmd-updates-list" });
     this.renderPluginUpdateItem(listEl);
     this.renderAnteUpdateItem(listEl);
+    this.renderObsidianCliItem(listEl);
 
     if (!this.pluginVersionState && !this.checkingPluginVersion) {
       void this.refreshPluginVersionState();
@@ -297,7 +269,6 @@ export class TmdSettingTab extends PluginSettingTab {
     if (!this.anteVersionState && !this.checkingAnteVersion) {
       void this.refreshAnteVersionState();
     }
-    return sectionEl;
   }
 
   private renderPluginUpdateItem(containerEl: HTMLElement): void {
@@ -397,10 +368,117 @@ export class TmdSettingTab extends PluginSettingTab {
     }
   }
 
+  private renderObsidianCliItem(containerEl: HTMLElement): void {
+    const cliStatus = this.pluginRef.getObsidianCliStatus();
+    const itemEl = containerEl.createDiv({ cls: `tmd-update-item ${this.getObsidianCliStatusTone()}` });
+    const iconEl = itemEl.createDiv({ cls: "tmd-update-item-icon" });
+    setIcon(iconEl, this.getObsidianCliStatusIcon());
+
+    const bodyEl = itemEl.createDiv({ cls: "tmd-update-item-body" });
+    const headerEl = bodyEl.createDiv({ cls: "tmd-update-item-header" });
+    const titleRowEl = headerEl.createDiv({ cls: "tmd-update-item-title-row" });
+    titleRowEl.createSpan({ cls: "tmd-update-item-title", text: "Obsidian CLI" });
+    titleRowEl.createSpan({ cls: "tmd-update-item-status", text: this.getObsidianCliStatusLabel() });
+
+    bodyEl.createDiv({
+      cls: "tmd-update-item-summary",
+      text: this.getObsidianCliSummary()
+    });
+    bodyEl.createDiv({
+      cls: "tmd-update-item-meta",
+      text: this.getObsidianCliMeta()
+    });
+
+    const actionsEl = itemEl.createDiv({ cls: "tmd-update-item-actions" });
+    const toggleButton = actionsEl.createEl("button", {
+      cls: cliStatus.available && this.pluginRef.settings.allowObsidianCli ? "mod-cta" : ""
+    });
+    toggleButton.addClass("tmd-update-item-button");
+    this.decorateAnteActionButton(
+      toggleButton,
+      cliStatus.available ? (this.pluginRef.settings.allowObsidianCli ? "toggle-right" : "toggle-left") : "circle-slash",
+      cliStatus.available ? (this.pluginRef.settings.allowObsidianCli ? "Enabled" : "Disabled") : "Unavailable"
+    );
+    toggleButton.disabled = !cliStatus.available;
+    toggleButton.addEventListener("click", () => {
+      void (async () => {
+        if (!cliStatus.available) {
+          return;
+        }
+        this.pluginRef.settings.allowObsidianCli = !this.pluginRef.settings.allowObsidianCli;
+        await this.pluginRef.saveSettings();
+        this.display();
+      })();
+    });
+
+    const checkButton = actionsEl.createEl("button");
+    checkButton.addClass("tmd-update-item-button");
+    this.decorateAnteActionButton(checkButton, "refresh-cw", "Check");
+    checkButton.addEventListener("click", () => {
+      void (async () => {
+        await this.pluginRef.refreshObsidianCliStatus();
+        this.display();
+      })();
+    });
+
+    const docsButton = actionsEl.createEl("button");
+    docsButton.addClass("tmd-update-item-button");
+    this.decorateAnteActionButton(docsButton, "external-link", "Open CLI docs");
+    docsButton.addEventListener("click", () => {
+      window.open("https://obsidian.md/zh/cli", "_blank", "noopener");
+    });
+  }
+
   private decorateAnteActionButton(buttonEl: HTMLButtonElement, icon: string, label: string): void {
     const iconEl = buttonEl.createSpan({ cls: "tmd-ante-update-button-icon" });
     setIcon(iconEl, icon);
     buttonEl.createSpan({ text: label, cls: "tmd-ante-update-button-label" });
+  }
+
+  private getObsidianCliStatusLabel(): string {
+    const cliStatus = this.pluginRef.getObsidianCliStatus();
+    if (!cliStatus.enabled) {
+      return "Disabled";
+    }
+    if (cliStatus.available) {
+      return "Available";
+    }
+    return "Not detected";
+  }
+
+  private getObsidianCliSummary(): string {
+    const cliStatus = this.pluginRef.getObsidianCliStatus();
+    if (!cliStatus.enabled) {
+      return "Vault-aware CLI mode is turned off.";
+    }
+    if (cliStatus.available) {
+      return "Lets Ante use Obsidian CLI for vault-aware tasks.";
+    }
+    return "Optional vault-aware mode is unavailable.";
+  }
+
+  private getObsidianCliMeta(): string {
+    const cliStatus = this.pluginRef.getObsidianCliStatus();
+    if (cliStatus.available) {
+      return "";
+    }
+    return "Enable CLI in Obsidian Settings, add `obsidian` to PATH, and keep Obsidian running.";
+  }
+
+  private getObsidianCliStatusTone(): string {
+    const cliStatus = this.pluginRef.getObsidianCliStatus();
+    if (!cliStatus.enabled) {
+      return "is-neutral";
+    }
+    return cliStatus.available ? "is-success" : "is-neutral";
+  }
+
+  private getObsidianCliStatusIcon(): string {
+    const cliStatus = this.pluginRef.getObsidianCliStatus();
+    if (!cliStatus.enabled) {
+      return "toggle-left";
+    }
+    return cliStatus.available ? "app-window" : "circle-slash";
   }
 
   private getAnteUpdateStatusLabel(): string {
@@ -859,10 +937,6 @@ export class TmdSettingTab extends PluginSettingTab {
       this.pluginRef.settings.anteProvider,
       this.pluginRef.settings.anteModel,
     );
-  }
-
-  private normalizeConnectionMode(value: string): AnteConnectionMode {
-    return normalizeConnectionModeValue(value);
   }
 }
 

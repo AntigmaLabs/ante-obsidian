@@ -12,7 +12,7 @@ Ante md currently provides 6 main user-facing capabilities:
 2. Run built-in or custom presets from the editor context menu.
 3. Ask follow-up questions in `Chat with Ante`.
 4. Use `Ante Terminal` for a more terminal-style prompt flow.
-5. Configure the local Ante runtime, connection mode, provider, model, and currently supported credential options from plugin settings.
+5. Configure the local Ante runtime, provider, model, and currently supported credential options from plugin settings.
 6. Manage preset visibility, ordering, and custom preset definitions from plugin settings.
 
 ## Feature 1: Inline Trigger Inside Notes
@@ -135,9 +135,6 @@ Besides runtime configuration, Ante md now includes dedicated update checks and 
 
 ### Available Settings
 
-- Ante connection mode (`stdio` or `websocket`)
-- Ante launch arguments
-- Ante WebSocket address
 - Auto-approve Ante tool calls
 - Show full process logs
 - Whether to use provider and model from `~/.ante/settings.json`
@@ -154,7 +151,6 @@ Besides runtime configuration, Ante md now includes dedicated update checks and 
 ### Why These Settings Matter
 
 - You can reuse your existing Ante configuration.
-- You can choose between a local stdin/stdout connection and a WebSocket transport.
 - You can override provider and model inside the plugin.
 - If Ante is not ready locally yet, you can check status and complete install or upgrade steps from settings.
 - You can simplify the editor menu to only show the presets you actually use.

@@ -33,6 +33,8 @@ const buildVaultAnalysisBlock = (): string =>
     "When useful, infer how this note fits within the vault, folder organization, and nearby documentation context based on those paths."
   ].join("\n");
 
+const buildObsidianCliBlock = (request: TaskRequest): string => request.obsidianCliPromptBlock?.trim() ?? "";
+
 const buildSchemaBlock = (): string =>
   [
     "Return exactly one JSON object and nothing else.",
@@ -125,7 +127,17 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
 
   if (request.mode === "followup") {
     if (request.kind === "terminal") {
-      return [followUpPrompt, "", buildTerminalPriorityBlock(), "", buildTerminalContextBlock(request), "", buildTerminalSchemaBlock()]
+      return [
+        followUpPrompt,
+        "",
+        buildTerminalPriorityBlock(),
+        "",
+        buildObsidianCliBlock(request),
+        "",
+        buildTerminalContextBlock(request),
+        "",
+        buildTerminalSchemaBlock()
+      ]
         .filter(Boolean)
         .join("\n\n");
     }
@@ -135,6 +147,7 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
       `Goal: ${request.preset.goal}`,
       request.preset.systemInstructions ? `Execution instructions:\n${request.preset.systemInstructions}` : "",
       followUpPrompt ? `Follow-up user instruction:\n${followUpPrompt}` : "",
+      buildObsidianCliBlock(request),
       buildVaultAnalysisBlock(),
       buildContextBlock(request),
       buildSchemaBlock()
@@ -144,7 +157,19 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
   }
 
   if (request.kind === "terminal") {
-    return [inlineInstruction, "", buildTerminalPriorityBlock(), "", buildVaultAnalysisBlock(), "", buildTerminalContextBlock(request), "", buildTerminalSchemaBlock()]
+    return [
+      inlineInstruction,
+      "",
+      buildTerminalPriorityBlock(),
+      "",
+      buildObsidianCliBlock(request),
+      "",
+      buildVaultAnalysisBlock(),
+      "",
+      buildTerminalContextBlock(request),
+      "",
+      buildTerminalSchemaBlock()
+    ]
       .filter(Boolean)
       .join("\n\n");
   }
@@ -157,6 +182,7 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
     `Goal: ${request.preset.goal}`,
     request.preset.systemInstructions ? `Execution instructions:\n${request.preset.systemInstructions}` : "",
     inlineInstruction ? `User instruction:\n${inlineInstruction}` : "",
+    buildObsidianCliBlock(request),
     buildVaultAnalysisBlock(),
     buildContextBlock(request),
     buildSchemaBlock()
