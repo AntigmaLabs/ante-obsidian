@@ -18,6 +18,9 @@ const logDebug = (...args: unknown[]): void => {
   }
 };
 
+const previewText = (value: string, maxChars = 240): string =>
+  value.length <= maxChars ? value : `${value.slice(0, maxChars)}...`;
+
 const emitDiagnosticLog = (observer: RuntimeObserver | null | undefined, text: string): void => {
   console.info("[tmd session]", text);
   observer?.onEvent({
@@ -128,16 +131,22 @@ export class AnteSessionDriver implements AnteRuntime {
       return;
     }
 
+    logDebug(`transport recv ${previewText(line)}`);
+
     const envelope = parseEnvelope(line);
     if (!envelope) {
+      logDebug(`transport recv non-envelope ${previewText(line)}`);
       this.activeRun?.observer.onEvent({ type: "log", stream: "stderr", text: line });
       return;
     }
 
     const variant = getVariant(envelope.event);
     if (!variant) {
+      logDebug(`transport recv envelope without variant parent=${envelope.parent ?? "none"}`);
       return;
     }
+
+    logDebug(`transport variant type=${variant.name} parent=${envelope.parent ?? "none"}`);
 
     if (this.handleLifecycleVariant(variant.name, variant.payload, envelope.parent)) {
       return;

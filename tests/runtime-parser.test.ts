@@ -122,6 +122,36 @@ test("parseAssistantMessage parses insert-block anchors", () => {
   ]);
 });
 
+test("parseAssistantMessage extracts change JSON from a fenced block inside surrounding prose", () => {
+  const events = parseAssistantMessage(`我会按你的要求修改：
+
+\`\`\`json
+{
+  "type":"change",
+  "operation":"append-block",
+  "afterText":"done"
+}
+\`\`\`
+
+已生成结果。`);
+
+  assert.deepEqual(events, [
+    {
+      type: "result.change",
+      change: {
+        kind: "change",
+        operation: "append-block",
+        afterText: "done",
+        anchor: undefined,
+        placement: undefined,
+        targetPath: undefined,
+        title: undefined,
+        summary: undefined
+      }
+    }
+  ]);
+});
+
 test("extractUsage accepts canonical usage payloads", () => {
   assert.deepEqual(
     extractUsage({

@@ -3,23 +3,50 @@ import type { BuiltinPresetPreference, CustomPresetConfig, PresetSettings } from
 export const OPENAI_PROVIDER = "openai-subscription";
 export const GEMINI_PROVIDER = "gemini";
 export const ANTHROPIC_PROVIDER = "anthropic";
-export type AnteProvider = typeof OPENAI_PROVIDER | typeof GEMINI_PROVIDER | typeof ANTHROPIC_PROVIDER;
+export const ANTIX_PROVIDER = "antix";
+export type AnteProvider =
+  | typeof OPENAI_PROVIDER
+  | typeof GEMINI_PROVIDER
+  | typeof ANTHROPIC_PROVIDER
+  | typeof ANTIX_PROVIDER;
 export type AnteConnectionMode = "stdio" | "websocket";
 
 export const PROVIDER_MODELS: Record<AnteProvider, readonly string[]> = {
   [OPENAI_PROVIDER]: ["gpt-5.1-codex", "gpt-5.3-codex", "gpt-5.4"],
   [GEMINI_PROVIDER]: ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-3.1-pro-preview"],
-  [ANTHROPIC_PROVIDER]: ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-6"]
+  [ANTHROPIC_PROVIDER]: ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-sonnet-4-6", "claude-opus-4-6"],
+  [ANTIX_PROVIDER]: [
+    "qwen3.5-flash",
+    "gemini-3.1-flash-lite-preview",
+    "qwen3.5-plus",
+    "qwen3.6-plus",
+    "gemini-3.1-pro-preview",
+    "claude-haiku-4-5",
+    "claude-sonnet-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-6",
+    "gpt-4o",
+    "gpt-5.4",
+    "gpt-5.3-codex"
+  ]
 };
 
 export const getDefaultModelForProvider = (provider: AnteProvider): string =>
-  provider === GEMINI_PROVIDER ? "gemini-3-flash-preview" : provider === ANTHROPIC_PROVIDER ? "claude-sonnet-4-5" : "gpt-5.4";
+  provider === GEMINI_PROVIDER
+    ? "gemini-3-flash-preview"
+    : provider === ANTHROPIC_PROVIDER
+      ? "claude-sonnet-4-5"
+      : provider === ANTIX_PROVIDER
+        ? "qwen3.5-flash"
+        : "gpt-5.4";
 
 export const normalizeProvider = (provider: string): AnteProvider =>
   provider === GEMINI_PROVIDER
     ? GEMINI_PROVIDER
     : provider === ANTHROPIC_PROVIDER
       ? ANTHROPIC_PROVIDER
+      : provider === ANTIX_PROVIDER
+        ? ANTIX_PROVIDER
       : OPENAI_PROVIDER;
 
 export interface TmdSettings extends PresetSettings {

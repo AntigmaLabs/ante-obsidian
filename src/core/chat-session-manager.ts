@@ -11,6 +11,17 @@ type ChatListener = (state: ChatStateSnapshot) => void;
 
 const MAX_CONVERSATION_TITLE_CHARS = 60;
 
+const isDebugEnabled = (): boolean => globalThis.localStorage?.getItem("tmd-debug") === "true";
+
+const logDebug = (...args: unknown[]): void => {
+  if (isDebugEnabled()) {
+    console.info("[tmd chat]", ...args);
+  }
+};
+
+const previewText = (value: string, maxChars = 240): string =>
+  value.length <= maxChars ? value : `${value.slice(0, maxChars)}...`;
+
 const cloneContext = (context: ContextSnapshot | null | undefined): ContextSnapshot | null =>
   context
     ? {
@@ -131,6 +142,30 @@ const STRUCTURED_JSON_TYPE_PATTERN = /"type"\s*:\s*"(text|change|changes)"/;
 const STRUCTURED_TEXT_TYPE_PATTERN = /"type"\s*:\s*"text"/;
 const STRUCTURED_CHANGE_TYPE_PATTERN = /"type"\s*:\s*"(change|changes)"/;
 
+const extractJsonCandidates = (text: string): string[] => {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const candidates: string[] = [];
+  const exactFence = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
+  if (exactFence?.[1]) {
+    candidates.push(exactFence[1].trim());
+  }
+
+  const fencePattern = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
+  for (const match of trimmed.matchAll(fencePattern)) {
+    const candidate = match[1]?.trim();
+    if (candidate) {
+      candidates.push(candidate);
+    }
+  }
+
+  candidates.push(trimmed);
+  return [...new Set(candidates)];
+};
+
 const decodePartialJsonString = (input: string): string => {
   let output = "";
 
@@ -190,58 +225,57 @@ const decodePartialJsonString = (input: string): string => {
 };
 
 const extractStructuredStreamingText = (text: string): string | null => {
-  const normalized = text.trim();
-  if (!normalized || !normalized.startsWith("{") || !STRUCTURED_JSON_TYPE_PATTERN.test(normalized)) {
-    return null;
-  }
-
-  if (STRUCTURED_CHANGE_TYPE_PATTERN.test(normalized)) {
-    return "";
-  }
-
-  if (!STRUCTURED_TEXT_TYPE_PATTERN.test(normalized)) {
-    return "";
-  }
-
-  const textFieldMatch = /"text"\s*:\s*"/.exec(normalized);
-  if (!textFieldMatch) {
-    return "";
-  }
-
-  const contentStart = textFieldMatch.index + textFieldMatch[0].length;
-  let escaped = false;
-  let valueEnd = normalized.length;
-
-  for (let index = contentStart; index < normalized.length; index += 1) {
-    const char = normalized[index];
-    if (escaped) {
-      escaped = false;
+  for (const candidate of extractJsonCandidates(text)) {
+    if (!candidate.startsWith("{") || !STRUCTURED_JSON_TYPE_PATTERN.test(candidate)) {
       continue;
     }
-    if (char === "\\") {
-      escaped = true;
-      continue;
+
+    if (STRUCTURED_CHANGE_TYPE_PATTERN.test(candidate)) {
+      return "";
     }
-    if (char === '"') {
-      valueEnd = index;
-      break;
+
+    if (!STRUCTURED_TEXT_TYPE_PATTERN.test(candidate)) {
+      return "";
     }
+
+    const textFieldMatch = /"text"\s*:\s*"/.exec(candidate);
+    if (!textFieldMatch) {
+      return "";
+    }
+
+    const contentStart = textFieldMatch.index + textFieldMatch[0].length;
+    let escaped = false;
+    let valueEnd = candidate.length;
+
+    for (let index = contentStart; index < candidate.length; index += 1) {
+      const char = candidate[index];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        valueEnd = index;
+        break;
+      }
+    }
+
+    return decodePartialJsonString(candidate.slice(contentStart, valueEnd));
   }
 
-  return decodePartialJsonString(normalized.slice(contentStart, valueEnd));
+  return null;
 };
 
 const shouldHideStructuredStreamingText = (text: string): boolean => {
-  const normalized = text.trim();
-  if (!normalized) {
-    return false;
-  }
-
-  if (!normalized.startsWith("{")) {
-    return false;
-  }
-
-  return STRUCTURED_CHANGE_TYPE_PATTERN.test(normalized);
+  return extractJsonCandidates(text).some(
+    (candidate) =>
+      candidate.startsWith("{") &&
+      STRUCTURED_JSON_TYPE_PATTERN.test(candidate) &&
+      STRUCTURED_CHANGE_TYPE_PATTERN.test(candidate)
+  );
 };
 
 const isRecoverableConversationSession = (task: TaskRecord): boolean => Boolean(task.runtimeSession?.sessionId && task.endedAt);
@@ -551,14 +585,17 @@ export class ChatSessionManager {
     conversationId: string,
     userMessageId: string,
     taskId: string,
-    removeConversationIfEmpty = false
+    removeConversationIfEmpty = false,
+    extraMessageIds: string[] = []
   ): string[] {
     const conversation = this.conversations.get(conversationId);
     if (!conversation) {
       return [];
     }
     const assistantMessageId = this.taskToMessageId.get(taskId);
-    const messageIdsToRemove = new Set([userMessageId, assistantMessageId].filter((value): value is string => Boolean(value)));
+    const messageIdsToRemove = new Set(
+      [userMessageId, assistantMessageId, ...extraMessageIds].filter((value): value is string => Boolean(value))
+    );
     if (messageIdsToRemove.size === 0) {
       return [];
     }
@@ -634,9 +671,9 @@ export class ChatSessionManager {
 
     const hasStructuredResult =
       Boolean(task.textResult?.text.trim()) || task.artifacts.length > 0 || Boolean(task.inlineChanges && task.inlineChanges.length > 0);
-    const streamingText =
-      extractStructuredStreamingText(task.stdoutText) ??
-      (shouldHideStructuredStreamingText(task.stdoutText) ? "" : task.stdoutText);
+    const extractedStreamingText = extractStructuredStreamingText(task.stdoutText);
+    const hideStructuredStreamingText = extractedStreamingText == null && shouldHideStructuredStreamingText(task.stdoutText);
+    const streamingText = extractedStreamingText ?? (hideStructuredStreamingText ? "" : task.stdoutText);
     const nextText =
       task.status === "running"
         ? streamingText
@@ -675,6 +712,20 @@ export class ChatSessionManager {
       taskId: task.id,
       runtimeSessionId: task.runtimeSession?.sessionId
     };
+
+    if (isDebugEnabled()) {
+      const candidatePreviews = extractJsonCandidates(task.stdoutText).map((candidate) => previewText(candidate, 180));
+      logDebug(
+        `syncTask id=${task.id} status=${task.status} artifacts=${task.artifacts.length} hasStructuredResult=${hasStructuredResult} extractedStreaming=${extractedStreamingText != null} hideStructured=${hideStructuredStreamingText} stdoutLen=${task.stdoutText.length}`
+      );
+      if (task.stdoutText.trim()) {
+        logDebug(`syncTask stdout preview=${JSON.stringify(previewText(task.stdoutText, 800))}`);
+        logDebug(`syncTask json candidates=${JSON.stringify(candidatePreviews)}`);
+      }
+      logDebug(
+        `syncTask nextText len=${nextText.length} status=${nextStatus} textPreview=${JSON.stringify(previewText(nextText, 240))}`
+      );
+    }
 
     const changed =
       message.text !== nextText ||

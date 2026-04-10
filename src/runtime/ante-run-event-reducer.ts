@@ -44,6 +44,9 @@ export interface ReduceRunVariantInput {
   respondToApproval: (approval: RuntimeApprovalRequest, decision: "AcceptForSession") => void;
 }
 
+const previewText = (value: string, maxChars = 240): string =>
+  value.length <= maxChars ? value : `${value.slice(0, maxChars)}...`;
+
 const markFirstEvent = (activeRun: ActiveRun, nowMs: () => number): number => {
   if (activeRun.firstEventAtMs == null) {
     activeRun.firstEventAtMs = nowMs();
@@ -73,6 +76,7 @@ export const reduceRunVariant = ({
       if (!delta) {
         return null;
       }
+      logDebug(`MessageDelta len=${delta.length} preview=${JSON.stringify(previewText(delta))}`);
       markFirstStdout(activeRun, nowMs);
       activeRun.finalMessage += delta;
       activeRun.observer.onEvent({ type: "log", stream: "stdout", text: delta });
@@ -108,6 +112,7 @@ export const reduceRunVariant = ({
       if (!message.trim()) {
         return null;
       }
+      logDebug(`AgentMessage len=${message.length} preview=${JSON.stringify(previewText(message))}`);
       markFirstStdout(activeRun, nowMs);
       activeRun.finalMessage = message;
       activeRun.observer.onEvent({ type: "log", stream: "stdout", text: message });
@@ -242,9 +247,18 @@ export const reduceRunVariant = ({
         return { status: "failed", error: errorMessage };
       }
       if (activeRun.finalMessage.trim()) {
-        for (const event of parseAssistantMessage(activeRun.finalMessage)) {
+        logDebug(
+          `TurnEnd finalMessage len=${activeRun.finalMessage.length} preview=${JSON.stringify(previewText(activeRun.finalMessage, 1000))}`
+        );
+        const parsedEvents = parseAssistantMessage(activeRun.finalMessage);
+        logDebug(
+          `TurnEnd parsedEvents count=${parsedEvents.length} types=${parsedEvents.map((event) => event.type).join(",") || "none"}`
+        );
+        for (const event of parsedEvents) {
           activeRun.observer.onEvent(event);
         }
+      } else {
+        logDebug("TurnEnd finalMessage empty");
       }
       activeRun.observer.onEvent({ type: "process.update", process: undefined });
       activeRun.observer.onEvent({ type: "session.completed", summary: "Ante session completed" });

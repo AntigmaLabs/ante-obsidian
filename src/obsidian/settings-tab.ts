@@ -4,6 +4,7 @@ import type TmdPlugin from "./main";
 import type { AnteVersionCheckResult } from "./ante-updater";
 import type { PluginVersionCheckResult } from "./plugin-updater";
 import {
+  ANTIX_PROVIDER,
   ANTHROPIC_PROVIDER,
   GEMINI_PROVIDER,
   OPENAI_PROVIDER,
@@ -120,6 +121,7 @@ export class TmdSettingTab extends PluginSettingTab {
             .addOption(OPENAI_PROVIDER, "OpenAI Subscription")
             .addOption(GEMINI_PROVIDER, "Gemini API")
             .addOption(ANTHROPIC_PROVIDER, "Anthropic API")
+            .addOption(ANTIX_PROVIDER, "Antix")
             .setValue(this.pluginRef.settings.anteProvider)
             .onChange(async (value) => {
               applyProviderOverrideSelection(this.pluginRef.settings, value);

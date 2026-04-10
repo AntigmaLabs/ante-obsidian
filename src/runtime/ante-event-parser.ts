@@ -329,19 +329,40 @@ export const extractTurnStatus = (value: unknown): string | null => {
   return null;
 };
 
-const parseJsonPayload = (value: string): unknown | null => {
+const extractJsonCandidates = (value: string): string[] => {
   const trimmed = value.trim();
   if (!trimmed) {
-    return null;
+    return [];
   }
 
-  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
-  const candidate = (fenced ? fenced[1] : trimmed).replace(/\s*\[end_turn\]\s*$/i, "").trim();
-  try {
-    return JSON.parse(candidate) as unknown;
-  } catch {
-    return null;
+  const normalized = trimmed.replace(/\s*\[end_turn\]\s*$/i, "").trim();
+  const candidates: string[] = [];
+  const exactFence = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(normalized);
+  if (exactFence?.[1]) {
+    candidates.push(exactFence[1].trim());
   }
+
+  const fencePattern = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
+  for (const match of normalized.matchAll(fencePattern)) {
+    const candidate = match[1]?.trim();
+    if (candidate) {
+      candidates.push(candidate);
+    }
+  }
+
+  candidates.push(normalized);
+  return [...new Set(candidates)];
+};
+
+const parseJsonPayload = (value: string): unknown | null => {
+  for (const candidate of extractJsonCandidates(value)) {
+    try {
+      return JSON.parse(candidate) as unknown;
+    } catch {
+      // Try the next candidate, for example a fenced JSON block inside prose.
+    }
+  }
+  return null;
 };
 
 const extractTopLevelJsonObject = (value: string, startIndex = 0): string | null => {

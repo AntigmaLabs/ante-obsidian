@@ -60,6 +60,7 @@ const PROVIDER_LABELS: Record<AnteProvider, string> = {
   gemini: "Gemini",
   "openai-subscription": "OpenAI",
   anthropic: "Anthropic",
+  antix: "Antix",
 }
 
 const MAX_CHAT_PREVIEW_CHARS = 12000
@@ -415,7 +416,7 @@ export class TmdChatView extends ItemView {
     this.populateModelSelect()
     this.providerButtonEl.addEventListener("click", (event) => {
       const menu = new Menu()
-      const providers: AnteProvider[] = ["gemini", "openai-subscription"]
+      const providers: AnteProvider[] = ["openai-subscription", "gemini", "anthropic", "antix"]
       for (const provider of providers) {
         menu.addItem((item) => {
           item
@@ -1607,15 +1608,21 @@ export class TmdChatView extends ItemView {
       createdConversation = pendingSend.createdConversation
     }
 
-    this.plugin.chatManager.createAssistantTurn(request.conversationId, taskId)
     const runtimeTarget = this.getSelectedRuntimeTarget()
     const sendMode = this.resolveConversationSendMode(
       request.conversationId,
       runtimeTarget,
     )
+    this.plugin.chatManager.createAssistantTurn(request.conversationId, taskId)
     if (sendMode.requiresSessionRestart) {
       await this.plugin.persistIdleAnteSession()
     }
+    const providerChangeNoticeId = sendMode.switchedProvider
+      ? this.plugin.chatManager.appendAssistantNotice(
+          request.conversationId,
+          `Provider changed to ${runtimeTarget.provider}. Starting a new session for this turn.`,
+        )
+      : null
     try {
       await this.plugin.taskEngine.queueChatTask(
         taskId,
@@ -1629,18 +1636,13 @@ export class TmdChatView extends ItemView {
         request.conversationId,
         runtimeTarget,
       )
-      if (sendMode.switchedProvider) {
-        this.plugin.chatManager.appendAssistantNotice(
-          request.conversationId,
-          `Provider changed to ${runtimeTarget.provider}. Starting a new session for this turn.`,
-        )
-      }
     } catch (error) {
       const removedTaskIds = this.plugin.chatManager.rollbackPendingSend(
         request.conversationId,
         userMessageId,
         taskId,
         createdConversation,
+        providerChangeNoticeId ? [providerChangeNoticeId] : [],
       )
       this.plugin.taskEngine.clearTasks(removedTaskIds)
       throw error
@@ -1676,6 +1678,12 @@ export class TmdChatView extends ItemView {
         if (sendMode.requiresSessionRestart) {
           await this.plugin.persistIdleAnteSession()
         }
+        const providerChangeNoticeId = sendMode.switchedProvider
+          ? this.plugin.chatManager.appendAssistantNotice(
+              pendingSend.conversation.id,
+              `Provider changed to ${runtimeTarget.provider}. Starting a new session for this turn.`,
+            )
+          : null
         this.plugin.chatManager.createAssistantTurn(
           pendingSend.conversation.id,
           taskId,
@@ -1693,18 +1701,13 @@ export class TmdChatView extends ItemView {
             pendingSend.conversation.id,
             runtimeTarget,
           )
-          if (sendMode.switchedProvider) {
-            this.plugin.chatManager.appendAssistantNotice(
-              pendingSend.conversation.id,
-              `Provider changed to ${runtimeTarget.provider}. Starting a new session for this turn.`,
-            )
-          }
         } catch (error) {
           const removedTaskIds = this.plugin.chatManager.rollbackPendingSend(
             pendingSend.conversation.id,
             pendingSend.userMessageId,
             taskId,
             pendingSend.createdConversation,
+            providerChangeNoticeId ? [providerChangeNoticeId] : [],
           )
           this.plugin.taskEngine.clearTasks(removedTaskIds)
           throw error

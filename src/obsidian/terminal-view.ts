@@ -154,13 +154,30 @@ const parseJsonPayload = (value: string): unknown | null => {
     return null
   }
 
-  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed)
-  const candidate = fenced ? fenced[1] : trimmed
-  try {
-    return JSON.parse(candidate) as unknown
-  } catch {
-    return null
+  const candidates: string[] = []
+  const exactFence = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed)
+  if (exactFence?.[1]) {
+    candidates.push(exactFence[1].trim())
   }
+
+  const fencePattern = /```(?:json)?\s*([\s\S]*?)\s*```/gi
+  for (const match of trimmed.matchAll(fencePattern)) {
+    const candidate = match[1]?.trim()
+    if (candidate) {
+      candidates.push(candidate)
+    }
+  }
+
+  candidates.push(trimmed)
+  for (const candidate of [...new Set(candidates)]) {
+    try {
+      return JSON.parse(candidate) as unknown
+    } catch {
+      // Keep scanning for a parseable fenced JSON payload.
+    }
+  }
+
+  return null
 }
 
 const extractStreamingJsonPreview = (value: string): string => {

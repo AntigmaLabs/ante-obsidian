@@ -232,6 +232,55 @@ test("full process logs mode does not break structured text extraction in chat",
   }
 });
 
+test("streaming fenced change payloads do not show raw JSON envelope in chat", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = createWindowStub();
+
+  try {
+    const pluginStub = {
+      saveChatState: async () => {}
+    };
+
+    const manager = new ChatSessionManager(pluginStub as never);
+    const { conversation } = manager.appendUserPrompt("加到最后", context);
+    manager.createAssistantTurn(conversation.id, "task-1");
+
+    manager.syncFromTaskState({
+      currentTaskId: null,
+      tasks: [
+        {
+          id: "task-1",
+          kind: "chat",
+          preset: {
+            id: "default",
+            label: "@ante",
+            goal: "Discuss the current Markdown content before editing anything.",
+            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+          },
+          triggerSource: "chat",
+          inlineInstruction: "加到最后",
+          context,
+          status: "running",
+          logs: [],
+          stdoutText: "我来处理：\n```json\n{\"type\":\"change\",\"operation\":\"append-block\",\"afterText\":\"done\"}\n```",
+          artifacts: [],
+          startedAt: "2026-03-29T00:00:00.000Z"
+        }
+      ]
+    });
+
+    const snapshot = manager.getSnapshot();
+    const messages = snapshot.messagesByConversation[conversation.id] ?? [];
+    const assistant = messages.find((message) => message.role === "assistant");
+
+    assert.ok(assistant);
+    assert.equal(assistant?.status, "streaming");
+    assert.equal(assistant?.text, "");
+  } finally {
+    (globalThis as { window?: unknown }).window = originalWindow;
+  }
+});
+
 test("persisted chat state retains artifact snapshots for old conversations", () => {
   const originalWindow = (globalThis as { window?: unknown }).window;
   (globalThis as { window?: unknown }).window = createWindowStub();
@@ -458,6 +507,40 @@ test("streaming assistant messages keep the live runtime session for loading sta
 
     assert.equal(assistant?.turn?.runtimeSessionId, "ses_live");
     assert.equal(manager.getConversationRuntimeSessionId(conversation.id), null);
+  } finally {
+    (globalThis as { window?: unknown }).window = originalWindow;
+  }
+});
+
+test("rollbackPendingSend removes extra assistant notices inserted before the turn", () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = createWindowStub();
+
+  try {
+    const pluginStub = {
+      saveChatState: async () => {}
+    };
+
+    const manager = new ChatSessionManager(pluginStub as never);
+    const { conversation, userMessageId } = manager.appendUserPrompt("继续", context);
+    const noticeId = manager.appendAssistantNotice(
+      conversation.id,
+      "Provider changed to antix. Starting a new session for this turn."
+    );
+    manager.createAssistantTurn(conversation.id, "task-1");
+
+    manager.rollbackPendingSend(
+      conversation.id,
+      userMessageId,
+      "task-1",
+      false,
+      noticeId ? [noticeId] : []
+    );
+
+    const snapshot = manager.getSnapshot();
+    const messages = snapshot.messagesByConversation[conversation.id] ?? [];
+
+    assert.equal(messages.length, 0);
   } finally {
     (globalThis as { window?: unknown }).window = originalWindow;
   }
