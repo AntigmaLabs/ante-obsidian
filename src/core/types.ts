@@ -136,6 +136,7 @@ export interface DocumentChangeArtifact {
   runtimeToolId?: string;
   baselinePath?: string;
   stagedPath?: string;
+  stagedRoot?: string;
   runtimeMode?: "approval" | "staged-preview" | "observed";
 }
 

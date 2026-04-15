@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile as readFsFile } from "node:fs/promises";
 import { TaskEngine } from "../src/core/task-engine";
 import { BUILTIN_PRESETS } from "../src/core/presets";
@@ -507,6 +508,126 @@ test("chat file-edit approvals are staged locally and auto-skipped in Ante", asy
   assert.deepEqual(runtime.approvals[0], { turnId: "turn-chat-1", decision: "Skip" });
   assert.equal(await readFsFile(task!.artifacts[0]!.baselinePath!, "utf8"), "alpha\n");
   assert.equal(await readFsFile(task!.artifacts[0]!.stagedPath!, "utf8"), "alpha\nbeta\n");
+});
+
+test("applying a staged chat preview cleans up its temp directory", async () => {
+  const host = new HostStub();
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-chat-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-chat-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, host as never, resolvePresetById);
+  await engine.startChatTask("Preview beta");
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  const artifact = task.artifacts[0];
+  assert.ok(artifact?.stagedRoot);
+  assert.equal(existsSync(artifact.stagedRoot), true);
+
+  await engine.applyArtifact(task.id, artifact.id);
+
+  const updatedArtifact = engine.getState().tasks[0]?.artifacts[0];
+  assert.ok(updatedArtifact);
+  assert.equal(host.appliedChanges, 1);
+  assert.equal(existsSync(artifact.stagedRoot), false);
+  assert.equal(updatedArtifact?.stagedRoot, undefined);
+  assert.equal(updatedArtifact?.baselinePath, undefined);
+  assert.equal(updatedArtifact?.stagedPath, undefined);
+});
+
+test("discarding a staged chat preview cleans up its temp directory", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-chat-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-chat-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  await engine.startChatTask("Preview beta");
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  const artifact = task.artifacts[0];
+  assert.ok(artifact?.stagedRoot);
+  assert.equal(existsSync(artifact.stagedRoot), true);
+
+  await engine.discardArtifact(task.id, artifact.id);
+
+  const updatedArtifact = engine.getState().tasks[0]?.artifacts[0];
+  assert.ok(updatedArtifact);
+  assert.equal(existsSync(artifact.stagedRoot), false);
+  assert.equal(updatedArtifact?.applyState, "discarded");
+  assert.equal(updatedArtifact?.stagedRoot, undefined);
+});
+
+test("clearing chat tasks cleans up staged preview temp directories", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-chat-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-chat-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  await engine.startChatTask("Preview beta");
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  const artifact = task.artifacts[0];
+  assert.ok(artifact?.stagedRoot);
+  assert.equal(existsSync(artifact.stagedRoot), true);
+
+  engine.clearTasks([task.id]);
+
+  assert.equal(existsSync(artifact.stagedRoot), false);
+  assert.equal(engine.getState().tasks.length, 0);
 });
 
 test("native Edit tools create artifacts from file snapshots on tool end", async () => {

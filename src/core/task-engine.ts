@@ -1,6 +1,6 @@
 import type { HostAdapter } from "./host-adapter";
 import type { AnteRuntime } from "../runtime/ante-runtime";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -262,12 +262,9 @@ export class TaskEngine {
   }
 
   clearTasksByTriggerSource(triggerSource: TaskTriggerSource): void {
+    const removedTasks = this.state.tasks.filter((task) => task.triggerSource === triggerSource);
     const remainingTasks = this.state.tasks.filter((task) => task.triggerSource !== triggerSource);
-    const removedTaskIds = new Set(
-      this.state.tasks
-        .filter((task) => task.triggerSource === triggerSource)
-        .map((task) => task.id)
-    );
+    const removedTaskIds = new Set(removedTasks.map((task) => task.id));
 
     for (const taskId of removedTaskIds) {
       const pending = this.pendingStdout.get(taskId);
@@ -276,6 +273,7 @@ export class TaskEngine {
       }
       this.pendingStdout.delete(taskId);
     }
+    this.cleanupArtifactsForTasks(removedTasks);
 
     const currentTaskId =
       this.state.currentTaskId && removedTaskIds.has(this.state.currentTaskId)
@@ -295,6 +293,7 @@ export class TaskEngine {
       return;
     }
     const removedTaskIds = new Set(taskIds);
+    const removedTasks = this.state.tasks.filter((task) => removedTaskIds.has(task.id));
     const remainingTasks = this.state.tasks.filter((task) => !removedTaskIds.has(task.id));
 
     for (const taskId of removedTaskIds) {
@@ -304,6 +303,7 @@ export class TaskEngine {
       }
       this.pendingStdout.delete(taskId);
     }
+    this.cleanupArtifactsForTasks(removedTasks);
 
     const currentTaskId =
       this.state.currentTaskId && removedTaskIds.has(this.state.currentTaskId)
@@ -335,11 +335,20 @@ export class TaskEngine {
     this.patchTask(taskId, { pendingApproval: undefined });
     if (decision === "Skip" || decision === "Abort") {
       const approvalToolIds = new Set(task.pendingApproval.tools.map((tool) => tool.id));
-      this.patchArtifacts(taskId, (artifact) =>
-        artifact.runtimeToolId && approvalToolIds.has(artifact.runtimeToolId) && artifact.applyState === "pending"
-          ? { ...artifact, applyState: "discarded", applyError: undefined }
-          : artifact
-      );
+      this.patchArtifacts(taskId, (artifact) => {
+        if (!(artifact.runtimeToolId && approvalToolIds.has(artifact.runtimeToolId) && artifact.applyState === "pending")) {
+          return artifact;
+        }
+        this.cleanupStagedPreview(artifact);
+        return {
+          ...artifact,
+          applyState: "discarded",
+          applyError: undefined,
+          baselinePath: undefined,
+          stagedPath: undefined,
+          stagedRoot: undefined
+        };
+      });
       this.reconcileTaskStatus(taskId);
     }
     this.appendLog(taskId, "system", `Approval sent: ${decision}`);
@@ -363,7 +372,13 @@ export class TaskEngine {
         if (!options?.skipHost) {
           await this.host.applyDocumentChange(artifact);
         }
-        this.patchArtifact(taskId, artifactId, { applyState: "applied" });
+        this.cleanupStagedPreview(artifact);
+        this.patchArtifact(taskId, artifactId, {
+          applyState: "applied",
+          baselinePath: undefined,
+          stagedPath: undefined,
+          stagedRoot: undefined
+        });
         this.runtime.respondToApproval(task.pendingApproval!, "Skip");
         this.patchTask(taskId, { pendingApproval: undefined });
         this.appendLog(taskId, "system", "Approval sent: Skip");
@@ -389,7 +404,13 @@ export class TaskEngine {
       if (!options?.skipHost) {
         await this.host.applyDocumentChange(artifact);
       }
-      this.patchArtifact(taskId, artifactId, { applyState: "applied" });
+      this.cleanupStagedPreview(artifact);
+      this.patchArtifact(taskId, artifactId, {
+        applyState: "applied",
+        baselinePath: undefined,
+        stagedPath: undefined,
+        stagedRoot: undefined
+      });
       this.reconcileTaskStatus(taskId);
     } catch (error) {
       this.patchArtifact(taskId, artifactId, {
@@ -436,11 +457,24 @@ export class TaskEngine {
         applyState: "pending",
         applyError: undefined
       });
+      this.cleanupStagedPreview(artifact);
+      this.patchArtifact(taskId, artifactId, {
+        baselinePath: undefined,
+        stagedPath: undefined,
+        stagedRoot: undefined
+      });
       this.reconcileTaskStatus(taskId);
       return;
     }
 
-    this.patchArtifact(taskId, artifactId, { applyState: "discarded", applyError: undefined });
+    this.cleanupStagedPreview(artifact);
+    this.patchArtifact(taskId, artifactId, {
+      applyState: "discarded",
+      applyError: undefined,
+      baselinePath: undefined,
+      stagedPath: undefined,
+      stagedRoot: undefined
+    });
     this.reconcileTaskStatus(taskId);
   }
 
@@ -465,7 +499,13 @@ export class TaskEngine {
 
     try {
       await this.host.revertDocumentChange(artifact);
-      this.patchArtifact(taskId, artifactId, { applyState: "reverted" });
+      this.cleanupStagedPreview(artifact);
+      this.patchArtifact(taskId, artifactId, {
+        applyState: "reverted",
+        baselinePath: undefined,
+        stagedPath: undefined,
+        stagedRoot: undefined
+      });
       this.reconcileTaskStatus(taskId);
     } catch (error) {
       this.patchArtifact(taskId, artifactId, {
@@ -924,10 +964,31 @@ export class TaskEngine {
     writeFileSync(stagedPath, artifact.afterText, "utf8");
     return {
       ...artifact,
+      stagedRoot: stageRoot,
       baselinePath,
       stagedPath,
       runtimeMode: "staged-preview"
     };
+  }
+
+  private cleanupArtifactsForTasks(tasks: TaskRecord[]): void {
+    for (const task of tasks) {
+      for (const artifact of task.artifacts) {
+        this.cleanupStagedPreview(artifact);
+      }
+    }
+  }
+
+  private cleanupStagedPreview(artifact: DocumentChangeArtifact): void {
+    const stagedRoot = artifact.stagedRoot?.trim();
+    if (!stagedRoot) {
+      return;
+    }
+    try {
+      rmSync(stagedRoot, { recursive: true, force: true });
+    } catch (error) {
+      logDebug(`staged preview cleanup failed root=${stagedRoot} error=${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   private resolveApprovalToolTargetPath(

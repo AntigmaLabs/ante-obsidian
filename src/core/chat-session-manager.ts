@@ -81,6 +81,7 @@ const cloneArtifact = (artifact: DocumentChangeArtifact): DocumentChangeArtifact
   },
   baselinePath: artifact.baselinePath,
   stagedPath: artifact.stagedPath,
+  stagedRoot: artifact.stagedRoot,
   runtimeMode: artifact.runtimeMode
 });
 
