@@ -1717,6 +1717,30 @@ button.tmd-diff-file-main {
   font-size: var(--tmd-type-reading-size);
 }
 
+.tmd-chat-message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tmd-chat-message-attachment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--background-primary) 42%, transparent);
+  color: color-mix(in srgb, var(--text-normal) 72%, var(--interactive-accent) 28%);
+}
+
+.tmd-chat-message-attachment .svg-icon,
+.tmd-chat-message-attachment svg {
+  width: 14px;
+  height: 14px;
+}
+
 .tmd-chat-loading {
   color: var(--text-muted);
   font-size: 16px;
@@ -1826,6 +1850,50 @@ button.tmd-diff-file-main {
   z-index: 1;
 }
 
+.tmd-chat-attachments {
+  position: absolute;
+  right: 60px;
+  bottom: 42px;
+  left: 16px;
+  display: none;
+  flex-wrap: wrap;
+  gap: 6px;
+  z-index: 1;
+}
+
+.tmd-chat-attachments.tmd-has-attachments {
+  display: flex;
+}
+
+.tmd-chat-attachment-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 999px;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--text-muted) 90%, white 10%) !important;
+  box-shadow: none !important;
+  opacity: 0.9;
+}
+
+.tmd-chat-attachment-button:hover,
+.tmd-chat-attachment-button:focus-visible {
+  color: var(--text-normal) !important;
+  background: color-mix(in srgb, var(--background-modifier-hover) 48%, transparent) !important;
+  opacity: 1;
+}
+
+.tmd-chat-attachment-button .svg-icon,
+.tmd-chat-attachment-button svg {
+  width: 14px;
+  height: 14px;
+}
+
 .tmd-chat-picker {
   display: inline-flex;
   align-items: center;
@@ -1892,7 +1960,7 @@ button.tmd-diff-file-main {
 .tmd-chat-input {
   width: 100%;
   height: 124px;
-  padding: 16px 62px 50px 16px;
+  padding: 16px 62px 72px 16px;
   border: 1px solid color-mix(in srgb, var(--tmd-chat-line-strong) 74%, transparent);
   border-radius: var(--tmd-radius-lg);
   background: color-mix(in srgb, var(--tmd-chat-paper) 98%, white 2%);
@@ -1949,6 +2017,102 @@ button.tmd-diff-file-main {
 .tmd-chat-primary-action svg {
   width: 15px;
   height: 15px;
+}
+
+.tmd-chat-file-input {
+  display: none;
+}
+
+.tmd-chat-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: min(280px, 100%);
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 72%, transparent);
+  border-radius: var(--tmd-radius-pill);
+  background: color-mix(in srgb, var(--background-secondary) 84%, transparent);
+  color: var(--text-muted);
+}
+
+.tmd-chat-composer.tmd-is-attachment-dragover .tmd-chat-input {
+  border-color: color-mix(in srgb, var(--interactive-accent) 68%, var(--tmd-chat-line));
+  background: color-mix(in srgb, var(--tmd-chat-paper) 92%, var(--interactive-accent) 8%);
+}
+
+.tmd-chat-attachments.tmd-is-compact {
+  gap: 4px;
+}
+
+.tmd-chat-attachments.tmd-is-compact .tmd-chat-attachment-chip {
+  gap: 4px;
+  max-width: none;
+  padding: 2px 6px;
+}
+
+.tmd-chat-attachment-summary {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tmd-chat-attachment-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  color: inherit;
+}
+
+.tmd-chat-attachment-icon .svg-icon,
+.tmd-chat-attachment-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tmd-chat-attachment-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.tmd-chat-attachment-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 999px;
+  background: transparent !important;
+  color: inherit !important;
+  box-shadow: none !important;
+}
+
+.tmd-chat-attachments.tmd-is-compact .tmd-chat-attachment-remove {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+}
+
+.tmd-chat-attachment-remove:hover,
+.tmd-chat-attachment-remove:focus-visible {
+  background: color-mix(in srgb, var(--background-modifier-hover) 56%, transparent) !important;
+  color: var(--text-normal) !important;
+}
+
+.tmd-chat-attachment-remove .svg-icon,
+.tmd-chat-attachment-remove svg {
+  width: 12px;
+  height: 12px;
 }
 
 .tmd-chat-empty {

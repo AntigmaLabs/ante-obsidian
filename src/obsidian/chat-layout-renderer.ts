@@ -22,11 +22,14 @@ export interface ChatLayoutNodes {
   timelineEl: HTMLDivElement
   composerContainerEl: HTMLDivElement
   inputShellEl: HTMLDivElement
+  attachmentListEl: HTMLDivElement
   composerMetaEl: HTMLDivElement
+  attachmentButtonEl: HTMLButtonElement
   providerButtonEl: HTMLButtonElement
   modelButtonEl: HTMLButtonElement
   composerEl: HTMLTextAreaElement
   composerActionButtonEl: HTMLButtonElement
+  fileInputEl: HTMLInputElement
 }
 
 interface ChatSidebarNodes {
@@ -51,11 +54,14 @@ interface ChatContextNodes {
 interface ChatComposerNodes {
   composerContainerEl: HTMLDivElement
   inputShellEl: HTMLDivElement
+  attachmentListEl: HTMLDivElement
   composerMetaEl: HTMLDivElement
+  attachmentButtonEl: HTMLButtonElement
   providerButtonEl: HTMLButtonElement
   modelButtonEl: HTMLButtonElement
   composerEl: HTMLTextAreaElement
   composerActionButtonEl: HTMLButtonElement
+  fileInputEl: HTMLInputElement
 }
 
 const renderChatSidebar = (shellEl: HTMLDivElement): ChatSidebarNodes => {
@@ -124,9 +130,15 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
     composerContainerEl,
   )
   const composerEl = textarea({ cls: "tmd-chat-input" }).appendTo(inputShellEl)
+  const attachmentListEl = div({ cls: "tmd-chat-attachments" }).appendTo(
+    inputShellEl,
+  )
   const composerMetaEl = div({ cls: "tmd-chat-composer-meta" }).appendTo(
     inputShellEl,
   )
+  const attachmentButtonEl = button({
+    cls: "tmd-chat-attachment-button",
+  }).appendTo(composerMetaEl)
   const providerButtonEl = button({
     cls: "tmd-chat-picker tmd-chat-provider-picker",
   }).appendTo(composerMetaEl)
@@ -136,15 +148,23 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
   const composerActionButtonEl = button({
     cls: "tmd-chat-primary-action",
   }).appendTo(inputShellEl)
+  const fileInputEl = inputShellEl.createEl("input", {
+    cls: "tmd-chat-file-input",
+  }) as HTMLInputElement
+  fileInputEl.type = "file"
+  fileInputEl.multiple = true
 
   return {
     composerContainerEl,
     inputShellEl,
+    attachmentListEl,
     composerMetaEl,
+    attachmentButtonEl,
     providerButtonEl,
     modelButtonEl,
     composerEl,
     composerActionButtonEl,
+    fileInputEl,
   }
 }
 
@@ -196,10 +216,13 @@ export const renderChatLayout = (
     timelineEl: main.timelineEl,
     composerContainerEl: main.composer.composerContainerEl,
     inputShellEl: main.composer.inputShellEl,
+    attachmentListEl: main.composer.attachmentListEl,
     composerMetaEl: main.composer.composerMetaEl,
+    attachmentButtonEl: main.composer.attachmentButtonEl,
     providerButtonEl: main.composer.providerButtonEl,
     modelButtonEl: main.composer.modelButtonEl,
     composerEl: main.composer.composerEl,
     composerActionButtonEl: main.composer.composerActionButtonEl,
+    fileInputEl: main.composer.fileInputEl,
   }
 }

@@ -66,6 +66,184 @@ const PROVIDER_LABELS: Record<AnteProvider, string> = {
 const MAX_CHAT_PREVIEW_CHARS = 12000
 const MAX_CHAT_PREVIEW_LINES = 160
 const MESSAGE_WINDOW_SIZE = 80
+const MAX_ATTACHMENT_LABEL_CHARS = 42
+
+const logAttachmentDebug = (
+  message: string,
+  details?: Record<string, unknown>,
+): void => {
+  if (details) {
+    console.info("[tmd chat attachments]", message, details)
+    return
+  }
+  console.info("[tmd chat attachments]", message)
+}
+
+type ElectronDialogModule = {
+  showOpenDialog: (options: {
+    title?: string
+    buttonLabel?: string
+    properties?: string[]
+  }) => Promise<{ canceled: boolean; filePaths: string[] }>
+}
+
+type ElectronWebUtilsModule = {
+  getPathForFile: (file: File) => string
+}
+
+const getElectronRequire = ():
+  | ((moduleName: string) => unknown)
+  | null => {
+  return (
+    (
+      globalThis as typeof globalThis & {
+        require?: (moduleName: string) => unknown
+        window?: Window & {
+          require?: (moduleName: string) => unknown
+        }
+      }
+    ).require ??
+    (
+      globalThis as typeof globalThis & {
+        window?: Window & {
+          require?: (moduleName: string) => unknown
+        }
+      }
+    ).window?.require ??
+    null
+  )
+}
+
+const getElectronDialog = (): {
+  dialog: ElectronDialogModule | null
+  source: string | null
+} => {
+  const candidateRequire = getElectronRequire()
+  if (!candidateRequire) {
+    return { dialog: null, source: null }
+  }
+
+  const candidates: Array<{
+    source: string
+    getDialog: () => ElectronDialogModule | null
+  }> = [
+    {
+      source: "@electron/remote",
+      getDialog: () => {
+        const remoteModule = candidateRequire("@electron/remote") as {
+          dialog?: ElectronDialogModule
+        }
+        return remoteModule?.dialog ?? null
+      },
+    },
+    {
+      source: "electron.remote",
+      getDialog: () => {
+        const electronModule = candidateRequire("electron") as {
+          remote?: { dialog?: ElectronDialogModule }
+        }
+        return electronModule?.remote?.dialog ?? null
+      },
+    },
+    {
+      source: "electron.dialog",
+      getDialog: () => {
+        const electronModule = candidateRequire("electron") as {
+          dialog?: ElectronDialogModule
+        }
+        return electronModule?.dialog ?? null
+      },
+    },
+  ]
+
+  for (const candidate of candidates) {
+    try {
+      const dialog = candidate.getDialog()
+      if (dialog?.showOpenDialog) {
+        return {
+          dialog,
+          source: candidate.source,
+        }
+      }
+    } catch (error) {
+      console.warn(
+        "[tmd chat attachments]",
+        `failed to load ${candidate.source}`,
+        error,
+      )
+    }
+  }
+
+  return { dialog: null, source: null }
+}
+
+const getElectronWebUtils = (): {
+  webUtils: ElectronWebUtilsModule | null
+  source: string | null
+} => {
+  const candidateRequire = getElectronRequire()
+  if (!candidateRequire) {
+    return { webUtils: null, source: null }
+  }
+
+  try {
+    const electronModule = candidateRequire("electron") as {
+      webUtils?: ElectronWebUtilsModule
+    }
+    if (electronModule?.webUtils?.getPathForFile) {
+      return {
+        webUtils: electronModule.webUtils,
+        source: "electron.webUtils",
+      }
+    }
+  } catch (error) {
+    console.warn(
+      "[tmd chat attachments]",
+      "failed to load electron.webUtils",
+      error,
+    )
+  }
+
+  return { webUtils: null, source: null }
+}
+
+const trimAttachmentLabel = (value: string): string =>
+  value.length <= MAX_ATTACHMENT_LABEL_CHARS
+    ? value
+    : `...${value.slice(-(MAX_ATTACHMENT_LABEL_CHARS - 3))}`
+
+const formatAttachmentLabel = (filePath: string): string => {
+  return trimAttachmentLabel(getAttachmentFileName(filePath))
+}
+
+const getAttachmentFileName = (filePath: string): string => {
+  const normalized = filePath.replace(/\\/g, "/")
+  const segments = normalized.split("/").filter(Boolean)
+  return segments[segments.length - 1] ?? normalized
+}
+
+const buildPromptWithAttachmentPaths = (
+  prompt: string,
+  filePaths: string[],
+): string => {
+  if (filePaths.length === 0) {
+    return prompt
+  }
+
+  const attachmentBlock = [
+    "Attached file paths:",
+    ...filePaths.map((filePath) => `- ${filePath}`),
+    "",
+    "Use these file paths as local context when relevant.",
+  ].join("\n")
+
+  if (!prompt.trim()) {
+    return attachmentBlock
+  }
+
+  return `${prompt}\n\n${attachmentBlock}`
+}
+
 const hashText = (value: string): string => {
   let hash = 2166136261
   for (let index = 0; index < value.length; index += 1) {
@@ -209,6 +387,8 @@ interface ChatMessageElements {
   textMode: "plain" | "markdown" | null
   textRenderToken: number
   textComponent: Component | null
+  attachmentsEl: HTMLDivElement | null
+  attachmentsValue: string | null
   loadingEl: HTMLDivElement | null
   loadingValue: string | null
   processEl: HTMLDivElement | null
@@ -257,18 +437,23 @@ export class TmdChatView extends ItemView {
   private timelineEl!: HTMLDivElement
   private emptyStateEl: HTMLDivElement | null = null
   private composerActionButtonEl!: HTMLButtonElement
+  private attachmentButtonEl!: HTMLButtonElement
   private providerButtonEl!: HTMLButtonElement
   private modelButtonEl!: HTMLButtonElement
   private composerEl!: HTMLTextAreaElement
   private composerContainerEl!: HTMLDivElement
+  private attachmentListEl!: HTMLDivElement
+  private fileInputEl!: HTMLInputElement
   private composerResizeObserver: ResizeObserver | null = null
   private loadMoreButtonEl: HTMLButtonElement | null = null
   private lastRenderedConversationId: string | null = null
   private shouldAutoScrollToBottom = true
   private isComposing = false
   private isSidebarCollapsed = true
+  private isAttachmentDragActive = false
   private selectedProvider: AnteProvider = "openai-subscription"
   private selectedModel = getDefaultModelForProvider("openai-subscription")
+  private selectedAttachmentPaths: string[] = []
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -369,12 +554,79 @@ export class TmdChatView extends ItemView {
 
     this.timelineEl = layout.timelineEl
     this.composerContainerEl = layout.composerContainerEl
+    this.attachmentListEl = layout.attachmentListEl
+    this.attachmentButtonEl = layout.attachmentButtonEl
+    setIcon(this.attachmentButtonEl, "plus")
+    this.attachmentButtonEl.setAttribute("aria-label", "Attach files")
+    this.attachmentButtonEl.setAttribute("title", "Attach files")
     this.providerButtonEl = layout.providerButtonEl
     this.modelButtonEl = layout.modelButtonEl
     this.composerEl = layout.composerEl
     this.composerEl.placeholder =
       "Ask about the current note, rewrite a selection, or plan the next edit."
     this.composerActionButtonEl = layout.composerActionButtonEl
+    this.fileInputEl = layout.fileInputEl
+    this.fileInputEl.setAttribute("aria-hidden", "true")
+    this.fileInputEl.addEventListener("change", () => {
+      logAttachmentDebug("file input change fired", {
+        fileCount: this.fileInputEl.files?.length ?? 0,
+        inputValue: this.fileInputEl.value,
+      })
+      this.captureSelectedAttachments()
+    })
+    this.attachmentButtonEl.addEventListener("click", () => {
+      logAttachmentDebug("attachment button clicked")
+      void this.openAttachmentPicker()
+    })
+    this.composerContainerEl.addEventListener("dragover", (event) => {
+      if (!(event instanceof DragEvent)) {
+        return
+      }
+      if (!event.dataTransfer?.files?.length) {
+        return
+      }
+      event.preventDefault()
+      event.dataTransfer.dropEffect = "copy"
+      if (!this.isAttachmentDragActive) {
+        this.isAttachmentDragActive = true
+        this.syncAttachmentDropState()
+      }
+    })
+    this.composerContainerEl.addEventListener("dragleave", (event) => {
+      if (!(event instanceof DragEvent)) {
+        return
+      }
+      const relatedTarget = event.relatedTarget
+      if (
+        relatedTarget instanceof Node &&
+        this.composerContainerEl.contains(relatedTarget)
+      ) {
+        return
+      }
+      this.isAttachmentDragActive = false
+      this.syncAttachmentDropState()
+    })
+    this.composerContainerEl.addEventListener("drop", (event) => {
+      if (!(event instanceof DragEvent)) {
+        return
+      }
+      event.preventDefault()
+      this.isAttachmentDragActive = false
+      this.syncAttachmentDropState()
+      const files = event.dataTransfer?.files
+      logAttachmentDebug("attachment files dropped", {
+        fileCount: files?.length ?? 0,
+      })
+      if (!files?.length) {
+        return
+      }
+      const paths = this.extractFilePaths(files)
+      if (paths.length === 0) {
+        logAttachmentDebug("no attachment paths extracted from drop")
+        return
+      }
+      this.applySelectedAttachmentPaths(paths)
+    })
     this.initializeRuntimeTargetControls()
     wireChatComposer({
       composerEl: this.composerEl,
@@ -393,6 +645,7 @@ export class TmdChatView extends ItemView {
         this.plugin.taskEngine.cancelActiveTask()
       },
     })
+    this.syncAttachmentList()
     this.syncComposerActionButton(false)
     this.composerResizeObserver?.disconnect()
     this.composerResizeObserver = new ResizeObserver(() => {
@@ -922,6 +1175,8 @@ export class TmdChatView extends ItemView {
         textMode: null,
         textRenderToken: 0,
         textComponent: null,
+        attachmentsEl: null,
+        attachmentsValue: null,
         loadingEl: null,
         loadingValue: null,
         processEl: null,
@@ -949,6 +1204,7 @@ export class TmdChatView extends ItemView {
     this.syncMessageFooter(elements, message)
 
     const previewText = clampPreview(message.text)
+    const attachmentPaths = message.attachmentPaths ?? []
     if (previewText) {
       this.syncMessageText(elements, message, previewText)
       this.removeLoading(elements)
@@ -962,6 +1218,7 @@ export class TmdChatView extends ItemView {
       this.removeText(elements)
       this.removeLoading(elements)
     }
+    this.syncMessageAttachments(elements, attachmentPaths)
 
     const processLines =
       message.status === "streaming"
@@ -1179,6 +1436,43 @@ export class TmdChatView extends ItemView {
     elements.textValue = null
     elements.textMode = null
     elements.textRenderToken += 1
+  }
+
+  private syncMessageAttachments(
+    elements: ChatMessageElements,
+    attachmentPaths: string[],
+  ): void {
+    if (attachmentPaths.length === 0) {
+      this.removeMessageAttachments(elements)
+      return
+    }
+
+    const signature = attachmentPaths.join("\n")
+    if (elements.attachmentsEl && elements.attachmentsValue === signature) {
+      return
+    }
+
+    const attachmentsEl =
+      elements.attachmentsEl ??
+      elements.bubbleEl.createDiv({ cls: "tmd-chat-message-attachments" })
+    attachmentsEl.empty()
+
+    for (const filePath of attachmentPaths) {
+      const itemEl = attachmentsEl.createDiv({
+        cls: "tmd-chat-message-attachment",
+      })
+      itemEl.setAttribute("title", getAttachmentFileName(filePath))
+      setIcon(itemEl, "file")
+    }
+
+    elements.attachmentsEl = attachmentsEl
+    elements.attachmentsValue = signature
+  }
+
+  private removeMessageAttachments(elements: ChatMessageElements): void {
+    elements.attachmentsEl?.remove()
+    elements.attachmentsEl = null
+    elements.attachmentsValue = null
   }
 
   private syncLoading(elements: ChatMessageElements, text: string): void {
@@ -1548,7 +1842,7 @@ export class TmdChatView extends ItemView {
       return {
         conversationId: message.conversationId,
         sourceRole: "user",
-        prompt: message.text,
+        prompt: message.submissionText?.trim() || message.text,
         context: message.context ?? null,
         runtimeSessionId:
           this.plugin.chatManager.getConversationRuntimeSessionId(
@@ -1567,7 +1861,7 @@ export class TmdChatView extends ItemView {
         return {
           conversationId: message.conversationId,
           sourceRole: "assistant",
-          prompt: candidate.text,
+          prompt: candidate.submissionText?.trim() || candidate.text,
           context: candidate.context ?? null,
           runtimeSessionId:
             this.plugin.chatManager.getConversationRuntimeSessionId(
@@ -1651,12 +1945,15 @@ export class TmdChatView extends ItemView {
 
   private runPrompt(): void {
     const prompt = this.composerEl.value.trim()
-    if (!prompt) {
+    const attachmentPaths = [...this.selectedAttachmentPaths]
+    if (!prompt && attachmentPaths.length === 0) {
       return
     }
     if (!this.plugin.ensureAnteInstalled("Chat with Ante")) {
       return
     }
+    const composedPrompt = buildPromptWithAttachmentPaths(prompt, attachmentPaths)
+    const visiblePrompt = prompt
     this.shouldAutoScrollToBottom = true
 
     const activeConversation = this.getActiveConversation(this.latestChatState)
@@ -1668,8 +1965,10 @@ export class TmdChatView extends ItemView {
         this.liveContext = contextSnapshot
         const taskId = crypto.randomUUID()
         const pendingSend = this.plugin.chatManager.appendUserPrompt(
-          prompt,
+          visiblePrompt,
           contextSnapshot,
+          composedPrompt,
+          attachmentPaths,
         )
         const sendMode = this.resolveConversationSendMode(
           pendingSend.conversation.id,
@@ -1691,7 +1990,7 @@ export class TmdChatView extends ItemView {
         try {
           await this.plugin.taskEngine.queueChatTask(
             taskId,
-            prompt,
+            composedPrompt,
             Boolean(sendMode.runtimeSessionId),
             contextSnapshot,
             sendMode.runtimeSessionId,
@@ -1715,6 +2014,7 @@ export class TmdChatView extends ItemView {
       })
       .then(() => {
         this.composerEl.value = ""
+        this.clearSelectedAttachments()
         this.syncComposerActionButton(this.hasRunningChatTask())
       })
       .catch((error) => {
@@ -1747,7 +2047,256 @@ export class TmdChatView extends ItemView {
     this.composerActionButtonEl.setAttribute("aria-label", "Send")
     this.composerActionButtonEl.setAttribute("title", "Send")
     this.composerActionButtonEl.disabled =
-      this.composerEl.value.trim().length === 0
+      this.composerEl.value.trim().length === 0 &&
+      this.selectedAttachmentPaths.length === 0
+  }
+
+  private captureSelectedAttachments(): void {
+    logAttachmentDebug("capturing selected attachments")
+    const nextPaths = this.extractSelectedFilePaths()
+    if (nextPaths.length === 0) {
+      logAttachmentDebug("no attachment paths extracted")
+      return
+    }
+    this.applySelectedAttachmentPaths(nextPaths)
+  }
+
+  private async openAttachmentPicker(): Promise<void> {
+    const { dialog, source } = getElectronDialog()
+    if (!dialog) {
+      logAttachmentDebug(
+        "native electron dialog unavailable, falling back to input[type=file]",
+      )
+      this.fileInputEl.click()
+      return
+    }
+
+    logAttachmentDebug("opening native attachment picker", {
+      source,
+    })
+
+    try {
+      const result = await dialog.showOpenDialog({
+        title: "Select files for Ante",
+        buttonLabel: "Attach",
+        properties: ["openFile", "multiSelections"],
+      })
+      logAttachmentDebug("native attachment picker resolved", {
+        source,
+        canceled: result.canceled,
+        fileCount: result.filePaths.length,
+        filePaths: result.filePaths,
+      })
+      if (result.canceled || result.filePaths.length === 0) {
+        return
+      }
+      this.applySelectedAttachmentPaths(result.filePaths)
+    } catch (error) {
+      console.error(
+        "[tmd chat attachments]",
+        "native attachment picker failed",
+        error,
+      )
+      new Notice(
+        error instanceof Error
+          ? error.message
+          : "Failed to open native file picker",
+      )
+    }
+  }
+
+  private applySelectedAttachmentPaths(filePaths: string[]): void {
+    const dedupedPaths = filePaths
+      .map((filePath) => filePath.trim())
+      .filter(Boolean)
+    if (dedupedPaths.length === 0) {
+      logAttachmentDebug("applySelectedAttachmentPaths received no usable paths")
+      return
+    }
+    this.selectedAttachmentPaths = [
+      ...this.selectedAttachmentPaths,
+      ...dedupedPaths,
+    ].filter((value, index, values) => values.indexOf(value) === index)
+    logAttachmentDebug("attachment paths applied", {
+      addedCount: dedupedPaths.length,
+      totalCount: this.selectedAttachmentPaths.length,
+      paths: this.selectedAttachmentPaths,
+    })
+    this.fileInputEl.value = ""
+    this.syncAttachmentList()
+    this.syncComposerActionButton(this.hasRunningChatTask())
+  }
+
+  private extractSelectedFilePaths(): string[] {
+    const files = this.fileInputEl.files
+    if (!files || files.length === 0) {
+      logAttachmentDebug("extractSelectedFilePaths found no files on input")
+      return []
+    }
+
+    return this.extractFilePaths(files)
+  }
+
+  private extractFilePaths(files: FileList | File[]): string[] {
+    const fileEntries = Array.from(files)
+    const { webUtils, source: webUtilsSource } = getElectronWebUtils()
+
+    logAttachmentDebug("extracting file paths", {
+      fileCount: fileEntries.length,
+      webUtilsSource,
+      files: fileEntries.map((file) => {
+        const candidate = file as File & {
+          path?: string
+          webkitRelativePath?: string
+        }
+        return {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          path: candidate.path ?? null,
+          webkitRelativePath: candidate.webkitRelativePath ?? null,
+        }
+      }),
+    })
+
+    const paths: string[] = []
+    for (const file of fileEntries) {
+      const webUtilsPath = webUtils?.getPathForFile(file)?.trim()
+      if (webUtilsPath) {
+        paths.push(webUtilsPath)
+        continue
+      }
+      const candidate = (
+        file as File & { path?: string; webkitRelativePath?: string }
+      ).path?.trim()
+      if (candidate) {
+        paths.push(candidate)
+        continue
+      }
+      const relativePath = file.webkitRelativePath?.trim()
+      if (relativePath) {
+        paths.push(relativePath)
+      }
+    }
+
+    logAttachmentDebug("extracted attachment paths", {
+      count: paths.length,
+      paths,
+    })
+
+    if (paths.length === 0) {
+      new Notice(
+        "This environment could not read local file paths from the selected files.",
+      )
+      console.warn(
+        "[tmd chat attachments]",
+        "selected files did not expose a readable local path",
+        fileEntries.map((file) => {
+          const candidate = file as File & {
+            path?: string
+            webkitRelativePath?: string
+          }
+          return {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            path: candidate.path ?? null,
+            webkitRelativePath: candidate.webkitRelativePath ?? null,
+          }
+        }),
+      )
+    }
+
+    return paths
+  }
+
+  private clearSelectedAttachments(): void {
+    logAttachmentDebug("clearing selected attachments", {
+      previousCount: this.selectedAttachmentPaths.length,
+    })
+    this.selectedAttachmentPaths = []
+    this.fileInputEl.value = ""
+    this.syncAttachmentList()
+  }
+
+  private syncAttachmentList(): void {
+    if (!this.attachmentListEl) {
+      return
+    }
+    this.attachmentListEl.empty()
+    const useCompactAttachmentList = this.selectedAttachmentPaths.length > 2
+    const visibleAttachmentPaths = useCompactAttachmentList
+      ? this.selectedAttachmentPaths.slice(0, 2)
+      : this.selectedAttachmentPaths
+    const hiddenAttachmentPaths = useCompactAttachmentList
+      ? this.selectedAttachmentPaths.slice(2)
+      : []
+    this.attachmentListEl.classList.toggle(
+      "tmd-has-attachments",
+      this.selectedAttachmentPaths.length > 0,
+    )
+    this.attachmentListEl.classList.toggle(
+      "tmd-is-compact",
+      useCompactAttachmentList,
+    )
+    if (this.selectedAttachmentPaths.length === 0) {
+      this.syncComposerOffset()
+      return
+    }
+
+    for (const filePath of visibleAttachmentPaths) {
+      const fileName = getAttachmentFileName(filePath)
+      const chipEl = this.attachmentListEl.createDiv({
+        cls: "tmd-chat-attachment-chip",
+      })
+      if (useCompactAttachmentList) {
+        const iconEl = chipEl.createSpan({
+          cls: "tmd-chat-attachment-icon",
+        })
+        iconEl.setAttribute("title", fileName)
+        setIcon(iconEl, "file")
+      } else {
+        const labelEl = chipEl.createSpan({
+          cls: "tmd-chat-attachment-label",
+          text: formatAttachmentLabel(filePath),
+        })
+        labelEl.setAttribute("title", fileName)
+      }
+      const removeButtonEl = chipEl.createEl("button", {
+        cls: "tmd-chat-attachment-remove",
+      })
+      removeButtonEl.setAttribute("aria-label", `Remove ${fileName}`)
+      removeButtonEl.setAttribute("title", `Remove ${fileName}`)
+      setIcon(removeButtonEl, "x")
+      removeButtonEl.addEventListener("click", () => {
+        logAttachmentDebug("removing attachment path", { filePath })
+        this.selectedAttachmentPaths = this.selectedAttachmentPaths.filter(
+          (candidate) => candidate !== filePath,
+        )
+        this.syncAttachmentList()
+        this.syncComposerActionButton(this.hasRunningChatTask())
+      })
+    }
+
+    if (hiddenAttachmentPaths.length > 0) {
+      const summaryEl = this.attachmentListEl.createDiv({
+        cls: "tmd-chat-attachment-chip tmd-chat-attachment-summary",
+        text: `+${hiddenAttachmentPaths.length}`,
+      })
+      summaryEl.setAttribute(
+        "title",
+        hiddenAttachmentPaths.map((filePath) => getAttachmentFileName(filePath)).join("\n"),
+      )
+    }
+
+    this.syncComposerOffset()
+  }
+
+  private syncAttachmentDropState(): void {
+    this.composerContainerEl?.classList.toggle(
+      "tmd-is-attachment-dragover",
+      this.isAttachmentDragActive,
+    )
   }
 
   private syncLoadingTimer(): void {

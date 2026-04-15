@@ -25,10 +25,13 @@ test("renderChatLayout creates the reusable chat shell skeleton", () => {
   assert.equal(layout.shellEl.className, "tmd-chat-shell")
   assert.equal(layout.sidebarEl.className, "tmd-chat-sidebar")
   assert.equal(layout.timelineEl.className, "tmd-chat-timeline")
+  assert.equal(layout.attachmentButtonEl.tagName, "button")
+  assert.equal(layout.attachmentListEl.className, "tmd-chat-attachments")
   assert.equal(layout.providerButtonEl.tagName, "button")
   assert.equal(layout.modelButtonEl.tagName, "button")
   assert.equal(layout.composerEl.tagName, "textarea")
   assert.equal(layout.composerActionButtonEl.className, "tmd-chat-primary-action")
+  assert.equal(layout.fileInputEl.tagName, "input")
 })
 
 test("renderTerminalLayout creates the reusable terminal shell skeleton", () => {

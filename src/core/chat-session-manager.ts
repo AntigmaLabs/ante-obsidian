@@ -103,6 +103,7 @@ const sortConversations = (conversations: ChatConversationRecord[]): ChatConvers
 
 const cloneMessage = (message: ChatMessageRecord): ChatMessageRecord => ({
   ...message,
+  attachmentPaths: message.attachmentPaths ? [...message.attachmentPaths] : undefined,
   context: cloneContext(message.context),
   turn: message.turn ? { ...message.turn } : undefined,
   runtime: message.runtime
@@ -537,7 +538,9 @@ export class ChatSessionManager {
 
   appendUserPrompt(
     prompt: string,
-    context: ContextSnapshot | null
+    context: ContextSnapshot | null,
+    submissionText?: string,
+    attachmentPaths?: string[]
   ): { conversation: ChatConversationRecord; userMessageId: string; createdConversation: boolean } {
     const hadActiveConversation =
       Boolean(this.activeConversationId) && Boolean(this.activeConversationId && this.conversations.get(this.activeConversationId));
@@ -552,6 +555,8 @@ export class ChatSessionManager {
       role: "user",
       status: "completed",
       text: prompt,
+      submissionText,
+      attachmentPaths,
       context
     });
     this.persistAndNotify();
@@ -764,7 +769,7 @@ export class ChatSessionManager {
 
   private pushMessage(
     conversation: ChatConversationRecord,
-    input: Pick<ChatMessageRecord, "role" | "status" | "text" | "context">
+    input: Pick<ChatMessageRecord, "role" | "status" | "text" | "submissionText" | "attachmentPaths" | "context">
   ): ChatMessageRecord {
     const timestamp = new Date().toISOString();
     const message: ChatMessageRecord = {
@@ -773,6 +778,8 @@ export class ChatSessionManager {
       role: input.role,
       status: input.status,
       text: input.text,
+      submissionText: input.submissionText,
+      attachmentPaths: input.attachmentPaths ? [...input.attachmentPaths] : undefined,
       createdAt: timestamp,
       updatedAt: timestamp,
       context: cloneContext(input.context)

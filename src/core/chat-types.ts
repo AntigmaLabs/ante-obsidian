@@ -29,6 +29,8 @@ export interface ChatMessageRecord {
   role: ChatMessageRole;
   status: ChatMessageStatus;
   text: string;
+  submissionText?: string;
+  attachmentPaths?: string[];
   createdAt: string;
   updatedAt: string;
   context?: ContextSnapshot | null;
