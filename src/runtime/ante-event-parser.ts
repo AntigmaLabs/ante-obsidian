@@ -1,31 +1,12 @@
 import type {
-  InsertAnchor,
   RuntimeApprovalRequest,
-  RuntimeChangeSuggestion,
   RuntimeEvent,
+  RuntimeToolCall,
   RuntimeUsage,
   RuntimeProcessLane,
   RuntimeProcessStep,
   RuntimeProcessStepStatus
 } from "../core/types";
-
-const parseInsertAnchor = (value: unknown): InsertAnchor | undefined => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return undefined;
-  }
-  const record = value as Record<string, unknown>;
-  const by = typeof record.by === "string" ? record.by.trim() : "";
-  if (by === "document-start" || by === "document-end" || by === "selection") {
-    return { by };
-  }
-  if ((by === "heading" || by === "text") && typeof record.value === "string" && record.value.trim()) {
-    return { by, value: record.value.trim() };
-  }
-  if (by === "paragraph-index" && typeof record.value === "number" && Number.isInteger(record.value)) {
-    return { by, value: record.value };
-  }
-  return undefined;
-};
 
 const getStringField = (value: unknown, keys: string[]): string | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -65,6 +46,37 @@ const findNestedStringField = (value: unknown, keys: string[]): string | null =>
     }
   }
   return null;
+};
+
+const findNestedNumberField = (value: unknown, keys: string[]): number | undefined => {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const nested = findNestedNumberField(entry, keys);
+      if (nested != null) {
+        return nested;
+      }
+    }
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of keys) {
+    const candidate = record[key];
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return candidate;
+    }
+  }
+
+  for (const nestedValue of Object.values(record)) {
+    const nested = findNestedNumberField(nestedValue, keys);
+    if (nested != null) {
+      return nested;
+    }
+  }
+  return undefined;
 };
 
 export const getVariant = (event: unknown): { name: string; payload: unknown } | null => {
@@ -120,21 +132,29 @@ export const extractUsage = (value: unknown): RuntimeUsage => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { raw: value };
   }
-  const record = value as Record<string, unknown>;
-  const readNumber = (keys: string[]): number | undefined => {
-    for (const key of keys) {
-      const candidate = record[key];
-      if (typeof candidate === "number" && Number.isFinite(candidate)) {
-        return candidate;
-      }
-    }
-    return undefined;
-  };
 
   return {
-    promptTokens: readNumber(["prompt_tokens", "promptTokens", "input_tokens", "inputTokens"]),
-    completionTokens: readNumber(["completion_tokens", "completionTokens", "output_tokens", "outputTokens"]),
-    totalTokens: readNumber(["total_tokens", "totalTokens"]),
+    promptTokens: findNestedNumberField(value, [
+      "prompt_tokens",
+      "promptTokens",
+      "input_tokens",
+      "inputTokens",
+      "prompt_token_count",
+      "input_token_count"
+    ]),
+    completionTokens: findNestedNumberField(value, [
+      "completion_tokens",
+      "completionTokens",
+      "output_tokens",
+      "outputTokens",
+      "completion_token_count",
+      "output_token_count"
+    ]),
+    totalTokens: findNestedNumberField(value, [
+      "total_tokens",
+      "totalTokens",
+      "total_token_count"
+    ]),
     raw: value
   };
 };
@@ -305,6 +325,44 @@ export const buildProcessLaneFromToolPayload = (
   };
 };
 
+export const extractToolCall = (
+  eventName: "ToolStart" | "ToolEnd",
+  payload: unknown
+): RuntimeToolCall | null => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const idCandidate = eventName === "ToolEnd" ? record.tool_use_id : record.id;
+  const id = typeof idCandidate === "string" ? idCandidate.trim() : "";
+  if (!id) {
+    return null;
+  }
+
+  const name = getStringField(record, ["name", "tool_name"]) ?? "Tool";
+  const argsText =
+    record.args && typeof record.args === "object" && !Array.isArray(record.args) ? JSON.stringify(record.args) : undefined;
+  const resultText =
+    record.result_json == null
+      ? undefined
+      : typeof record.result_json === "string"
+        ? record.result_json
+        : typeof record.result_json === "object" && !Array.isArray(record.result_json)
+          ? JSON.stringify(record.result_json)
+          : undefined;
+  const status = getStringField(record, ["status"]) ?? undefined;
+
+  return {
+    id,
+    name,
+    argsText,
+    resultText,
+    status,
+    isError: record.is_error === true
+  };
+};
+
 export const extractSessionId = (value: unknown): string | null => getStringField(value, ["session_id", "sessionId", "id"]);
 
 export const extractTurnStatus = (value: unknown): string | null => {
@@ -442,47 +500,6 @@ export const parseAssistantMessage = (message: string): RuntimeEvent[] => {
     const record = parsed as Record<string, unknown>;
     if (record.type === "text" && typeof record.text === "string") {
       return [{ type: "result.text", text: record.text }];
-    }
-    if (record.type === "change" && typeof record.operation === "string" && typeof record.afterText === "string") {
-      return [{
-        type: "result.change",
-        change: {
-          kind: "change",
-          operation: record.operation as RuntimeChangeSuggestion["operation"],
-          targetPath: typeof record.targetPath === "string" ? record.targetPath : undefined,
-          afterText: record.afterText,
-          anchor: parseInsertAnchor(record.anchor),
-          placement: record.placement === "before" || record.placement === "after" ? record.placement : undefined,
-          title: typeof record.title === "string" ? record.title : undefined,
-          summary: typeof record.summary === "string" ? record.summary : undefined
-        }
-      }];
-    }
-    if (record.type === "changes" && Array.isArray(record.changes)) {
-      const changes = record.changes.flatMap((entry): RuntimeChangeSuggestion[] => {
-        if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-          return [];
-        }
-        const change = entry as Record<string, unknown>;
-        if (typeof change.operation !== "string" || typeof change.afterText !== "string") {
-          return [];
-        }
-        return [
-          {
-            kind: "change",
-            operation: change.operation as RuntimeChangeSuggestion["operation"],
-            targetPath: typeof change.targetPath === "string" ? change.targetPath : undefined,
-            afterText: change.afterText,
-            anchor: parseInsertAnchor(change.anchor),
-            placement: change.placement === "before" || change.placement === "after" ? change.placement : undefined,
-            title: typeof change.title === "string" ? change.title : undefined,
-            summary: typeof change.summary === "string" ? change.summary : undefined
-          }
-        ];
-      });
-      if (changes.length > 0) {
-        return [{ type: "result.changes", changes }];
-      }
     }
   }
 

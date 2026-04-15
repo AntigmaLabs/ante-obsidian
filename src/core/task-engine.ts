@@ -1,13 +1,19 @@
 import type { HostAdapter } from "./host-adapter";
 import type { AnteRuntime } from "../runtime/ante-runtime";
-import { getArtifactTargetPath, toDocumentChangeArtifact } from "./artifacts";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import {
+  createRuntimeFileArtifact,
+  toDocumentChangeArtifactFromApprovalTool
+} from "./artifacts";
 import type {
   ContextSnapshot,
   DocumentChangeArtifact,
   PresetDefinition,
-  RuntimeChangeSuggestion,
   RuntimeApprovalDecision,
   RuntimeEvent,
+  RuntimeToolCall,
   RuntimeTelemetryState,
   RuntimeTimelineEntry,
   TaskRecord,
@@ -23,6 +29,50 @@ type StateListener = (state: TmdState) => void;
 const MAX_STDOUT_BUFFER_CHARS = 16000;
 const STDOUT_FLUSH_INTERVAL_MS = 100;
 const MAX_RUNTIME_TIMELINE_ENTRIES = 12;
+const STAGED_PREVIEW_PREFIX = "tmd-stage-";
+
+const isDebugEnabled = (): boolean => globalThis.localStorage?.getItem("tmd-debug") === "true";
+
+const logDebug = (...args: unknown[]): void => {
+  if (isDebugEnabled()) {
+    console.info("[tmd task]", ...args);
+  }
+};
+
+const matchesContextFilePath = (targetPath: string | null | undefined, context: ContextSnapshot): boolean => {
+  const candidate = targetPath?.trim();
+  const contextPath = context.filePath?.trim();
+  if (!candidate || !contextPath) {
+    return false;
+  }
+  if (candidate === contextPath) {
+    return true;
+  }
+  const normalizedCandidate = candidate.replace(/\\/g, "/");
+  const normalizedContext = contextPath.replace(/\\/g, "/");
+  return normalizedCandidate.endsWith(`/${normalizedContext}`) || normalizedCandidate.endsWith(normalizedContext);
+};
+
+const isNativeFileEditingToolName = (name: string | null | undefined): boolean => {
+  const normalized = name?.trim().toLowerCase();
+  return normalized === "write" || normalized === "edit";
+};
+
+const isUserSkippedToolMessage = (value: string | null | undefined): boolean =>
+  /tool call skipped by user/i.test(value ?? "");
+
+const approvalHasOnlyFileEditingTools = (approval: NonNullable<TaskRecord["pendingApproval"]>): boolean =>
+  approval.tools.length > 0 && approval.tools.every((tool) => isNativeFileEditingToolName(tool.name));
+
+const sanitizeStagePath = (value: string): string => {
+  const normalized = value.replace(/\\/g, "/").replace(/^\/+/, "");
+  const sanitized = normalized
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => segment.replace(/[^A-Za-z0-9._-]/g, "-"))
+    .join("/");
+  return sanitized || "untitled.md";
+};
 
 const appendStdoutPreview = (existing: string, incoming: string, preserveFullText: boolean): string => {
   if (!incoming) {
@@ -67,7 +117,6 @@ interface StartDocumentTaskInput {
   triggerSource: Exclude<TaskTriggerSource, "chat">;
   context?: ContextSnapshot | null;
   inlineInstruction?: string;
-  captureChangesAsArtifacts?: boolean;
 }
 
 export class TaskEngine {
@@ -75,6 +124,10 @@ export class TaskEngine {
   private readonly listeners = new Set<StateListener>();
   private activeTaskId: string | null = null;
   private readonly pendingStdout = new Map<string, { chunks: string[]; timer: ReturnType<typeof setTimeout> | null }>();
+  private readonly runtimeToolCalls = new Map<
+    string,
+    Map<string, { tool: RuntimeToolCall; targetPath: string | null; beforeText: string }>
+  >();
 
   constructor(
     private readonly runtime: AnteRuntime,
@@ -107,8 +160,7 @@ export class TaskEngine {
       preset: this.resolvePresetById(input.presetId),
       context,
       inlineInstruction: input.inlineInstruction?.trim() ?? "",
-      obsidianCliPromptBlock: this.getObsidianCliPromptBlock(),
-      captureChangesAsArtifacts: input.captureChangesAsArtifacts ?? true
+      obsidianCliPromptBlock: this.getObsidianCliPromptBlock()
     };
     await this.runTask(request);
     return request.taskId;
@@ -281,11 +333,52 @@ export class TaskEngine {
 
     this.runtime.respondToApproval(task.pendingApproval, decision);
     this.patchTask(taskId, { pendingApproval: undefined });
+    if (decision === "Skip" || decision === "Abort") {
+      const approvalToolIds = new Set(task.pendingApproval.tools.map((tool) => tool.id));
+      this.patchArtifacts(taskId, (artifact) =>
+        artifact.runtimeToolId && approvalToolIds.has(artifact.runtimeToolId) && artifact.applyState === "pending"
+          ? { ...artifact, applyState: "discarded", applyError: undefined }
+          : artifact
+      );
+      this.reconcileTaskStatus(taskId);
+    }
     this.appendLog(taskId, "system", `Approval sent: ${decision}`);
   }
 
   async applyArtifact(taskId: string, artifactId: string, options?: { skipHost?: boolean }): Promise<void> {
     const artifact = this.getArtifact(taskId, artifactId);
+    const task = this.getTask(taskId);
+    const approvalBackedTool =
+      artifact.runtimeToolId && task.pendingApproval?.tools.some((tool) => tool.id === artifact.runtimeToolId)
+        ? task.pendingApproval.tools.find((tool) => tool.id === artifact.runtimeToolId)
+        : undefined;
+
+    if (approvalBackedTool && isNativeFileEditingToolName(approvalBackedTool.name)) {
+      this.patchArtifact(taskId, artifactId, {
+        applyState: "applying",
+        applyError: undefined
+      });
+      this.reconcileTaskStatus(taskId);
+      try {
+        if (!options?.skipHost) {
+          await this.host.applyDocumentChange(artifact);
+        }
+        this.patchArtifact(taskId, artifactId, { applyState: "applied" });
+        this.runtime.respondToApproval(task.pendingApproval!, "Skip");
+        this.patchTask(taskId, { pendingApproval: undefined });
+        this.appendLog(taskId, "system", "Approval sent: Skip");
+        this.reconcileTaskStatus(taskId);
+        return;
+      } catch (error) {
+        this.patchArtifact(taskId, artifactId, {
+          applyState: "failed",
+          applyError: error instanceof Error ? error.message : String(error)
+        });
+        this.reconcileTaskStatus(taskId);
+        throw error;
+      }
+    }
+
     this.patchArtifact(taskId, artifactId, {
       applyState: "applying",
       applyError: undefined
@@ -310,6 +403,16 @@ export class TaskEngine {
 
   async discardArtifact(taskId: string, artifactId: string): Promise<void> {
     const artifact = this.getArtifact(taskId, artifactId);
+    const task = this.getTask(taskId);
+    const approvalBackedTool =
+      artifact.runtimeToolId && task.pendingApproval?.tools.some((tool) => tool.id === artifact.runtimeToolId)
+        ? task.pendingApproval.tools.find((tool) => tool.id === artifact.runtimeToolId)
+        : undefined;
+
+    if (approvalBackedTool && isNativeFileEditingToolName(approvalBackedTool.name)) {
+      this.respondToTaskApproval(taskId, "Skip");
+      return;
+    }
 
     if (artifact.applyState === "applied") {
       this.patchArtifact(taskId, artifactId, {
@@ -435,7 +538,7 @@ export class TaskEngine {
               this.patchTask(request.taskId, {
                 pendingApproval: undefined,
                 processLane: undefined,
-                status: task.artifacts.length > 0 ? "awaiting-apply" : "completed",
+                status: task.artifacts.length > 0 ? deriveTaskStatusFromArtifacts(task) : "completed",
                 endedAt: new Date().toISOString()
               });
             }
@@ -470,8 +573,28 @@ export class TaskEngine {
       case "runtime.session":
         this.patchTask(request.taskId, { runtimeSession: event });
         return;
-      case "session.approval":
-        this.patchTask(request.taskId, { pendingApproval: event.approval });
+      case "session.approval": {
+        const shouldAutoStageApproval =
+          request.kind === "chat" && approvalHasOnlyFileEditingTools(event.approval);
+        await this.addArtifactsFromApproval(request, event.approval, shouldAutoStageApproval ? "staged-preview" : "approval");
+        const task = this.getTask(request.taskId);
+        if (shouldAutoStageApproval) {
+          this.runtime.respondToApproval(event.approval, "Skip");
+          this.appendLog(request.taskId, "system", "Staged file preview created; skipped Ante file write");
+          this.patchTask(request.taskId, {
+            pendingApproval: undefined,
+            status: task.artifacts.length > 0 ? deriveTaskStatusFromArtifacts(task) : task.status
+          });
+          return;
+        }
+        this.patchTask(request.taskId, {
+          pendingApproval: event.approval,
+          status: task.artifacts.length > 0 ? deriveTaskStatusFromArtifacts(task) : task.status
+        });
+        return;
+      }
+      case "session.tool":
+        await this.handleRuntimeToolEvent(request, event);
         return;
       case "process.update":
         this.patchTask(request.taskId, { processLane: event.process });
@@ -525,27 +648,12 @@ export class TaskEngine {
           }
         });
         return;
-      case "result.change": {
-        if (request.captureChangesAsArtifacts === false) {
-          await this.captureInlineAndArtifactChanges(request, [event.change]);
-          return;
-        }
-        await this.addArtifactsFromChanges(request, [event.change]);
-        return;
-      }
-      case "result.changes":
-        if (request.captureChangesAsArtifacts === false) {
-          await this.captureInlineAndArtifactChanges(request, event.changes);
-          return;
-        }
-        await this.addArtifactsFromChanges(request, event.changes);
-        return;
       case "session.completed": {
         const task = this.getTask(request.taskId);
         this.patchTask(request.taskId, {
           pendingApproval: undefined,
           processLane: undefined,
-          status: task.artifacts.length > 0 ? "awaiting-apply" : "completed",
+          status: task.artifacts.length > 0 ? deriveTaskStatusFromArtifacts(task) : "completed",
           endedAt: new Date().toISOString()
         });
         return;
@@ -637,6 +745,35 @@ export class TaskEngine {
     return artifact;
   }
 
+  private getRuntimeToolState(taskId: string, toolId: string): {
+    tool: RuntimeToolCall;
+    targetPath: string | null;
+    beforeText: string;
+  } | null {
+    return this.runtimeToolCalls.get(taskId)?.get(toolId) ?? null;
+  }
+
+  private setRuntimeToolState(
+    taskId: string,
+    toolId: string,
+    value: { tool: RuntimeToolCall; targetPath: string | null; beforeText: string }
+  ): void {
+    const tools = this.runtimeToolCalls.get(taskId) ?? new Map<string, { tool: RuntimeToolCall; targetPath: string | null; beforeText: string }>();
+    tools.set(toolId, value);
+    this.runtimeToolCalls.set(taskId, tools);
+  }
+
+  private deleteRuntimeToolState(taskId: string, toolId: string): void {
+    const tools = this.runtimeToolCalls.get(taskId);
+    if (!tools) {
+      return;
+    }
+    tools.delete(toolId);
+    if (tools.size === 0) {
+      this.runtimeToolCalls.delete(taskId);
+    }
+  }
+
   private patchTask(taskId: string, patch: Partial<TaskRecord>): void {
     const taskIndex = this.getTaskIndex(taskId);
     const currentTask = this.state.tasks[taskIndex];
@@ -701,136 +838,229 @@ export class TaskEngine {
     });
   }
 
+  private patchArtifacts(
+    taskId: string,
+    updater: (artifact: DocumentChangeArtifact) => DocumentChangeArtifact
+  ): void {
+    const task = this.getTask(taskId);
+    const nextArtifacts = task.artifacts.map((artifact) => updater(artifact));
+    const changed = nextArtifacts.some((artifact, index) => artifact !== task.artifacts[index]);
+    if (!changed) {
+      return;
+    }
+    this.patchTask(taskId, { artifacts: nextArtifacts });
+  }
+
   private reconcileTaskStatus(taskId: string): void {
     const task = this.getTask(taskId);
     this.patchTask(taskId, { status: deriveTaskStatusFromArtifacts(task) });
   }
 
-  private appendInlineChanges(taskId: string, changes: RuntimeChangeSuggestion[]): void {
-    const task = this.getTask(taskId);
-    this.patchTask(taskId, {
-      inlineChanges: [...(task.inlineChanges ?? []), ...changes],
-      pendingApproval: undefined
-    });
-  }
-
-  private async captureInlineAndArtifactChanges(request: TaskRequest, changes: RuntimeChangeSuggestion[]): Promise<void> {
-    const { inlineChanges, artifactChanges } = this.partitionInlineAndArtifactChanges(request, changes);
-
-    if (inlineChanges.length > 0) {
-      this.appendInlineChanges(request.taskId, inlineChanges);
-    }
-    if (artifactChanges.length > 0) {
-      await this.addArtifactsFromChanges(request, artifactChanges);
-    }
-  }
-
-  private partitionInlineAndArtifactChanges(
+  private async addArtifactsFromApproval(
     request: TaskRequest,
-    changes: RuntimeChangeSuggestion[]
-  ): { inlineChanges: RuntimeChangeSuggestion[]; artifactChanges: RuntimeChangeSuggestion[] } {
-    const inlineChanges: RuntimeChangeSuggestion[] = [];
-    const artifactChanges: RuntimeChangeSuggestion[] = [];
-
-    for (const change of changes) {
-      const isInlineEligible =
-        (change.operation === "append-block" || change.operation === "replace-selection") &&
-        (!change.targetPath || change.targetPath === request.context.filePath);
-
-      if (isInlineEligible) {
-        inlineChanges.push(change);
-      } else {
-        artifactChanges.push(change);
-      }
+    approval: TaskRecord["pendingApproval"],
+    runtimeMode: DocumentChangeArtifact["runtimeMode"] = "approval"
+  ): Promise<void> {
+    if (!approval) {
+      return;
     }
 
-    return { inlineChanges, artifactChanges };
-  }
-
-  private async addArtifactsFromChanges(request: TaskRequest, changes: RuntimeChangeSuggestion[]): Promise<void> {
     const task = this.getTask(request.taskId);
-    const existingArtifactsByTarget = new Map<string, DocumentChangeArtifact>();
-    for (const artifact of task.artifacts) {
-      existingArtifactsByTarget.set(getArtifactTargetPath(artifact), artifact);
-    }
+    const existingToolIds = new Set(task.artifacts.map((artifact) => artifact.runtimeToolId).filter(Boolean));
+    const nextArtifacts = task.artifacts.slice();
 
-    const workingTexts = new Map<string, string>();
+    for (const tool of approval.tools) {
+      if (existingToolIds.has(tool.id)) {
+        continue;
+      }
 
-    for (const change of changes) {
-      const targetPath = this.resolveChangeTargetPath(change, request.context);
+      const targetPath = this.resolveApprovalToolTargetPath(tool, request.context);
       if (!targetPath) {
         continue;
       }
 
-      const existingTargetText =
-        workingTexts.get(targetPath) ??
-        (change.operation === "create-file"
-          ? ""
-          : targetPath !== request.context.filePath
-            ? (await this.host.readFile(targetPath)) ?? ""
-            : request.context.documentText ?? "");
+      const beforeText = matchesContextFilePath(targetPath, request.context)
+        ? request.context.documentText ?? ""
+        : (await this.host.readFile(targetPath)) ?? "";
+      const artifact = toDocumentChangeArtifactFromApprovalTool(tool, beforeText);
+      if (!artifact) {
+        if (["write", "edit"].includes(tool.name.trim().toLowerCase())) {
+          logDebug(`approval artifact skipped tool=${tool.name} id=${tool.id} target=${targetPath}`);
+        }
+        continue;
+      }
 
-      const contextForChange: ContextSnapshot =
-        targetPath === request.context.filePath
-          ? {
-              ...request.context,
-              documentText: existingTargetText
-            }
-          : request.context;
+      const nextArtifact =
+        runtimeMode === "staged-preview" ? await this.materializeStagedPreviewArtifact(artifact) : artifact;
+      nextArtifacts.push({
+        ...nextArtifact,
+        runtimeMode
+      });
+      existingToolIds.add(tool.id);
+      logDebug(
+        `approval artifact created tool=${tool.name} id=${tool.id} target=${targetPath} operation=${nextArtifact.operation} mode=${runtimeMode}`,
+      );
+    }
 
-      const artifact = this.normalizeArtifactToFileUnit(
-        toDocumentChangeArtifact(change, contextForChange, existingTargetText)
-      );
-      workingTexts.set(targetPath, artifact.afterText);
-      existingArtifactsByTarget.set(
-        targetPath,
-        this.mergeArtifactsByFile(existingArtifactsByTarget.get(targetPath), artifact)
-      );
+    if (nextArtifacts.length === task.artifacts.length) {
+      return;
     }
 
     this.patchTask(request.taskId, {
-      artifacts: [...existingArtifactsByTarget.values()],
-      pendingApproval: undefined,
-      status: "awaiting-apply"
+      artifacts: nextArtifacts
     });
   }
 
-  private resolveChangeTargetPath(change: RuntimeChangeSuggestion, context: ContextSnapshot): string | null {
-    if (change.operation === "create-file") {
-      return change.targetPath?.trim() || null;
-    }
-    return change.targetPath?.trim() || context.filePath;
-  }
-
-  private normalizeArtifactToFileUnit(artifact: DocumentChangeArtifact): DocumentChangeArtifact {
-    const path = getArtifactTargetPath(artifact);
+  private async materializeStagedPreviewArtifact(
+    artifact: DocumentChangeArtifact
+  ): Promise<DocumentChangeArtifact> {
+    const stageRoot = mkdtempSync(join(tmpdir(), STAGED_PREVIEW_PREFIX));
+    const relativePath = sanitizeStagePath(artifact.target.path);
+    const baselinePath = join(stageRoot, "baseline", relativePath);
+    const stagedPath = join(stageRoot, "staged", relativePath);
+    mkdirSync(dirname(baselinePath), { recursive: true });
+    mkdirSync(dirname(stagedPath), { recursive: true });
+    writeFileSync(baselinePath, artifact.beforeText, "utf8");
+    writeFileSync(stagedPath, artifact.afterText, "utf8");
     return {
       ...artifact,
-      operation: artifact.operation === "create-file" ? "create-file" : "replace-file",
-      target: {
-        type: "file",
-        path
-      }
+      baselinePath,
+      stagedPath,
+      runtimeMode: "staged-preview"
     };
   }
 
-  private mergeArtifactsByFile(
-    previous: DocumentChangeArtifact | undefined,
-    next: DocumentChangeArtifact
-  ): DocumentChangeArtifact {
-    if (!previous) {
-      return next;
+  private resolveApprovalToolTargetPath(
+    tool: NonNullable<TaskRecord["pendingApproval"]>["tools"][number],
+    context: ContextSnapshot
+  ): string | null {
+    if (!tool.argsText?.trim()) {
+      return context.filePath;
+    }
+    try {
+      const parsed = JSON.parse(tool.argsText) as Record<string, unknown>;
+      const pathCandidate = parsed.file_path ?? parsed.path ?? parsed.targetPath;
+      return typeof pathCandidate === "string" && pathCandidate.trim() ? pathCandidate.trim() : context.filePath;
+    } catch {
+      return context.filePath;
+    }
+  }
+
+  private async handleRuntimeToolEvent(
+    request: TaskRequest,
+    event: Extract<RuntimeEvent, { type: "session.tool" }>
+  ): Promise<void> {
+    const normalizedName = event.tool.name.trim().toLowerCase();
+    if (event.phase === "start") {
+      const targetPath = this.resolveRuntimeToolTargetPath(event.tool, request.context);
+      this.setRuntimeToolState(request.taskId, event.tool.id, {
+        tool: event.tool,
+        targetPath,
+        beforeText: matchesContextFilePath(targetPath, request.context) ? request.context.documentText ?? "" : ""
+      });
+      if (targetPath && !matchesContextFilePath(targetPath, request.context)) {
+        const beforeText = (await this.host.readFile(targetPath)) ?? "";
+        this.setRuntimeToolState(request.taskId, event.tool.id, {
+          tool: event.tool,
+          targetPath,
+          beforeText
+        });
+      }
+      if (normalizedName === "write") {
+        const task = this.getTask(request.taskId);
+        if (!task.artifacts.some((artifact) => artifact.runtimeToolId === event.tool.id)) {
+          const syntheticApprovalTool = {
+            id: event.tool.id,
+            name: event.tool.name,
+            argsText: event.tool.argsText
+          };
+          await this.addArtifactsFromApproval(request, {
+            turnId: "",
+            message: "",
+            tools: [syntheticApprovalTool]
+          });
+        }
+      }
+      if (normalizedName === "write" || normalizedName === "edit") {
+        logDebug(`tool start name=${event.tool.name} id=${event.tool.id} target=${targetPath ?? "none"}`);
+      }
+      return;
     }
 
-    return {
-      ...next,
-      id: previous.id,
-      operation: previous.operation === "create-file" ? "create-file" : next.operation,
-      beforeText: previous.beforeText,
-      sourceChanges: [...previous.sourceChanges, ...next.sourceChanges],
-      applyState: previous.applyState === "applied" ? "pending" : next.applyState,
-      applyError: undefined
-    };
+    const cached = this.getRuntimeToolState(request.taskId, event.tool.id);
+    const effectiveTool: RuntimeToolCall =
+      cached == null
+        ? event.tool
+        : {
+            ...cached.tool,
+            ...event.tool,
+            name: event.tool.name === "Tool" ? cached.tool.name : event.tool.name,
+            argsText: event.tool.argsText ?? cached.tool.argsText
+          };
+    if (
+      !effectiveTool.isError &&
+      (normalizedName === "edit" || effectiveTool.name.trim().toLowerCase() === "edit") &&
+      cached?.targetPath
+    ) {
+      const task = this.getTask(request.taskId);
+      const afterText = (await this.host.readFile(cached.targetPath)) ?? "";
+      if (!task.artifacts.some((artifact) => artifact.runtimeToolId === effectiveTool.id)) {
+        const artifact = createRuntimeFileArtifact({
+          toolId: effectiveTool.id,
+          title: "Edit file",
+          targetPath: cached.targetPath,
+          beforeText: cached.beforeText,
+          afterText,
+          runtimeMode: "observed"
+        });
+        this.patchTask(request.taskId, {
+          artifacts: [...task.artifacts, artifact]
+        });
+        logDebug(`tool artifact created name=${effectiveTool.name} id=${effectiveTool.id} target=${cached.targetPath}`);
+      }
+    }
+
+    let matched = false;
+    this.patchArtifacts(request.taskId, (artifact) => {
+      if (artifact.runtimeToolId !== effectiveTool.id) {
+        return artifact;
+      }
+      matched = true;
+      const shouldIgnoreSkippedError =
+        effectiveTool.isError === true &&
+        isUserSkippedToolMessage(effectiveTool.resultText) &&
+        (artifact.applyState === "applied" ||
+          artifact.applyState === "discarded" ||
+          artifact.runtimeMode === "staged-preview");
+      if (shouldIgnoreSkippedError) {
+        return artifact;
+      }
+      return {
+        ...artifact,
+        applyState: effectiveTool.isError ? "failed" : "applied",
+        applyError: effectiveTool.isError ? effectiveTool.resultText ?? "Tool execution failed" : undefined
+      };
+    });
+    if (effectiveTool.name.trim().toLowerCase() === "write" || effectiveTool.name.trim().toLowerCase() === "edit") {
+      logDebug(
+        `tool end name=${effectiveTool.name} id=${effectiveTool.id} matchedArtifact=${matched} status=${effectiveTool.status ?? ""} isError=${effectiveTool.isError === true}`,
+      );
+    }
+    this.deleteRuntimeToolState(request.taskId, effectiveTool.id);
+    this.reconcileTaskStatus(request.taskId);
+  }
+
+  private resolveRuntimeToolTargetPath(tool: RuntimeToolCall, context: ContextSnapshot): string | null {
+    if (!tool.argsText?.trim()) {
+      return context.filePath;
+    }
+    try {
+      const parsed = JSON.parse(tool.argsText) as Record<string, unknown>;
+      const candidate = parsed.file_path ?? parsed.path ?? parsed.targetPath;
+      return typeof candidate === "string" && candidate.trim() ? candidate.trim() : context.filePath;
+    } catch {
+      return context.filePath;
+    }
   }
 
   private notify(): void {

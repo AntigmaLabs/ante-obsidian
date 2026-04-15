@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile as readFsFile } from "node:fs/promises";
 import { TaskEngine } from "../src/core/task-engine";
 import { BUILTIN_PRESETS } from "../src/core/presets";
 import type {
@@ -20,6 +21,8 @@ const context: ContextSnapshot = {
 };
 
 class RuntimeStub {
+  public readonly approvals: Array<{ turnId: string; decision: RuntimeApprovalDecision }> = [];
+
   constructor(private readonly emit: (request: TaskRequest, onEvent: (event: RuntimeEvent) => void) => void) {}
 
   async ensureWarmSession(): Promise<void> {}
@@ -37,7 +40,10 @@ class RuntimeStub {
 
   cancelActiveRun(): void {}
 
-  respondToApproval(_approval: unknown, _decision: RuntimeApprovalDecision): void {}
+  respondToApproval(approval: unknown, decision: RuntimeApprovalDecision): void {
+    const request = approval as { turnId?: string };
+    this.approvals.push({ turnId: request.turnId ?? "", decision });
+  }
 
   async persistActiveSession(): Promise<void> {}
 
@@ -64,7 +70,21 @@ class CancelledRuntimeStub extends RuntimeStub {
   }
 }
 
+class HangingRuntimeStub extends RuntimeStub {
+  override run(
+    request: TaskRequest,
+    observer: {
+      onEvent: (event: RuntimeEvent) => void;
+      onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+    }
+  ): void {
+    this.emit(request, observer.onEvent);
+  }
+}
+
 class HostStub {
+  public appliedChanges = 0;
+
   async getActiveContext(): Promise<ContextSnapshot | null> {
     return context;
   }
@@ -81,58 +101,30 @@ class HostStub {
     return null;
   }
 
-  async applyDocumentChange(_change: DocumentChangeArtifact): Promise<void> {}
+  async applyDocumentChange(_change: DocumentChangeArtifact): Promise<void> {
+    this.appliedChanges += 1;
+  }
 
   async revertDocumentChange(_change: DocumentChangeArtifact): Promise<void> {}
 
   async revealDocumentChange(_change: DocumentChangeArtifact): Promise<void> {}
 }
 
+class MutableHostStub extends HostStub {
+  constructor(private readonly files: Record<string, string>) {
+    super();
+  }
+
+  override async readFile(path: string): Promise<string | null> {
+    return this.files[path] ?? null;
+  }
+
+  setFile(path: string, content: string): void {
+    this.files[path] = content;
+  }
+}
+
 const resolvePresetById = (presetId: PresetId) => BUILTIN_PRESETS[presetId];
-
-test("batched changes for the same file collapse into one file artifact", async () => {
-  const runtime = new RuntimeStub((_request, onEvent) => {
-    onEvent({
-      type: "result.changes",
-      changes: [
-        {
-          kind: "change",
-          operation: "append-block",
-          targetPath: "Note.md",
-          afterText: "beta",
-          title: "Append beta"
-        },
-        {
-          kind: "change",
-          operation: "append-block",
-          targetPath: "Note.md",
-          afterText: "gamma",
-          title: "Append gamma"
-        }
-      ]
-    });
-    onEvent({ type: "session.completed", summary: "done" });
-  });
-
-  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
-  await engine.startDocumentTask({
-    presetId: "default",
-    triggerSource: "mention",
-    context,
-    inlineInstruction: "Append two blocks"
-  });
-
-  const task = engine.getState().tasks[0];
-  assert.ok(task);
-  assert.equal(task?.artifacts.length, 1);
-  assert.equal(task?.artifacts[0]?.target.type, "file");
-  assert.equal(task?.artifacts[0]?.operation, "replace-file");
-  assert.equal(task?.artifacts[0]?.beforeText, "alpha\n");
-  assert.equal(task?.artifacts[0]?.afterText, "alpha\n\nbeta\n\ngamma\n");
-  assert.equal(task?.artifacts[0]?.sourceChanges.length, 2);
-  assert.equal(task?.artifacts[0]?.sourceChanges[0]?.afterText, "beta");
-  assert.equal(task?.artifacts[0]?.sourceChanges[1]?.afterText, "gamma");
-});
 
 test("stdout chunks are aggregated outside the visible log list", async () => {
   const runtime = new RuntimeStub((_request, onEvent) => {
@@ -156,71 +148,6 @@ test("stdout chunks are aggregated outside the visible log list", async () => {
   assert.equal(task?.logs.length, 1);
   assert.equal(task?.logs[0]?.stream, "system");
   assert.equal(task?.logs[0]?.text, "done");
-});
-
-test("context-menu tasks can keep change suggestions inline without generating artifacts", async () => {
-  const runtime = new RuntimeStub((_request, onEvent) => {
-    onEvent({
-      type: "result.change",
-      change: {
-        kind: "change",
-        operation: "append-block",
-        targetPath: "Note.md",
-        afterText: "summary block",
-        title: "Summary"
-      }
-    });
-    onEvent({ type: "session.completed", summary: "done" });
-  });
-
-  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
-  await engine.startDocumentTask({
-    presetId: "summary",
-    triggerSource: "context-menu",
-    context,
-    inlineInstruction: "Summarize this selection",
-    captureChangesAsArtifacts: false
-  });
-
-  const task = engine.getState().tasks[0];
-  assert.ok(task);
-  assert.equal(task?.artifacts.length, 0);
-  assert.equal(task?.inlineChanges?.length, 1);
-  assert.equal(task?.inlineChanges?.[0]?.afterText, "summary block");
-  assert.equal(task?.status, "completed");
-});
-
-test("context-menu tasks still generate artifacts for non-inline file changes", async () => {
-  const runtime = new RuntimeStub((_request, onEvent) => {
-    onEvent({
-      type: "result.change",
-      change: {
-        kind: "change",
-        operation: "create-file",
-        targetPath: "Summary.md",
-        afterText: "# Summary\n",
-        title: "Summary file"
-      }
-    });
-    onEvent({ type: "session.completed", summary: "done" });
-  });
-
-  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
-  await engine.startDocumentTask({
-    presetId: "summary",
-    triggerSource: "context-menu",
-    context,
-    inlineInstruction: "Summarize this selection",
-    captureChangesAsArtifacts: false
-  });
-
-  const task = engine.getState().tasks[0];
-  assert.ok(task);
-  assert.equal(task?.inlineChanges?.length ?? 0, 0);
-  assert.equal(task?.artifacts.length, 1);
-  assert.equal(task?.artifacts[0]?.target.type, "file");
-  assert.equal(task?.artifacts[0]?.target.path, "Summary.md");
-  assert.equal(task?.status, "awaiting-apply");
 });
 
 test("stdout preview buffer is capped", async () => {
@@ -411,4 +338,546 @@ test("startDocumentTask accepts a custom preset resolved at runtime", async () =
 
   assert.equal(capturedRequest?.preset.id, "custom-1");
   assert.equal(capturedRequest?.preset.systemInstructions, "Rewrite the content more clearly.");
+});
+
+test("native Write approvals create applied diff artifacts from tool args", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+    onEvent({
+      type: "session.tool",
+      phase: "end",
+      tool: {
+        id: "tool-write-1",
+        name: "Write",
+        resultText: JSON.stringify({ lines_written: 2 }),
+        status: "Completed",
+        isError: false
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Add beta"
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.artifacts.length, 1);
+  assert.equal(task?.artifacts[0]?.beforeText, "alpha\n");
+  assert.equal(task?.artifacts[0]?.afterText, "alpha\nbeta\n");
+  assert.equal(task?.artifacts[0]?.runtimeToolId, "tool-write-1");
+  assert.equal(task?.artifacts[0]?.applyState, "applied");
+  assert.equal(task?.status, "applied");
+});
+
+test("native Edit approvals create preview diff artifacts before execution", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-1",
+        message: "approve edit",
+        tools: [
+          {
+            id: "tool-edit-approval-1",
+            name: "Edit",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              old_string: "alpha\n",
+              new_string: "alpha\nbeta\n",
+              replace_all: false
+            })
+          }
+        ]
+      }
+    });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Preview edit"
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.artifacts.length, 1);
+  assert.equal(task?.artifacts[0]?.runtimeToolId, "tool-edit-approval-1");
+  assert.equal(task?.artifacts[0]?.beforeText, "alpha\n");
+  assert.equal(task?.artifacts[0]?.afterText, "alpha\nbeta\n");
+  assert.equal(task?.artifacts[0]?.applyState, "pending");
+  assert.equal(task?.status, "awaiting-apply");
+});
+
+test("native file-edit approval pauses switch the task to awaiting-apply before runtime exit", async () => {
+  const runtime = new HangingRuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-1",
+        message: "approve edit",
+        tools: [
+          {
+            id: "tool-edit-approval-1",
+            name: "Edit",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              old_string: "alpha\n",
+              new_string: "alpha\nbeta\n",
+              replace_all: false
+            })
+          }
+        ]
+      }
+    });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  const taskId = await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Preview edit"
+  });
+
+  const task = engine.getState().tasks.find((entry) => entry.id === taskId);
+  assert.ok(task);
+  assert.equal(task?.artifacts.length, 1);
+  assert.equal(task?.status, "awaiting-apply");
+  assert.equal(task?.pendingApproval?.turnId, "turn-1");
+});
+
+test("chat file-edit approvals are staged locally and auto-skipped in Ante", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-chat-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-chat-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  await engine.startChatTask("Preview beta");
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.kind, "chat");
+  assert.equal(task?.pendingApproval, undefined);
+  assert.equal(task?.artifacts.length, 1);
+  assert.equal(task?.artifacts[0]?.runtimeMode, "staged-preview");
+  assert.equal(task?.artifacts[0]?.applyState, "pending");
+  assert.equal(task?.status, "awaiting-apply");
+  assert.equal(runtime.approvals.length, 1);
+  assert.deepEqual(runtime.approvals[0], { turnId: "turn-chat-1", decision: "Skip" });
+  assert.equal(await readFsFile(task!.artifacts[0]!.baselinePath!, "utf8"), "alpha\n");
+  assert.equal(await readFsFile(task!.artifacts[0]!.stagedPath!, "utf8"), "alpha\nbeta\n");
+});
+
+test("native Edit tools create artifacts from file snapshots on tool end", async () => {
+  const path = "Note.md";
+  const host = new MutableHostStub({ [path]: "alpha\n" });
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.tool",
+      phase: "start",
+      tool: {
+        id: "tool-edit-1",
+        name: "Edit",
+        argsText: JSON.stringify({
+          file_path: path,
+          old_string: "alpha\n",
+          new_string: "alpha\nbeta\n"
+        })
+      }
+    });
+    host.setFile(path, "alpha\nbeta\n");
+    onEvent({
+      type: "session.tool",
+      phase: "end",
+      tool: {
+        id: "tool-edit-1",
+        name: "Tool",
+        resultText: JSON.stringify({ patch: { lines: ["+beta"] } }),
+        status: "Completed",
+        isError: false
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, host as never, resolvePresetById);
+  await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Add beta with edit"
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.artifacts.length, 1);
+  assert.equal(task?.artifacts[0]?.beforeText, "alpha\n");
+  assert.equal(task?.artifacts[0]?.afterText, "alpha\nbeta\n");
+  assert.equal(task?.artifacts[0]?.runtimeToolId, "tool-edit-1");
+  assert.equal(task?.artifacts[0]?.applyState, "applied");
+});
+
+test("failed Edit followed by successful Write only keeps the successful diff artifact", async () => {
+  const path = "Note.md";
+  const host = new MutableHostStub({ [path]: "alpha\n" });
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.tool",
+      phase: "start",
+      tool: {
+        id: "tool-edit-1",
+        name: "Edit",
+        argsText: JSON.stringify({
+          file_path: path,
+          old_string: "alpha\n",
+          new_string: "alpha\nbeta\n",
+          replace_all: false
+        })
+      }
+    });
+    onEvent({
+      type: "session.tool",
+      phase: "end",
+      tool: {
+        id: "tool-edit-1",
+        name: "Tool",
+        resultText: "old_string found 2 times",
+        status: "Failed",
+        isError: true
+      }
+    });
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: path,
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+    host.setFile(path, "alpha\nbeta\n");
+    onEvent({
+      type: "session.tool",
+      phase: "end",
+      tool: {
+        id: "tool-write-1",
+        name: "Write",
+        resultText: JSON.stringify({ lines_written: 2 }),
+        status: "Completed",
+        isError: false
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, host as never, resolvePresetById);
+  await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Add beta even if edit fallback is needed"
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.artifacts.length, 1);
+  assert.equal(task?.artifacts[0]?.runtimeToolId, "tool-write-1");
+  assert.equal(task?.artifacts[0]?.beforeText, "alpha\n");
+  assert.equal(task?.artifacts[0]?.afterText, "alpha\nbeta\n");
+  assert.equal(task?.artifacts[0]?.applyState, "applied");
+  assert.equal(task?.status, "applied");
+});
+
+test("applying an approval-backed native Write artifact modifies the host and skips the pending tool call", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+  });
+  const host = new HostStub();
+
+  const engine = new TaskEngine(runtime as never, host as never, resolvePresetById);
+  await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Preview beta"
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.artifacts.length, 1);
+  assert.equal(task?.artifacts[0]?.applyState, "pending");
+  assert.equal(task?.status, "awaiting-apply");
+
+  await engine.applyArtifact(task!.id, task!.artifacts[0]!.id);
+
+  const updatedTask = engine.getState().tasks[0];
+  assert.ok(updatedTask);
+  assert.equal(runtime.approvals.length, 1);
+  assert.deepEqual(runtime.approvals[0], { turnId: "turn-1", decision: "Skip" });
+  assert.equal(host.appliedChanges, 1);
+  assert.equal(updatedTask?.artifacts[0]?.applyState, "applied");
+});
+
+test("skipped-by-user ToolEnd does not overwrite a locally applied native artifact as failed", async () => {
+  let observerRef:
+    | {
+        onEvent: (event: RuntimeEvent) => void;
+        onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+      }
+    | null = null;
+
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+  });
+
+  runtime.run = (
+    request: TaskRequest,
+    observer: {
+      onEvent: (event: RuntimeEvent) => void;
+      onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+    }
+  ): void => {
+    observerRef = observer;
+    runtime["emit"](request, observer.onEvent);
+  };
+
+  const host = new HostStub();
+  const engine = new TaskEngine(runtime as never, host as never, resolvePresetById);
+  await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Preview beta"
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  await engine.applyArtifact(task!.id, task!.artifacts[0]!.id);
+
+  observerRef?.onEvent({
+    type: "session.tool",
+    phase: "end",
+    tool: {
+      id: "tool-write-1",
+      name: "Write",
+      resultText: "Tool call skipped by user, and was not executed.",
+      status: "Skipped",
+      isError: true
+    }
+  });
+
+  const updatedTask = engine.getState().tasks[0];
+  assert.ok(updatedTask);
+  assert.equal(updatedTask?.artifacts[0]?.applyState, "applied");
+  assert.equal(updatedTask?.artifacts[0]?.applyError, undefined);
+});
+
+test("skipped-by-user ToolEnd does not overwrite a staged chat preview artifact as failed", async () => {
+  let observerRef:
+    | {
+        onEvent: (event: RuntimeEvent) => void;
+        onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+      }
+    | null = null;
+
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-chat-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-chat-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+  });
+
+  runtime.run = (
+    request: TaskRequest,
+    observer: {
+      onEvent: (event: RuntimeEvent) => void;
+      onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+    }
+  ): void => {
+    observerRef = observer;
+    runtime["emit"](request, observer.onEvent);
+  };
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  await engine.startChatTask("Preview beta");
+
+  observerRef?.onEvent({
+    type: "session.tool",
+    phase: "end",
+    tool: {
+      id: "tool-write-chat-1",
+      name: "Tool",
+      resultText: "Tool call skipped by user, and was not executed.",
+      status: "Skipped",
+      isError: true
+    }
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.artifacts[0]?.applyState, "pending");
+  assert.equal(task?.artifacts[0]?.applyError, undefined);
+});
+
+test("skipped-by-user ToolEnd does not overwrite a discarded native artifact as failed", async () => {
+  let observerRef:
+    | {
+        onEvent: (event: RuntimeEvent) => void;
+        onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+      }
+    | null = null;
+
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+  });
+
+  runtime.run = (
+    request: TaskRequest,
+    observer: {
+      onEvent: (event: RuntimeEvent) => void;
+      onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+    }
+  ): void => {
+    observerRef = observer;
+    runtime["emit"](request, observer.onEvent);
+  };
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Preview beta"
+  });
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  await engine.discardArtifact(task!.id, task!.artifacts[0]!.id);
+
+  observerRef?.onEvent({
+    type: "session.tool",
+    phase: "end",
+    tool: {
+      id: "tool-write-1",
+      name: "Tool",
+      resultText: "Tool call skipped by user, and was not executed.",
+      status: "Skipped",
+      isError: true
+    }
+  });
+
+  const updatedTask = engine.getState().tasks[0];
+  assert.ok(updatedTask);
+  assert.equal(updatedTask?.artifacts[0]?.applyState, "discarded");
+  assert.equal(updatedTask?.artifacts[0]?.applyError, undefined);
 });

@@ -11,17 +11,17 @@ export interface ApprovalActionDefinition {
 
 export const DEFAULT_APPROVAL_ACTIONS: readonly ApprovalActionDefinition[] = [
   {
-    label: "Approve once",
+    label: "Run once",
     decision: "Accept",
     className: "tmd-is-approve",
   },
   {
-    label: "Allow session",
+    label: "Always allow",
     decision: "AcceptForSession",
     className: "tmd-is-approve-session",
   },
   {
-    label: "Deny",
+    label: "Cancel",
     decision: "Skip",
     className: "tmd-is-deny",
   },
@@ -49,7 +49,7 @@ export const renderApprovalCard = (
   const approvalCard = container.createDiv({ cls: "tmd-terminal-approval" })
   approvalCard.createDiv({
     cls: "tmd-terminal-approval-title",
-    text: "Tool approval required",
+    text: "Confirm tool call",
   })
   approvalCard.createDiv({
     cls: "tmd-terminal-approval-message",
@@ -62,7 +62,7 @@ export const renderApprovalCard = (
     })
     toolRow.createDiv({
       cls: "tmd-terminal-approval-tool-name",
-      text: `${tool.name} · ${tool.id}`,
+      text: tool.name,
     })
     if (tool.argsText) {
       toolRow.createDiv({

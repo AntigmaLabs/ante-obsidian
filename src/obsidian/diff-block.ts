@@ -31,6 +31,80 @@ const assertNever = (value: never): never => {
   throw new Error(`Unexpected value: ${String(value)}`);
 };
 
+type InlineSegment = {
+  text: string;
+  kind: "common" | "remove" | "add";
+};
+
+const buildInlineDiffSegments = (before: string, after: string): { before: InlineSegment[]; after: InlineSegment[] } => {
+  let prefix = 0;
+  const maxPrefix = Math.min(before.length, after.length);
+  while (prefix < maxPrefix && before[prefix] === after[prefix]) {
+    prefix += 1;
+  }
+
+  let suffix = 0;
+  const maxSuffix = Math.min(before.length - prefix, after.length - prefix);
+  while (
+    suffix < maxSuffix &&
+    before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
+  ) {
+    suffix += 1;
+  }
+
+  const beforePrefix = before.slice(0, prefix);
+  const beforeChanged = before.slice(prefix, before.length - suffix);
+  const beforeSuffix = suffix > 0 ? before.slice(before.length - suffix) : "";
+  const afterPrefix = after.slice(0, prefix);
+  const afterChanged = after.slice(prefix, after.length - suffix);
+  const afterSuffix = suffix > 0 ? after.slice(after.length - suffix) : "";
+
+  return {
+    before: [
+      beforePrefix ? { text: beforePrefix, kind: "common" } : null,
+      beforeChanged ? { text: beforeChanged, kind: "remove" } : null,
+      beforeSuffix ? { text: beforeSuffix, kind: "common" } : null
+    ].filter(Boolean) as InlineSegment[],
+    after: [
+      afterPrefix ? { text: afterPrefix, kind: "common" } : null,
+      afterChanged ? { text: afterChanged, kind: "add" } : null,
+      afterSuffix ? { text: afterSuffix, kind: "common" } : null
+    ].filter(Boolean) as InlineSegment[]
+  };
+};
+
+const renderInlineSegments = (container: HTMLElement, segments: InlineSegment[]): void => {
+  if (segments.length === 0) {
+    container.setText(" ");
+    return;
+  }
+
+  for (const segment of segments) {
+    container.createSpan({
+      cls: segment.kind === "common" ? "tmd-diff-inline-common" : `tmd-diff-inline-${segment.kind}`,
+      text: segment.text || " "
+    });
+  }
+};
+
+const renderDiffLine = (
+  container: HTMLElement,
+  row: RenderableDiffRow,
+  pairedSegments?: InlineSegment[]
+): void => {
+  const line = container.createDiv({ cls: `tmd-diff-line is-${row.kind}` });
+  line.createDiv({ cls: "tmd-diff-gutter" });
+  line.createDiv({ cls: "tmd-diff-line-number" }).setText(row.oldLine === null ? "" : String(row.oldLine));
+  line.createDiv({ cls: "tmd-diff-line-number" }).setText(row.newLine === null ? "" : String(row.newLine));
+  line.createDiv({ cls: "tmd-diff-line-marker", text: row.marker });
+  const text = line.createDiv({ cls: "tmd-diff-line-text" });
+  if (pairedSegments) {
+    renderInlineSegments(text, pairedSegments);
+    return;
+  }
+  text.setText(row.text || " ");
+};
+
 const collectDiffStats = (rows: PatchRow[]): DiffStats =>
   rows.reduce<DiffStats>(
     (stats, row) => {
@@ -248,13 +322,17 @@ export const renderArtifactDiff = (
     if (index > 0) {
       hunkEl.createDiv({ cls: "tmd-diff-hunk-header", text: hunk.header });
     }
-    for (const row of hunk.rows) {
-      const line = hunkEl.createDiv({ cls: `tmd-diff-line is-${row.kind}` });
-      line.createDiv({ cls: "tmd-diff-gutter" });
-      line.createDiv({ cls: "tmd-diff-line-number" }).setText(row.oldLine === null ? "" : String(row.oldLine));
-      line.createDiv({ cls: "tmd-diff-line-number" }).setText(row.newLine === null ? "" : String(row.newLine));
-      line.createDiv({ cls: "tmd-diff-line-marker", text: row.marker });
-      line.createDiv({ cls: "tmd-diff-line-text", text: row.text || " " });
+    for (let rowIndex = 0; rowIndex < hunk.rows.length; rowIndex += 1) {
+      const row = hunk.rows[rowIndex];
+      const next = hunk.rows[rowIndex + 1];
+      if (row?.kind === "remove" && next?.kind === "add") {
+        const segments = buildInlineDiffSegments(row.text, next.text);
+        renderDiffLine(hunkEl, row, segments.before);
+        renderDiffLine(hunkEl, next, segments.after);
+        rowIndex += 1;
+        continue;
+      }
+      renderDiffLine(hunkEl, row);
     }
   });
 };

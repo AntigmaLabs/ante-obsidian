@@ -59,7 +59,6 @@ test("structured chat change results do not keep raw JSON as message text", () =
               },
               beforeText: "alpha\n",
               afterText: "beta\nalpha\n",
-              sourceChanges: [],
               applyState: "pending"
             }
           ],
@@ -323,7 +322,6 @@ test("persisted chat state retains artifact snapshots for old conversations", ()
               },
               beforeText: "alpha\n",
               afterText: "beta\nalpha\n",
-              sourceChanges: [],
               applyState: "pending"
             }
           ],

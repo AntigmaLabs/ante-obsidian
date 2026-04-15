@@ -264,8 +264,7 @@ export default class TmdPlugin extends Plugin {
           replaceTo: context.selection.to,
           context,
           presetId,
-          triggerSource: "context-menu",
-          captureChangesAsArtifacts: false
+          triggerSource: "context-menu"
         });
         return;
       }

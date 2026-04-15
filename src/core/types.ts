@@ -10,12 +10,11 @@ export type TaskStatus =
   | "awaiting-apply"
   | "applied"
   | "discarded";
-export type DocumentChangeOperation = "replace-selection" | "append-block" | "insert-block" | "replace-file" | "create-file";
+export type DocumentChangeOperation = "replace-file" | "create-file";
 export type ApplyState = "pending" | "applying" | "applied" | "reverting" | "reverted" | "failed" | "discarded";
 export type LogStream = "stdout" | "stderr" | "system" | "user";
 export type RuntimeApprovalDecision = "Accept" | "AcceptForSession" | "Skip" | "Abort";
 export type RuntimeProcessStepStatus = "pending" | "in_progress" | "completed";
-export type InsertPlacement = "before" | "after";
 export type RuntimeInfoLevel = "info" | "goodbye";
 
 export interface TextPosition {
@@ -65,6 +64,15 @@ export interface RuntimeApprovalTool {
   argsText?: string;
 }
 
+export interface RuntimeToolCall {
+  id: string;
+  name: string;
+  argsText?: string;
+  resultText?: string;
+  status?: string;
+  isError?: boolean;
+}
+
 export interface RuntimeApprovalRequest {
   turnId: string;
   message: string;
@@ -110,17 +118,10 @@ export interface RuntimeTelemetryState {
   timeline: RuntimeTimelineEntry[];
 }
 
-export type DocumentChangeTarget =
-  | {
-      type: "selection";
-      filePath: string;
-      from: TextPosition;
-      to: TextPosition;
-    }
-  | {
-      type: "file";
-      path: string;
-    };
+export type DocumentChangeTarget = {
+  type: "file";
+  path: string;
+};
 
 export interface DocumentChangeArtifact {
   id: string;
@@ -130,31 +131,18 @@ export interface DocumentChangeArtifact {
   target: DocumentChangeTarget;
   beforeText: string;
   afterText: string;
-  sourceChanges: RuntimeChangeSuggestion[];
   applyState: ApplyState;
   applyError?: string;
+  runtimeToolId?: string;
+  baselinePath?: string;
+  stagedPath?: string;
+  runtimeMode?: "approval" | "staged-preview" | "observed";
 }
 
 export interface TextResult {
   kind: "text";
   text: string;
 }
-
-export interface RuntimeChangeSuggestion {
-  kind: "change";
-  operation: DocumentChangeOperation;
-  targetPath?: string;
-  afterText: string;
-  anchor?: InsertAnchor;
-  placement?: InsertPlacement;
-  title?: string;
-  summary?: string;
-}
-
-export type InsertAnchor =
-  | { by: "document-start" | "document-end" | "selection" }
-  | { by: "heading" | "text"; value: string }
-  | { by: "paragraph-index"; value: number };
 
 export interface TaskRecord {
   id: string;
@@ -167,7 +155,6 @@ export interface TaskRecord {
   logs: LogEntry[];
   stdoutText: string;
   textResult?: TextResult;
-  inlineChanges?: RuntimeChangeSuggestion[];
   artifacts: DocumentChangeArtifact[];
   pendingApproval?: RuntimeApprovalRequest;
   processLane?: RuntimeProcessLane;
@@ -191,7 +178,6 @@ export interface TaskRequest {
   context: ContextSnapshot;
   inlineInstruction: string;
   obsidianCliPromptBlock?: string;
-  captureChangesAsArtifacts?: boolean;
   mode?: "initial" | "followup";
   followUpPrompt?: string;
   runtimeSessionId?: string;
@@ -206,14 +192,13 @@ export type RuntimeEvent =
   | { type: "log"; stream: LogStream; text: string }
   | { type: "runtime.session"; provider: "ante"; sessionId: string }
   | { type: "session.approval"; approval: RuntimeApprovalRequest }
+  | { type: "session.tool"; phase: "start" | "end"; tool: RuntimeToolCall }
   | { type: "process.update"; process?: RuntimeProcessLane }
   | { type: "session.thinking"; text: string; mode: "full" | "delta" }
   | { type: "session.usage"; usage: RuntimeUsage }
   | { type: "session.compaction"; phase: "start" | "end" }
   | { type: "session.info"; level: RuntimeInfoLevel; message?: string }
   | { type: "result.text"; text: string }
-  | { type: "result.change"; change: RuntimeChangeSuggestion }
-  | { type: "result.changes"; changes: RuntimeChangeSuggestion[] }
   | { type: "session.completed"; summary?: string }
   | { type: "session.failed"; error: string };
 

@@ -58,12 +58,13 @@ test("terminal prompt prioritizes provided note context over workspace search", 
   assert.match(prompt, /clean desk/);
 });
 
-test("terminal prompt requires batched change JSON for multiple markdown file edits", () => {
+test("terminal prompt requires native file-editing tools for multiple markdown file edits", () => {
   const prompt = buildInteractivePrompt(terminalRequest({ inlineInstruction: "Create two markdown files." }));
 
-  assert.match(prompt, /For multiple Markdown changes/);
-  assert.match(prompt, /"type":"changes"/);
-  assert.match(prompt, /do not use Bash, Write, or other tools to modify files directly/i);
+  assert.match(prompt, /prefer native file-editing tools/i);
+  assert.match(prompt, /multiple native file-editing tool calls/i);
+  assert.match(prompt, /use native file-editing tools first/i);
+  assert.doesNotMatch(prompt, /fallback json/i);
 });
 
 test("terminal prompt includes Obsidian CLI guidance when available", () => {
@@ -117,6 +118,8 @@ test("chat follow-up prompt still includes the latest note context", () => {
   assert.match(prompt, /Current note path: Projects\/Today\.md/);
   assert.match(prompt, /Selected text:\nsync plugin chat context/);
   assert.match(prompt, /Current note content:\n# Today/);
-  assert.match(prompt, /Never copy the prompt instructions, schema text, or context labels into afterText\./);
-  assert.match(prompt, /Return exactly one JSON object and nothing else\./);
+  assert.match(prompt, /Never copy the prompt instructions, schema text, or context labels into file content\./);
+  assert.match(prompt, /Use native file-editing tools when the user asks to create or modify Markdown files\./);
+  assert.doesNotMatch(prompt, /fallback JSON object/i);
+  assert.match(prompt, /Do not emit JSON envelopes such as type=text, type=change, or type=changes\./);
 });

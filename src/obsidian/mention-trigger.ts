@@ -143,7 +143,6 @@ export class MentionTriggerService {
     presetId: PresetId;
     inlineInstruction?: string;
     triggerSource?: Exclude<TaskTriggerSource, "chat">;
-    captureChangesAsArtifacts?: boolean;
   }): Promise<void> {
     const {
       editor,
@@ -152,8 +151,7 @@ export class MentionTriggerService {
       context,
       presetId,
       inlineInstruction,
-      triggerSource = "mention",
-      captureChangesAsArtifacts = true
+      triggerSource = "mention"
     } = options;
     let loadingFrameIndex = 0;
     const loadingSeed = window.crypto.randomUUID();
@@ -185,8 +183,7 @@ export class MentionTriggerService {
         presetId,
         triggerSource,
         context,
-        inlineInstruction,
-        captureChangesAsArtifacts
+        inlineInstruction
       });
 
       let settled = false;
@@ -215,42 +212,10 @@ export class MentionTriggerService {
 
             void (async () => {
               try {
-                let localPlaceholderContent = "";
-                let hasLocalPlaceholderContent = false;
                 for (const artifact of pendingArtifacts) {
-                  // If any source changes specify edit or append to this file, we handle it via the placeholder
-                  const currentFileChanges = artifact.sourceChanges.filter(
-                    (change) =>
-                      (change.operation === "append-block" || change.operation === "replace-selection") &&
-                      (!change.targetPath || change.targetPath === context.filePath)
-                  );
-
-                  if (currentFileChanges.length > 0) {
-                    hasLocalPlaceholderContent = true;
-                    for (const change of currentFileChanges) {
-                      localPlaceholderContent += (localPlaceholderContent ? "\n\n" : "") + change.afterText;
-                    }
-                    // Mark as applied in state but skip host modification (we'll do it via placeholder)
-                    await this.plugin.taskEngine.applyArtifact(task.id, artifact.id, { skipHost: true });
-                  } else {
-                    await this.plugin.taskEngine.applyArtifact(task.id, artifact.id);
-                  }
+                  await this.plugin.taskEngine.applyArtifact(task.id, artifact.id);
                 }
-
-                if (!hasLocalPlaceholderContent && task.inlineChanges?.length) {
-                  localPlaceholderContent = this.collectInlinePlaceholderContent(task.inlineChanges, context);
-                  hasLocalPlaceholderContent = localPlaceholderContent.length > 0;
-                }
-
-                if (hasLocalPlaceholderContent) {
-                  this.replacePlaceholderWhole(editor, markers, localPlaceholderContent);
-                } else {
-                  this.replacePlaceholderWhole(
-                    editor,
-                    markers,
-                    `> [!success]\n> \n> Applied directly.`
-                  );
-                }
+                this.replacePlaceholderWhole(editor, markers, `> [!success]\n> \n> Applied directly.`);
               } catch (error) {
                 this.replacePlaceholderWhole(
                   editor,
@@ -285,14 +250,6 @@ export class MentionTriggerService {
         settled = true;
         window.clearInterval(timer);
         unsubscribe();
-
-        if (task.inlineChanges?.length) {
-          const localPlaceholderContent = this.collectInlinePlaceholderContent(task.inlineChanges, context);
-          if (localPlaceholderContent) {
-            this.replacePlaceholderWhole(editor, markers, localPlaceholderContent);
-            return;
-          }
-        }
 
         if (task.textResult?.text.trim()) {
           this.replacePlaceholderWhole(editor, markers, task.textResult.text.trim());
@@ -373,21 +330,6 @@ export class MentionTriggerService {
     this.performEditorReplace(editor, () => {
       editor.replaceRange(replacement, startPosition, endPosition);
     });
-  }
-
-  private collectInlinePlaceholderContent(changes: Array<{ operation: string; targetPath?: string; afterText: string }>, context: ContextSnapshot): string {
-    let localPlaceholderContent = "";
-
-    for (const change of changes) {
-      if (
-        (change.operation === "append-block" || change.operation === "replace-selection") &&
-        (!change.targetPath || change.targetPath === context.filePath)
-      ) {
-        localPlaceholderContent += (localPlaceholderContent ? "\n\n" : "") + change.afterText;
-      }
-    }
-
-    return localPlaceholderContent;
   }
 
   private performEditorReplace(editor: Editor, action: () => void): void {

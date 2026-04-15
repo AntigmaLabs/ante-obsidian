@@ -3,6 +3,7 @@ import {
   buildProcessLaneFromToolPayload,
   extractErrorMessage,
   extractInfoMessage,
+  extractToolCall,
   extractText,
   extractTurnPauseApproval,
   extractTurnPauseDetail,
@@ -61,6 +62,12 @@ const markFirstStdout = (activeRun: ActiveRun, nowMs: () => number): void => {
   }
 };
 
+const approvalHasFileEditingTools = (approval: RuntimeApprovalRequest): boolean =>
+  approval.tools.some((tool) => {
+    const normalized = tool.name.trim().toLowerCase();
+    return normalized === "write" || normalized === "edit";
+  });
+
 export const reduceRunVariant = ({
   activeRun,
   variantName,
@@ -76,7 +83,6 @@ export const reduceRunVariant = ({
       if (!delta) {
         return null;
       }
-      logDebug(`MessageDelta len=${delta.length} preview=${JSON.stringify(previewText(delta))}`);
       markFirstStdout(activeRun, nowMs);
       activeRun.finalMessage += delta;
       activeRun.observer.onEvent({ type: "log", stream: "stdout", text: delta });
@@ -123,6 +129,12 @@ export const reduceRunVariant = ({
     case "ToolUpdate":
     case "TurnStart": {
       markFirstEvent(activeRun, nowMs);
+      if (variantName === "ToolStart") {
+        const tool = extractToolCall("ToolStart", payload);
+        if (tool) {
+          activeRun.observer.onEvent({ type: "session.tool", phase: "start", tool });
+        }
+      }
       const process =
         variantName === "TurnStart" ? undefined : buildProcessLaneFromToolPayload(variantName, payload, activeRun.processLane);
       if (process) {
@@ -140,6 +152,10 @@ export const reduceRunVariant = ({
     }
     case "ToolEnd": {
       markFirstEvent(activeRun, nowMs);
+      const tool = extractToolCall("ToolEnd", payload);
+      if (tool) {
+        activeRun.observer.onEvent({ type: "session.tool", phase: "end", tool });
+      }
       const process = buildProcessLaneFromToolPayload("ToolEnd", payload, activeRun.processLane);
       if (process) {
         activeRun.processLane = process;
@@ -163,7 +179,7 @@ export const reduceRunVariant = ({
           type: "process.update",
           process: activeRun.processLane
         });
-        if (activeRun.autoApproveTools) {
+        if (activeRun.autoApproveTools && !approvalHasFileEditingTools(approval)) {
           activeRun.observer.onEvent({
             type: "log",
             stream: "system",

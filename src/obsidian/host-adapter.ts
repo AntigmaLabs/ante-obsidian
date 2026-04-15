@@ -8,6 +8,7 @@ import {
   TFolder,
   normalizePath
 } from "obsidian";
+import { readFile as readFsFile } from "node:fs/promises";
 import type { HostAdapter } from "../core/host-adapter";
 import type { ContextSnapshot, DocumentChangeArtifact } from "../core/types";
 import { getArtifactTargetPath } from "../core/artifacts";
@@ -43,7 +44,7 @@ export class ObsidianHostAdapter implements HostAdapter {
   }
 
   async readFile(path: string): Promise<string | null> {
-    const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
+    const file = this.getFile(path);
     if (!(file instanceof TFile)) {
       return null;
     }
@@ -52,26 +53,28 @@ export class ObsidianHostAdapter implements HostAdapter {
 
   async applyDocumentChange(change: DocumentChangeArtifact): Promise<void> {
     const targetPath = getArtifactTargetPath(change);
+    const nextText = change.stagedPath ? await readFsFile(change.stagedPath, "utf8") : change.afterText;
     if (change.operation === "create-file") {
-      const existing = this.app.vault.getAbstractFileByPath(normalizePath(targetPath));
+      const relativePath = this.requireVaultPath(targetPath);
+      const existing = this.app.vault.getAbstractFileByPath(relativePath);
       if (existing) {
         throw new Error(`File already exists: ${targetPath}`);
       }
-      await this.ensureFolderForPath(targetPath);
-      await this.app.vault.create(normalizePath(targetPath), change.afterText);
+      await this.ensureFolderForPath(relativePath);
+      await this.app.vault.create(relativePath, nextText);
       new Notice(`Created ${targetPath}`);
       return;
     }
 
     const file = this.requireFile(targetPath);
-    await this.app.vault.modify(file, change.afterText);
+    await this.app.vault.modify(file, nextText);
     new Notice(`Updated ${targetPath}`);
   }
 
   async revertDocumentChange(change: DocumentChangeArtifact): Promise<void> {
     const targetPath = getArtifactTargetPath(change);
     if (change.operation === "create-file") {
-      const file = this.app.vault.getAbstractFileByPath(normalizePath(targetPath));
+      const file = this.getFile(targetPath);
       if (file instanceof TFile) {
         await this.app.vault.delete(file);
         new Notice(`Removed ${targetPath}`);
@@ -86,7 +89,7 @@ export class ObsidianHostAdapter implements HostAdapter {
 
   async revealDocumentChange(change: DocumentChangeArtifact): Promise<void> {
     const targetPath = getArtifactTargetPath(change);
-    const file = this.app.vault.getAbstractFileByPath(normalizePath(targetPath));
+    const file = this.getFile(targetPath);
     if (file instanceof TFile) {
       await this.app.workspace.getLeaf(true).openFile(file);
     }
@@ -140,12 +143,83 @@ export class ObsidianHostAdapter implements HostAdapter {
     return adapter instanceof FileSystemAdapter ? adapter.getBasePath() : null;
   }
 
+  private getFile(path: string): TFile | null {
+    const relativePath = this.toVaultRelativePath(path);
+    if (relativePath) {
+      const direct = this.app.vault.getAbstractFileByPath(relativePath);
+      if (direct instanceof TFile) {
+        return direct;
+      }
+    }
+
+    const normalizedInput = this.normalizeLookupPath(path);
+    if (!normalizedInput) {
+      return null;
+    }
+
+    const vaultPath = this.getVaultPath();
+    const normalizedVaultPath = vaultPath ? this.normalizeLookupPath(vaultPath) : null;
+
+    for (const file of this.app.vault.getFiles()) {
+      const relativeCandidate = this.normalizeLookupPath(file.path);
+      if (relativeCandidate === normalizedInput) {
+        return file;
+      }
+
+      if (normalizedInput.endsWith(`/${relativeCandidate}`) || normalizedInput === relativeCandidate) {
+        return file;
+      }
+
+      if (normalizedVaultPath) {
+        const absoluteCandidate = this.normalizeLookupPath(`${normalizedVaultPath}/${file.path}`);
+        if (absoluteCandidate === normalizedInput) {
+          return file;
+        }
+      }
+    }
+
+    return null;
+  }
+
   private requireFile(path: string): TFile {
-    const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
-    if (!(file instanceof TFile)) {
+    const file = this.getFile(path);
+    if (!file) {
       throw new Error(`File not found: ${path}`);
     }
     return file;
+  }
+
+  private requireVaultPath(path: string): string {
+    const relativePath = this.toVaultRelativePath(path);
+    if (!relativePath) {
+      throw new Error(`Path is outside the current vault: ${path}`);
+    }
+    return relativePath;
+  }
+
+  private toVaultRelativePath(path: string): string | null {
+    const normalizedPath = this.normalizeLookupPath(path);
+    if (!normalizedPath) {
+      return null;
+    }
+    if (!normalizedPath.startsWith("/")) {
+      return normalizedPath;
+    }
+
+    const vaultPath = this.getVaultPath();
+    if (!vaultPath) {
+      return null;
+    }
+
+    const normalizedVaultPath = this.normalizeLookupPath(vaultPath);
+    if (normalizedPath === normalizedVaultPath) {
+      return "";
+    }
+    if (!normalizedPath.startsWith(`${normalizedVaultPath}/`)) {
+      return null;
+    }
+
+    return normalizedPath.slice(normalizedVaultPath.length + 1);
   }
 
   private async ensureFolderForPath(path: string): Promise<void> {
@@ -163,5 +237,9 @@ export class ObsidianHostAdapter implements HostAdapter {
         throw new Error(`A file already exists at ${current}`);
       }
     }
+  }
+
+  private normalizeLookupPath(path: string): string {
+    return normalizePath(path.trim()).normalize("NFC");
   }
 }

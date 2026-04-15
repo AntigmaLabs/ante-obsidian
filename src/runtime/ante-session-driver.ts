@@ -131,11 +131,8 @@ export class AnteSessionDriver implements AnteRuntime {
       return;
     }
 
-    logDebug(`transport recv ${previewText(line)}`);
-
     const envelope = parseEnvelope(line);
     if (!envelope) {
-      logDebug(`transport recv non-envelope ${previewText(line)}`);
       this.activeRun?.observer.onEvent({ type: "log", stream: "stderr", text: line });
       return;
     }
@@ -146,7 +143,19 @@ export class AnteSessionDriver implements AnteRuntime {
       return;
     }
 
-    logDebug(`transport variant type=${variant.name} parent=${envelope.parent ?? "none"}`);
+    if (
+      [
+        "TurnPause",
+        "ToolStart",
+        "ToolEnd",
+        "TurnEnd",
+        "SessionStart",
+        "SessionUpdated",
+        "ExtensionRefreshed"
+      ].includes(variant.name)
+    ) {
+      logDebug(`transport variant type=${variant.name} parent=${envelope.parent ?? "none"}`);
+    }
 
     if (this.handleLifecycleVariant(variant.name, variant.payload, envelope.parent)) {
       return;

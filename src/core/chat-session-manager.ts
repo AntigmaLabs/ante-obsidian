@@ -22,6 +22,23 @@ const logDebug = (...args: unknown[]): void => {
 const previewText = (value: string, maxChars = 240): string =>
   value.length <= maxChars ? value : `${value.slice(0, maxChars)}...`;
 
+const approvalHasOnlyFileEditingTools = (
+  approval: NonNullable<ChatMessageRecord["runtime"]>["approval"] | undefined,
+): boolean =>
+  Boolean(
+    approval &&
+      approval.tools.length > 0 &&
+      approval.tools.every((tool) => {
+        const normalized = tool.name.trim().toLowerCase();
+        return normalized === "write" || normalized === "edit";
+      }),
+  );
+
+const shouldHideFileEditingApproval = (
+  approval: NonNullable<ChatMessageRecord["runtime"]>["approval"] | undefined,
+  artifactCount: number,
+): boolean => approvalHasOnlyFileEditingTools(approval) && artifactCount > 0;
+
 const cloneContext = (context: ContextSnapshot | null | undefined): ContextSnapshot | null =>
   context
     ? {
@@ -58,22 +75,13 @@ const contextSignature = (context: ContextSnapshot | null | undefined): string =
 
 const cloneArtifact = (artifact: DocumentChangeArtifact): DocumentChangeArtifact => ({
   ...artifact,
-  target:
-    artifact.target.type === "file"
-      ? {
-          type: "file",
-          path: artifact.target.path
-        }
-      : {
-          type: "selection",
-          filePath: artifact.target.filePath,
-          from: { ...artifact.target.from },
-          to: { ...artifact.target.to }
-        },
-  sourceChanges: artifact.sourceChanges.map((change) => ({
-    ...change,
-    anchor: change.anchor ? { ...change.anchor } : undefined
-  }))
+  target: {
+    type: "file",
+    path: artifact.target.path
+  },
+  baselinePath: artifact.baselinePath,
+  stagedPath: artifact.stagedPath,
+  runtimeMode: artifact.runtimeMode
 });
 
 const defaultConversationTitle = (prompt: string): string => {
@@ -669,8 +677,7 @@ export class ChatSessionManager {
       }
     }
 
-    const hasStructuredResult =
-      Boolean(task.textResult?.text.trim()) || task.artifacts.length > 0 || Boolean(task.inlineChanges && task.inlineChanges.length > 0);
+    const hasStructuredResult = Boolean(task.textResult?.text.trim()) || task.artifacts.length > 0;
     const extractedStreamingText = extractStructuredStreamingText(task.stdoutText);
     const hideStructuredStreamingText = extractedStreamingText == null && shouldHideStructuredStreamingText(task.stdoutText);
     const streamingText = extractedStreamingText ?? (hideStructuredStreamingText ? "" : task.stdoutText);
@@ -689,7 +696,9 @@ export class ChatSessionManager {
               ? "streaming"
               : "completed";
     const nextRuntime = {
-      approval: task.pendingApproval,
+      approval: shouldHideFileEditingApproval(task.pendingApproval, task.artifacts.length)
+        ? undefined
+        : task.pendingApproval,
       processLane: task.processLane
         ? {
             ...task.processLane,
@@ -714,17 +723,16 @@ export class ChatSessionManager {
     };
 
     if (isDebugEnabled()) {
-      const candidatePreviews = extractJsonCandidates(task.stdoutText).map((candidate) => previewText(candidate, 180));
-      logDebug(
-        `syncTask id=${task.id} status=${task.status} artifacts=${task.artifacts.length} hasStructuredResult=${hasStructuredResult} extractedStreaming=${extractedStreamingText != null} hideStructured=${hideStructuredStreamingText} stdoutLen=${task.stdoutText.length}`
-      );
-      if (task.stdoutText.trim()) {
-        logDebug(`syncTask stdout preview=${JSON.stringify(previewText(task.stdoutText, 800))}`);
-        logDebug(`syncTask json candidates=${JSON.stringify(candidatePreviews)}`);
+      const runtimeArtifactCount = task.artifacts.filter((artifact) => Boolean(artifact.runtimeToolId)).length;
+      const fallbackArtifactCount = task.artifacts.length - runtimeArtifactCount;
+      if (runtimeArtifactCount > 0 || fallbackArtifactCount > 0 || extractedStreamingText != null) {
+        logDebug(
+          `syncTask id=${task.id} status=${task.status} runtimeArtifacts=${runtimeArtifactCount} fallbackArtifacts=${fallbackArtifactCount} structuredStreaming=${extractedStreamingText != null}`,
+        );
       }
-      logDebug(
-        `syncTask nextText len=${nextText.length} status=${nextStatus} textPreview=${JSON.stringify(previewText(nextText, 240))}`
-      );
+      if (extractedStreamingText != null && task.stdoutText.trim()) {
+        logDebug(`syncTask structured preview=${JSON.stringify(previewText(task.stdoutText, 400))}`);
+      }
     }
 
     const changed =

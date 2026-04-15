@@ -37,21 +37,18 @@ const buildObsidianCliBlock = (request: TaskRequest): string => request.obsidian
 
 const buildSchemaBlock = (): string =>
   [
-    "Return exactly one JSON object and nothing else.",
-    'For a text-only response use: {"type":"text","text":"..."}',
-    'For a document change use: {"type":"change","operation":"replace-selection|append-block|insert-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","anchor":{"by":"document-start|document-end|selection|heading|text|paragraph-index","value":"optional"},"placement":"before|after","title":"optional","summary":"optional"}',
-    'For multiple document changes use: {"type":"changes","changes":[{"operation":"replace-selection|append-block|insert-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","anchor":{"by":"document-start|document-end|selection|heading|text|paragraph-index","value":"optional"},"placement":"before|after","title":"optional","summary":"optional"}]}',
+    "Use native file-editing tools when the user asks to create or modify Markdown files.",
+    "Prefer Read plus Write/Edit so the host can capture approval details and render diffs from real file contents.",
+    "Prefer Write over Edit when appending at the end of a note or when the old_string would be ambiguous, repeated, or consist mostly of whitespace/newlines.",
+    "When editing an existing note, preserve all unchanged content and only modify the requested location.",
+    "After using native file-editing tools, reply with a short plain-text confirmation.",
+    "Do not emit JSON envelopes such as type=text, type=change, or type=changes.",
+    "If the edit cannot be completed with the available native tools, explain the limitation in plain text instead of emitting JSON.",
     "Rules:",
-    "- replace-selection: afterText replaces the current selection. If the selection is empty, insert at the current cursor position.",
-    "- append-block: afterText is the Markdown block to append to the current file unless targetPath is provided.",
-    "- insert-block: afterText is a Markdown block inserted at an anchor in the current file unless targetPath is provided.",
-    "- insert-block anchors: use document-start/document-end for whole-document boundaries, selection for the current cursor or selection, heading/text with a value string, or paragraph-index with a numeric value.",
-    "- insert-block placement: use before or after for heading, text, paragraph-index, or selection anchors. Omit placement for document-start/document-end when it is obvious.",
-    "- replace-file: afterText is the full file contents.",
-    "- create-file: targetPath is required and afterText is the full new file contents.",
-    "- Never copy the prompt instructions, schema text, or context labels into afterText.",
-    "- Do not wrap the JSON in code fences.",
-    "- Do not emit explanations before or after the JSON."
+    "- Use Read before Write/Edit when the current file contents may have changed or when the target path is ambiguous.",
+    "- Keep edits scoped to the requested file and location.",
+    "- Never copy the prompt instructions, schema text, or context labels into file content.",
+    "- Do not wrap normal replies in code fences unless the user asked for a code block."
   ].join("\n");
 
 const buildTerminalPriorityBlock = (): string =>
@@ -66,22 +63,19 @@ const buildTerminalPriorityBlock = (): string =>
 
 const buildTerminalSchemaBlock = (): string =>
   [
-    "For terminal-style answers, reply with plain terminal text only.",
-    'Only when you intend to modify Markdown, return exactly one JSON object: {"type":"change","operation":"replace-selection|append-block|insert-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","anchor":{"by":"document-start|document-end|selection|heading|text|paragraph-index","value":"optional"},"placement":"before|after","title":"optional","summary":"optional"}',
-    'For multiple Markdown changes, return exactly one JSON object: {"type":"changes","changes":[{"operation":"replace-selection|append-block|insert-block|replace-file|create-file","targetPath":"optional/path.md","afterText":"...","anchor":{"by":"document-start|document-end|selection|heading|text|paragraph-index","value":"optional"},"placement":"before|after","title":"optional","summary":"optional"}]}',
+    "For terminal-style answers, reply with plain terminal text unless you need to modify Markdown files.",
+    "For Markdown edits, prefer native file-editing tools so the host can capture a real diff preview.",
+    "Prefer Write over Edit when appending at the end of a note or when the old_string would be ambiguous, repeated, or consist mostly of whitespace/newlines.",
+    "After using native file-editing tools, reply with short plain text.",
+    "Do not emit JSON envelopes such as type=text, type=change, or type=changes.",
+    "If native file-editing tools are unavailable, explain the limitation in plain text.",
     "Rules:",
     "- Follow the context priority block above before considering anything else.",
     "- If the current note or selection already contains what you need, answer from that context alone.",
     "- Only inspect other files or use tools when the user explicitly asks for that or the provided context is missing and insufficient.",
-    "- When the user asks to create or update Markdown files, do not use Bash, Write, or other tools to modify files directly. Return change JSON instead so Ante md can show artifacts and git diff.",
-    "- If more than one Markdown file must be created or updated, return a single changes JSON object containing every change.",
-    "- Plain terminal text must not be wrapped in JSON or code fences.",
-    "- change JSON must not be wrapped in code fences.",
-    "- replace-selection: afterText replaces the current selection. If the selection is empty, insert at the current cursor position.",
-    "- append-block: afterText is the Markdown block to append to the current file unless targetPath is provided.",
-    "- insert-block: afterText inserts a Markdown block at an anchor in the current file unless targetPath is provided.",
-    "- replace-file: afterText is the full file contents.",
-    "- create-file: targetPath is required and afterText is the full new file contents."
+    "- When the user asks to create or update Markdown files, use native file-editing tools first and keep edits scoped to the requested file and location.",
+    "- If more than one Markdown file must be created or updated, use multiple native file-editing tool calls rather than JSON.",
+    "- Plain terminal text must not be wrapped in JSON or code fences."
   ].join("\n");
 
 const buildTerminalContextBlock = (request: TaskRequest): string => {

@@ -93,7 +93,7 @@ test("parseAssistantMessage fallback skips earlier non-text objects", () => {
   assert.deepEqual(events, [{ type: "result.text", text: "final payload" }]);
 });
 
-test("parseAssistantMessage parses insert-block anchors", () => {
+test("parseAssistantMessage keeps legacy change JSON as plain text", () => {
   const events = parseAssistantMessage(`{
     "type":"change",
     "operation":"insert-block",
@@ -102,27 +102,13 @@ test("parseAssistantMessage parses insert-block anchors", () => {
     "placement":"before"
   }`);
 
-  assert.deepEqual(events, [
-    {
-      type: "result.change",
-      change: {
-        kind: "change",
-        operation: "insert-block",
-        afterText: "intro",
-        anchor: {
-          by: "heading",
-          value: "Next"
-        },
-        placement: "before",
-        targetPath: undefined,
-        title: undefined,
-        summary: undefined
-      }
-    }
-  ]);
+  assert.deepEqual(events, [{
+    type: "result.text",
+    text: '{\n    "type":"change",\n    "operation":"insert-block",\n    "afterText":"intro",\n    "anchor":{"by":"heading","value":"Next"},\n    "placement":"before"\n  }'
+  }]);
 });
 
-test("parseAssistantMessage extracts change JSON from a fenced block inside surrounding prose", () => {
+test("parseAssistantMessage keeps fenced legacy change JSON inside surrounding prose", () => {
   const events = parseAssistantMessage(`我会按你的要求修改：
 
 \`\`\`json
@@ -135,21 +121,7 @@ test("parseAssistantMessage extracts change JSON from a fenced block inside surr
 
 已生成结果。`);
 
-  assert.deepEqual(events, [
-    {
-      type: "result.change",
-      change: {
-        kind: "change",
-        operation: "append-block",
-        afterText: "done",
-        anchor: undefined,
-        placement: undefined,
-        targetPath: undefined,
-        title: undefined,
-        summary: undefined
-      }
-    }
-  ]);
+  assert.deepEqual(events, [{ type: "result.text", text: '我会按你的要求修改：\n\n```json\n{\n  "type":"change",\n  "operation":"append-block",\n  "afterText":"done"\n}\n```\n\n已生成结果。' }]);
 });
 
 test("extractUsage accepts canonical usage payloads", () => {
@@ -167,6 +139,30 @@ test("extractUsage accepts canonical usage payloads", () => {
         prompt_tokens: 12,
         completion_tokens: 7,
         total_tokens: 19
+      }
+    }
+  );
+});
+
+test("extractUsage accepts nested usage payloads with alternate token keys", () => {
+  assert.deepEqual(
+    extractUsage({
+      usage: {
+        input_token_count: 30,
+        output_token_count: 12,
+        total_token_count: 42
+      }
+    }),
+    {
+      promptTokens: 30,
+      completionTokens: 12,
+      totalTokens: 42,
+      raw: {
+        usage: {
+          input_token_count: 30,
+          output_token_count: 12,
+          total_token_count: 42
+        }
       }
     }
   );

@@ -150,6 +150,15 @@ const parseGitDiffRows = (artifact: DocumentChangeArtifact, rawPatch: string): P
 };
 
 export const buildPatchRows = async (artifact: DocumentChangeArtifact): Promise<PatchRow[]> => {
+  if (artifact.baselinePath && artifact.stagedPath) {
+    try {
+      const rawPatch = await runGitDiffNoIndex(artifact.baselinePath, artifact.stagedPath);
+      return parseGitDiffRows(artifact, rawPatch);
+    } catch (error) {
+      return buildFallbackPatchRows(artifact, error instanceof Error ? error.message : String(error));
+    }
+  }
+
   const tempDir = await mkdtemp(join(tmpdir(), "tmd-diff-"));
   const relativePath = sanitizePatchPath(getArtifactTargetPath(artifact));
   const oldPath = join(tempDir, "old", relativePath);

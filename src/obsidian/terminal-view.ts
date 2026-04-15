@@ -835,6 +835,21 @@ export class TmdTerminalView extends ItemView {
   private syncApproval(task: TaskRecord | undefined): void {
     const approval =
       task?.status === "running" ? task.pendingApproval : undefined
+    const isFileEditOnlyApproval =
+      approval != null &&
+      task != null &&
+      task.artifacts.length > 0 &&
+      approval.tools.length > 0 &&
+      approval.tools.every((tool) => {
+        const normalized = tool.name.trim().toLowerCase()
+        return normalized === "write" || normalized === "edit"
+      })
+    if (isFileEditOnlyApproval) {
+      this.approvalEl?.remove()
+      this.approvalEl = null
+      this.approvalSignature = ""
+      return
+    }
     if (!approval || !task) {
       this.approvalEl?.remove()
       this.approvalEl = null
