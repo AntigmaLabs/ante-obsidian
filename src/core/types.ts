@@ -1,3 +1,5 @@
+import type { AnteThinkingPreference } from "./ante-thinking";
+
 export type PresetId = string;
 export type TaskTriggerSource = "mention" | "context-menu" | "command" | "chat" | "terminal";
 export type TaskKind = "document" | "chat" | "terminal";
@@ -186,6 +188,7 @@ export interface TaskRequest {
   runtimeTarget?: {
     provider: string;
     model: string;
+    thinking: AnteThinkingPreference;
   };
 }
 

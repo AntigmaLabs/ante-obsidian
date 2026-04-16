@@ -72,6 +72,12 @@ test("normalizeSettings enables chat runtime details by default and preserves ex
   assert.equal(normalizeSettings({ showChatRuntimeDetails: false }).showChatRuntimeDetails, false);
 });
 
+test("normalizeSettings normalizes think level to Ante default when unset or invalid", () => {
+  assert.equal(normalizeSettings(undefined).anteThinking, "ante-default");
+  assert.equal(normalizeSettings({ anteThinking: "Deep" }).anteThinking, "Deep");
+  assert.equal(normalizeSettings({ anteThinking: "bogus" as never }).anteThinking, "ante-default");
+});
+
 test("normalizeSettings provides default credential env keys for Gemini and Anthropic", () => {
   const settings = normalizeSettings(undefined);
   assert.equal(settings.geminiApiKeyEnvKey, "GEMINI_API_KEY");

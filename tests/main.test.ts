@@ -8,6 +8,7 @@ test("buildAnteRuntimeConfig prefers explicit gemini key and emits only selected
       connectionMode: "websocket",
       wsAddress: "127.0.0.1:8765",
       autoApproveAnteTools: true,
+      anteThinking: "Deep",
       geminiApiKeyEnvKey: "GEMINI_API_KEY",
       geminiApiKey: "gemini-inline",
       anthropicApiKeyEnvKey: "ANTHROPIC_API_KEY",
@@ -30,6 +31,7 @@ test("buildAnteRuntimeConfig prefers explicit gemini key and emits only selected
   assert.equal(config.connectionMode, "stdio")
   assert.equal(config.provider, "gemini")
   assert.equal(config.model, "gemini-3-flash-preview")
+  assert.equal(config.thinking, "Deep")
   assert.deepEqual(config.env, {
     GEMINI_API_KEY: "gemini-inline",
     ANTHROPIC_API_KEY: "anthropic-inline",
@@ -42,6 +44,7 @@ test("buildAnteRuntimeConfig falls back from shell env to process env for anthro
       connectionMode: "stdio",
       wsAddress: "127.0.0.1:8765",
       autoApproveAnteTools: false,
+      anteThinking: "ante-default",
       geminiApiKeyEnvKey: "GEMINI_API_KEY",
       geminiApiKey: "",
       anthropicApiKeyEnvKey: "ANTHROPIC_API_KEY",
@@ -59,5 +62,6 @@ test("buildAnteRuntimeConfig falls back from shell env to process env for anthro
 
   assert.equal(config.connectionMode, "stdio")
   assert.equal(config.autoApproveTools, false)
+  assert.equal(config.thinking, null)
   assert.deepEqual(config.env, { ANTHROPIC_API_KEY: "anthropic-process" })
 })

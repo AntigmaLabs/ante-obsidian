@@ -1,3 +1,4 @@
+import type { AnteThinkingLevel } from "../core/ante-thinking";
 import type { RuntimeApprovalDecision } from "../core/types";
 
 export interface AnteEventEnvelope {
@@ -11,6 +12,7 @@ export type AnteOperation =
         model: string;
         provider: string;
         streaming: boolean;
+        thinking: AnteThinkingLevel | null;
       };
     }
   | {

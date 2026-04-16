@@ -1928,6 +1928,12 @@ button.tmd-diff-file-main {
   text-align: left;
 }
 
+.tmd-chat-thinking-picker {
+  flex: 0 0 auto;
+  max-width: 96px;
+  text-align: left;
+}
+
 .tmd-chat-picker:hover,
 .tmd-chat-picker:focus-visible {
   color: var(--text-normal) !important;

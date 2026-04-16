@@ -1,4 +1,8 @@
 import { buildInteractivePrompt } from "../core/runtime-prompt";
+import {
+  ANTE_DEFAULT_THINKING,
+  resolveAnteThinkingPreference
+} from "../core/ante-thinking";
 import type { RuntimeApprovalDecision, RuntimeApprovalRequest, TaskRequest } from "../core/types";
 import { extractErrorMessage, extractSessionId, getVariant } from "./ante-event-parser";
 import { buildApprovalResponseOperation } from "./ante-approval";
@@ -235,19 +239,19 @@ export class AnteSessionDriver implements AnteRuntime {
         observer.onEvent({
           type: "log",
           stream: "system",
-          text: `Launching Ante server · provider=${config.provider.trim()} · model=${config.model.trim()} · cwd=${config.cwd.trim() || process.cwd()}`
+          text: `Launching Ante server · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"} · cwd=${config.cwd.trim() || process.cwd()}`
         });
       } else if (prepMode === "reuse") {
         observer.onEvent({
           type: "log",
           stream: "system",
-          text: `Reusing existing Ante session · provider=${config.provider.trim()} · model=${config.model.trim()}`
+          text: `Reusing existing Ante session · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"}`
         });
       } else {
         observer.onEvent({
           type: "log",
           stream: "system",
-          text: `Booting Ante session · provider=${config.provider.trim()} · model=${config.model.trim()}`
+          text: `Booting Ante session · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"}`
         });
       }
 
@@ -455,7 +459,7 @@ export class AnteSessionDriver implements AnteRuntime {
 
   private sendOperation(
     op:
-      | { StartSession: { model: string; provider: string; streaming: boolean } }
+      | { StartSession: { model: string; provider: string; streaming: boolean; thinking: AnteRuntimeConfig["thinking"] } }
       | { ResumeSession: { session_id: string } }
       | { UpdateSession: { model: { name: string }; provider: string } }
       | { UserInput: string }
@@ -474,7 +478,8 @@ export class AnteSessionDriver implements AnteRuntime {
       StartSession: {
         model: config.model.trim(),
         provider: config.provider.trim(),
-        streaming: true
+        streaming: true,
+        thinking: config.thinking
       }
     });
   }
@@ -554,7 +559,11 @@ export class AnteSessionDriver implements AnteRuntime {
     return {
       ...config,
       provider: request.runtimeTarget.provider.trim(),
-      model: request.runtimeTarget.model.trim()
+      model: request.runtimeTarget.model.trim(),
+      thinking:
+        request.runtimeTarget.thinking === ANTE_DEFAULT_THINKING
+          ? config.thinking
+          : resolveAnteThinkingPreference(request.runtimeTarget.thinking)
     };
   }
 
@@ -576,7 +585,7 @@ export class AnteSessionDriver implements AnteRuntime {
     observer.onEvent({
       type: "log",
       stream: "system",
-      text: `Updating Ante session · provider=${config.provider.trim()} · model=${config.model.trim()}`
+      text: `Updating Ante session · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"}`
     });
     await this.lifecycle.updateSession(config, observer, (nextConfig) => {
       this.beginUpdateSession(nextConfig);

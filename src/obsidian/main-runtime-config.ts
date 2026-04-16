@@ -1,3 +1,7 @@
+import {
+  resolveAnteThinkingPreference,
+  type AnteThinkingLevel,
+} from "../core/ante-thinking"
 import { DEFAULT_ANTE_ARGS_JSON } from "../runtime/create-ante-runtime"
 import { normalizeEnvVarName } from "./shell-env"
 import type { TmdSettings } from "./settings"
@@ -9,6 +13,7 @@ export interface AnteRuntimeConfigInput {
     | "connectionMode"
     | "wsAddress"
     | "autoApproveAnteTools"
+    | "anteThinking"
     | "geminiApiKeyEnvKey"
     | "geminiApiKey"
     | "anthropicApiKeyEnvKey"
@@ -29,6 +34,7 @@ export const buildAnteRuntimeConfig = (
   wsAddress: string
   model: string
   provider: string
+  thinking: AnteThinkingLevel | null
   autoApproveTools: boolean
   env: Record<string, string>
 } => {
@@ -52,6 +58,7 @@ export const buildAnteRuntimeConfig = (
     wsAddress: input.settings.wsAddress,
     model: input.resolvedTarget.model,
     provider: input.resolvedTarget.provider,
+    thinking: resolveAnteThinkingPreference(input.settings.anteThinking),
     autoApproveTools: input.settings.autoApproveAnteTools,
     env: {
       ...(geminiEnvKey && geminiApiKey ? { [geminiEnvKey]: geminiApiKey } : {}),

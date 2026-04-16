@@ -126,6 +126,7 @@ const config: AnteRuntimeConfig = {
   wsAddress: "",
   model: "gpt-5.4",
   provider: "openai-subscription",
+  thinking: null,
   autoApproveTools: true,
   env: {}
 };
@@ -400,7 +401,41 @@ test("initial chat requests start a fresh session instead of reusing the current
     StartSession: {
       model: config.model,
       provider: config.provider,
-      streaming: true
+      streaming: true,
+      thinking: null
+    }
+  });
+});
+
+test("runtime target think level is forwarded when starting a fresh session", async () => {
+  const transport = new FakeTransport();
+  const driver = new TestSessionDriver(() => config, () => transport);
+
+  driver.run(
+    {
+      ...request,
+      kind: "chat",
+      triggerSource: "chat",
+      mode: "initial",
+      runtimeTarget: {
+        provider: "openai-subscription",
+        model: "gpt-5.4",
+        thinking: "Max"
+      }
+    },
+    {
+      onEvent: () => {},
+      onExit: () => {}
+    }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(JSON.parse(transport.sentMessages[0] ?? "{}").op, {
+    StartSession: {
+      model: "gpt-5.4",
+      provider: "openai-subscription",
+      streaming: true,
+      thinking: "Max"
     }
   });
 });

@@ -232,12 +232,13 @@ test("queueChatTask forwards runtime target overrides", async () => {
     false,
     context,
     null,
-    { provider: "gemini", model: "gemini-3-flash-preview" }
+    { provider: "gemini", model: "gemini-3-flash-preview", thinking: "Deep" }
   );
 
   assert.deepEqual(capturedRequest?.runtimeTarget, {
     provider: "gemini",
-    model: "gemini-3-flash-preview"
+    model: "gemini-3-flash-preview",
+    thinking: "Deep"
   });
 });
 

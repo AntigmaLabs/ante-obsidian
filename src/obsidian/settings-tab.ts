@@ -1,4 +1,9 @@
 import { DropdownComponent, Modal, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
+import {
+  ANTE_DEFAULT_THINKING,
+  ANTE_THINKING_LEVELS,
+  type AnteThinkingPreference
+} from "../core/ante-thinking";
 import { listResolvedPresets } from "../core/presets";
 import type TmdPlugin from "./main";
 import type { AnteVersionCheckResult } from "./ante-updater";
@@ -19,6 +24,14 @@ import {
 } from "./settings-tab-helpers";
 
 type SettingsTabId = "runtime" | "model" | "presets" | "more";
+
+const THINKING_LABELS: Record<AnteThinkingPreference, string> = {
+  [ANTE_DEFAULT_THINKING]: "Ante default",
+  Disabled: "Disabled",
+  Enabled: "Enabled",
+  Deep: "Deep",
+  Max: "Max"
+};
 
 export class TmdSettingTab extends PluginSettingTab {
   private draggingPresetId: string | null = null;
@@ -111,6 +124,18 @@ export class TmdSettingTab extends PluginSettingTab {
       );
 
     new Setting(modelSectionEl).setName("Ante default").setDesc(`\`${anteDefaultTarget.provider}\` / \`${anteDefaultTarget.model}\``);
+
+    new Setting(modelSectionEl)
+      .setName("Think level")
+      .setDesc("Optional plugin-level thinking override. Leave on Ante default to avoid sending a thinking override.")
+      .addDropdown((dropdown) =>
+        this.addThinkingOptions(dropdown)
+          .setValue(this.pluginRef.settings.anteThinking)
+          .onChange(async (value) => {
+            this.pluginRef.settings.anteThinking = value as AnteThinkingPreference;
+            await this.pluginRef.saveSettings();
+          })
+      );
 
     if (!this.pluginRef.settings.useAnteDefaults) {
       new Setting(modelSectionEl)
@@ -930,6 +955,14 @@ export class TmdSettingTab extends PluginSettingTab {
     const models = PROVIDER_MODELS[this.pluginRef.settings.anteProvider];
     for (const model of models) {
       dropdown.addOption(model, model);
+    }
+    return dropdown;
+  }
+
+  private addThinkingOptions(dropdown: DropdownComponent): DropdownComponent {
+    dropdown.addOption(ANTE_DEFAULT_THINKING, THINKING_LABELS[ANTE_DEFAULT_THINKING]);
+    for (const thinking of ANTE_THINKING_LEVELS) {
+      dropdown.addOption(thinking, THINKING_LABELS[thinking]);
     }
     return dropdown;
   }

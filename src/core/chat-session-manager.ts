@@ -5,6 +5,7 @@ import type {
   ChatPersistenceState,
   ChatStateSnapshot
 } from "./chat-types";
+import type { AnteThinkingPreference } from "./ante-thinking";
 import type { ContextSnapshot, DocumentChangeArtifact, TaskRecord, TmdState } from "./types";
 
 type ChatListener = (state: ChatStateSnapshot) => void;
@@ -471,14 +472,22 @@ export class ChatSessionManager {
 
   getConversationRuntimeTarget(
     conversationId: string
-  ): { provider: string; model: string } | null {
+  ): {
+    provider: string;
+    model: string;
+    thinking: AnteThinkingPreference;
+  } | null {
     const conversation = this.conversations.get(conversationId);
     return conversation?.runtimeTarget ? { ...conversation.runtimeTarget } : null;
   }
 
   setConversationRuntimeTarget(
     conversationId: string,
-    target: { provider: string; model: string }
+    target: {
+      provider: string;
+      model: string;
+      thinking: AnteThinkingPreference;
+    }
   ): void {
     const conversation = this.conversations.get(conversationId);
     if (!conversation) {
@@ -486,7 +495,8 @@ export class ChatSessionManager {
     }
     if (
       conversation.runtimeTarget?.provider === target.provider &&
-      conversation.runtimeTarget?.model === target.model
+      conversation.runtimeTarget?.model === target.model &&
+      conversation.runtimeTarget?.thinking === target.thinking
     ) {
       return;
     }

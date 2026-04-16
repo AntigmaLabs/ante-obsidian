@@ -1,3 +1,4 @@
+import type { AnteThinkingPreference } from "./ante-thinking";
 import type {
   ContextSnapshot,
   DocumentChangeArtifact,
@@ -47,6 +48,7 @@ export interface ChatConversationRecord {
   runtimeTarget?: {
     provider: string;
     model: string;
+    thinking: AnteThinkingPreference;
   };
   messageIds: string[];
   archived: boolean;

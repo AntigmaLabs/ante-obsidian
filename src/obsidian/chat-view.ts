@@ -53,6 +53,12 @@ import {
   normalizeProvider,
   type AnteProvider,
 } from "./settings"
+import {
+  ANTE_DEFAULT_THINKING,
+  ANTE_THINKING_LEVELS,
+  resolveAnteThinkingPreference,
+  type AnteThinkingPreference,
+} from "../core/ante-thinking"
 
 export const TMD_CHAT_VIEW_TYPE = "tmd-chat-view"
 
@@ -61,6 +67,14 @@ const PROVIDER_LABELS: Record<AnteProvider, string> = {
   "openai-subscription": "OpenAI",
   anthropic: "Anthropic",
   antix: "Antix",
+}
+
+const THINKING_LABELS: Record<AnteThinkingPreference, string> = {
+  [ANTE_DEFAULT_THINKING]: "Default",
+  Disabled: "Off",
+  Enabled: "On",
+  Deep: "Deep",
+  Max: "Max",
 }
 
 const MAX_CHAT_PREVIEW_CHARS = 12000
@@ -440,6 +454,7 @@ export class TmdChatView extends ItemView {
   private attachmentButtonEl!: HTMLButtonElement
   private providerButtonEl!: HTMLButtonElement
   private modelButtonEl!: HTMLButtonElement
+  private thinkingButtonEl!: HTMLButtonElement
   private composerEl!: HTMLTextAreaElement
   private composerContainerEl!: HTMLDivElement
   private attachmentListEl!: HTMLDivElement
@@ -453,6 +468,7 @@ export class TmdChatView extends ItemView {
   private isAttachmentDragActive = false
   private selectedProvider: AnteProvider = "openai-subscription"
   private selectedModel = getDefaultModelForProvider("openai-subscription")
+  private selectedThinking: AnteThinkingPreference = ANTE_DEFAULT_THINKING
   private selectedAttachmentPaths: string[] = []
 
   constructor(
@@ -561,6 +577,7 @@ export class TmdChatView extends ItemView {
     this.attachmentButtonEl.setAttribute("title", "Attach files")
     this.providerButtonEl = layout.providerButtonEl
     this.modelButtonEl = layout.modelButtonEl
+    this.thinkingButtonEl = layout.thinkingButtonEl
     this.composerEl = layout.composerEl
     this.composerEl.placeholder =
       "Ask about the current note, rewrite a selection, or plan the next edit."
@@ -664,9 +681,11 @@ export class TmdChatView extends ItemView {
     )
       ? resolvedTarget.model
       : getDefaultModelForProvider(this.selectedProvider)
+    this.selectedThinking = this.plugin.settings.anteThinking
 
     this.populateProviderSelect()
     this.populateModelSelect()
+    this.populateThinkingSelect()
     this.providerButtonEl.addEventListener("click", (event) => {
       const menu = new Menu()
       const providers: AnteProvider[] = ["openai-subscription", "gemini", "anthropic", "antix"]
@@ -680,6 +699,7 @@ export class TmdChatView extends ItemView {
               this.selectedModel = getDefaultModelForProvider(this.selectedProvider)
               this.populateProviderSelect()
               this.populateModelSelect()
+              this.populateThinkingSelect()
             })
         })
       }
@@ -700,6 +720,33 @@ export class TmdChatView extends ItemView {
       }
       menu.showAtMouseEvent(event)
     })
+    this.thinkingButtonEl.addEventListener("click", (event) => {
+      const menu = new Menu()
+      menu.addItem((item) => {
+        item.setTitle("Thinking level").setDisabled(true)
+      })
+      menu.addItem((item) => {
+        item
+          .setTitle(THINKING_LABELS[ANTE_DEFAULT_THINKING])
+          .setChecked(this.selectedThinking === ANTE_DEFAULT_THINKING)
+          .onClick(() => {
+            this.selectedThinking = ANTE_DEFAULT_THINKING
+            this.populateThinkingSelect()
+          })
+      })
+      for (const thinking of ANTE_THINKING_LEVELS) {
+        menu.addItem((item) => {
+          item
+            .setTitle(THINKING_LABELS[thinking])
+            .setChecked(thinking === this.selectedThinking)
+            .onClick(() => {
+              this.selectedThinking = thinking
+              this.populateThinkingSelect()
+            })
+        })
+      }
+      menu.showAtMouseEvent(event)
+    })
   }
 
   private populateProviderSelect(): void {
@@ -715,10 +762,20 @@ export class TmdChatView extends ItemView {
     this.modelButtonEl.setAttribute("title", this.selectedModel)
   }
 
-  private getSelectedRuntimeTarget(): { provider: string; model: string } {
+  private populateThinkingSelect(): void {
+    this.thinkingButtonEl.setText(THINKING_LABELS[this.selectedThinking])
+    this.thinkingButtonEl.setAttribute("title", THINKING_LABELS[this.selectedThinking])
+  }
+
+  private getSelectedRuntimeTarget(): {
+    provider: string
+    model: string
+    thinking: AnteThinkingPreference
+  } {
     return {
       provider: this.selectedProvider,
       model: this.selectedModel,
+      thinking: this.selectedThinking,
     }
   }
 
@@ -737,41 +794,62 @@ export class TmdChatView extends ItemView {
     )
       ? (conversationTarget?.model ?? fallbackTarget.model)
       : getDefaultModelForProvider(provider)
+    const thinking =
+      conversationTarget?.thinking ?? this.plugin.settings.anteThinking
 
     const changed =
-      provider !== this.selectedProvider || model !== this.selectedModel
+      provider !== this.selectedProvider ||
+      model !== this.selectedModel ||
+      thinking !== this.selectedThinking
     if (!changed) {
       return
     }
 
     this.selectedProvider = provider
     this.selectedModel = model
+    this.selectedThinking = thinking
     this.populateProviderSelect()
     this.populateModelSelect()
+    this.populateThinkingSelect()
   }
 
   private resolveConversationSendMode(
     conversationId: string,
-    target: { provider: string; model: string }
+    target: { provider: string; model: string; thinking: AnteThinkingPreference }
   ): {
     runtimeSessionId: string | null
     requiresSessionRestart: boolean
     switchedProvider: boolean
+    switchedThinking: boolean
   } {
     const currentTarget =
       this.plugin.chatManager.getConversationRuntimeTarget(conversationId)
     const runtimeSessionId =
       this.plugin.chatManager.getConversationRuntimeSessionId(conversationId)
+    const currentThinkingPreference =
+      currentTarget?.thinking ?? this.plugin.settings.anteThinking
+    const currentThinking =
+      currentThinkingPreference === ANTE_DEFAULT_THINKING
+        ? this.plugin.getResolvedAnteThinking()
+        : resolveAnteThinkingPreference(currentThinkingPreference)
+    const nextThinking =
+      target.thinking === ANTE_DEFAULT_THINKING
+        ? this.plugin.getResolvedAnteThinking()
+        : resolveAnteThinkingPreference(target.thinking)
 
     if (
       runtimeSessionId &&
-      currentTarget?.provider &&
-      currentTarget.provider !== target.provider
+      ((currentTarget?.provider &&
+        currentTarget.provider !== target.provider) ||
+        currentThinking !== nextThinking)
     ) {
       return {
         runtimeSessionId: null,
         requiresSessionRestart: true,
-        switchedProvider: true,
+        switchedProvider: Boolean(
+          currentTarget?.provider && currentTarget.provider !== target.provider
+        ),
+        switchedThinking: currentThinking !== nextThinking,
       }
     }
 
@@ -779,6 +857,7 @@ export class TmdChatView extends ItemView {
       runtimeSessionId,
       requiresSessionRestart: false,
       switchedProvider: false,
+      switchedThinking: false,
     }
   }
 
@@ -1911,10 +1990,15 @@ export class TmdChatView extends ItemView {
     if (sendMode.requiresSessionRestart) {
       await this.plugin.persistIdleAnteSession()
     }
-    const providerChangeNoticeId = sendMode.switchedProvider
+    const restartNoticeText = sendMode.switchedProvider
+      ? `Provider changed to ${runtimeTarget.provider}. Starting a new session for this turn.`
+      : sendMode.switchedThinking
+        ? `Think level changed to ${THINKING_LABELS[runtimeTarget.thinking]}. Starting a new session for this turn.`
+        : null
+    const restartNoticeId = restartNoticeText
       ? this.plugin.chatManager.appendAssistantNotice(
           request.conversationId,
-          `Provider changed to ${runtimeTarget.provider}. Starting a new session for this turn.`,
+          restartNoticeText,
         )
       : null
     try {
@@ -1936,7 +2020,7 @@ export class TmdChatView extends ItemView {
         userMessageId,
         taskId,
         createdConversation,
-        providerChangeNoticeId ? [providerChangeNoticeId] : [],
+        restartNoticeId ? [restartNoticeId] : [],
       )
       this.plugin.taskEngine.clearTasks(removedTaskIds)
       throw error
@@ -1977,10 +2061,15 @@ export class TmdChatView extends ItemView {
         if (sendMode.requiresSessionRestart) {
           await this.plugin.persistIdleAnteSession()
         }
-        const providerChangeNoticeId = sendMode.switchedProvider
+        const restartNoticeText = sendMode.switchedProvider
+          ? `Provider changed to ${runtimeTarget.provider}. Starting a new session for this turn.`
+          : sendMode.switchedThinking
+            ? `Think level changed to ${THINKING_LABELS[runtimeTarget.thinking]}. Starting a new session for this turn.`
+            : null
+        const restartNoticeId = restartNoticeText
           ? this.plugin.chatManager.appendAssistantNotice(
               pendingSend.conversation.id,
-              `Provider changed to ${runtimeTarget.provider}. Starting a new session for this turn.`,
+              restartNoticeText,
             )
           : null
         this.plugin.chatManager.createAssistantTurn(
@@ -2006,7 +2095,7 @@ export class TmdChatView extends ItemView {
             pendingSend.userMessageId,
             taskId,
             pendingSend.createdConversation,
-            providerChangeNoticeId ? [providerChangeNoticeId] : [],
+            restartNoticeId ? [restartNoticeId] : [],
           )
           this.plugin.taskEngine.clearTasks(removedTaskIds)
           throw error

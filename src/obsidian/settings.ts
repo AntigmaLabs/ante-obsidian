@@ -1,4 +1,9 @@
 import type { BuiltinPresetPreference, CustomPresetConfig, PresetSettings } from "../core/preset-config";
+import {
+  ANTE_DEFAULT_THINKING,
+  normalizeAnteThinkingPreference,
+  type AnteThinkingPreference
+} from "../core/ante-thinking";
 
 export const OPENAI_PROVIDER = "openai-subscription";
 export const GEMINI_PROVIDER = "gemini";
@@ -55,6 +60,7 @@ export interface TmdSettings extends PresetSettings {
   useAnteDefaults: boolean;
   allowObsidianCli: boolean;
   anteModel: string;
+  anteThinking: AnteThinkingPreference;
   anteProvider: AnteProvider;
   autoApproveAnteTools: boolean;
   showFullProcessLogs: boolean;
@@ -72,6 +78,7 @@ export const DEFAULT_SETTINGS: TmdSettings = {
   useAnteDefaults: true,
   allowObsidianCli: true,
   anteModel: getDefaultModelForProvider(OPENAI_PROVIDER),
+  anteThinking: ANTE_DEFAULT_THINKING,
   anteProvider: OPENAI_PROVIDER,
   autoApproveAnteTools: true,
   showFullProcessLogs: false,
@@ -162,6 +169,7 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
   const anteModel = providerModels.includes(requestedModel as (typeof providerModels)[number])
     ? requestedModel
     : getDefaultModelForProvider(anteProvider);
+  const anteThinking = normalizeAnteThinkingPreference(raw.anteThinking);
 
   return {
     connectionMode: "stdio",
@@ -172,6 +180,7 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
     useAnteDefaults: raw.useAnteDefaults !== false,
     allowObsidianCli: raw.allowObsidianCli !== false,
     anteModel,
+    anteThinking,
     anteProvider,
     autoApproveAnteTools: raw.autoApproveAnteTools !== false,
     showFullProcessLogs: raw.showFullProcessLogs === true,

@@ -1,4 +1,5 @@
 import { App, MarkdownView, Notice, Plugin, type WorkspaceLeaf } from "obsidian";
+import { resolveAnteThinkingPreference, type AnteThinkingLevel } from "../core/ante-thinking";
 import { TaskEngine } from "../core/task-engine";
 import type { ContextSnapshot, PresetId } from "../core/types";
 import { MentionTriggerService } from "./mention-trigger";
@@ -368,6 +369,10 @@ export default class TmdPlugin extends Plugin {
       provider: this.settings.anteProvider,
       model: this.settings.anteModel
     };
+  }
+
+  getResolvedAnteThinking(): AnteThinkingLevel | null {
+    return resolveAnteThinkingPreference(this.settings.anteThinking);
   }
 
   getObsidianCliStatus(): ObsidianCliStatus & { enabled: boolean } {

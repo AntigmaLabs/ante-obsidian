@@ -27,6 +27,7 @@ export interface ChatLayoutNodes {
   attachmentButtonEl: HTMLButtonElement
   providerButtonEl: HTMLButtonElement
   modelButtonEl: HTMLButtonElement
+  thinkingButtonEl: HTMLButtonElement
   composerEl: HTMLTextAreaElement
   composerActionButtonEl: HTMLButtonElement
   fileInputEl: HTMLInputElement
@@ -59,6 +60,7 @@ interface ChatComposerNodes {
   attachmentButtonEl: HTMLButtonElement
   providerButtonEl: HTMLButtonElement
   modelButtonEl: HTMLButtonElement
+  thinkingButtonEl: HTMLButtonElement
   composerEl: HTMLTextAreaElement
   composerActionButtonEl: HTMLButtonElement
   fileInputEl: HTMLInputElement
@@ -145,6 +147,9 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
   const modelButtonEl = button({
     cls: "tmd-chat-picker tmd-chat-model-picker",
   }).appendTo(composerMetaEl)
+  const thinkingButtonEl = button({
+    cls: "tmd-chat-picker tmd-chat-thinking-picker",
+  }).appendTo(composerMetaEl)
   const composerActionButtonEl = button({
     cls: "tmd-chat-primary-action",
   }).appendTo(inputShellEl)
@@ -162,6 +167,7 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
     attachmentButtonEl,
     providerButtonEl,
     modelButtonEl,
+    thinkingButtonEl,
     composerEl,
     composerActionButtonEl,
     fileInputEl,
@@ -221,6 +227,7 @@ export const renderChatLayout = (
     attachmentButtonEl: main.composer.attachmentButtonEl,
     providerButtonEl: main.composer.providerButtonEl,
     modelButtonEl: main.composer.modelButtonEl,
+    thinkingButtonEl: main.composer.thinkingButtonEl,
     composerEl: main.composer.composerEl,
     composerActionButtonEl: main.composer.composerActionButtonEl,
     fileInputEl: main.composer.fileInputEl,
