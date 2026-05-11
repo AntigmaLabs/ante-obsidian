@@ -16,7 +16,7 @@
     "smoke": "node scripts/ante-smoke.cjs",
     "sync-version": "node scripts/sync-version.cjs",
     "test": "npm run build -w @antigma/ante-sdk && node --import tsx --test \"packages/*/tests/**/*.test.ts\"",
-    "typecheck": "npm run build -w @antigma/ante-sdk && npm run typecheck -w ante-obsidian-plugin"
+    "typecheck": "npm run build -w @antigma/ante-sdk && npm run typecheck -w @antigma/ante-sdk && npm run typecheck -w ante-obsidian-plugin"
   },
   "dependencies": {},
   "devDependencies": {

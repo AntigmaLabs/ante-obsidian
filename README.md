@@ -1,5 +1,10 @@
-# Ante md
-Ante md is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to note editing, review, and chat flows inside Obsidian.
+# Ante Obsidian
+Ante Obsidian is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to note editing, review, and chat flows inside Obsidian.
+
+The repository is a monorepo:
+
+- `packages/ante-obsidian-plugin`: the Obsidian plugin
+- `packages/ante-sdk`: the reusable `@antigma/ante-sdk` package for launching Ante, managing sessions, and streaming protocol messages
 
 ## Features
 
@@ -17,7 +22,7 @@ Ante md is an Obsidian desktop plugin for Ante-powered Markdown workflows. It co
 
 ## Runtime
 
-Ante md talks to `ante serve --stdio` over stdin/stdout.
+Ante Obsidian talks to `ante serve --stdio` over stdin/stdout.
 
 It does not use PTY, `xterm`, or other terminal emulation.
 
@@ -53,6 +58,7 @@ For multiple edits, Ante should return one `changes` object containing every Mar
 
 ```bash
 npm install
+npm run dev
 npm run typecheck
 npm test
 npm run build
@@ -60,6 +66,8 @@ npm run build:release
 npm run smoke
 npm run probe
 ```
+
+`npm run dev` syncs version metadata, then starts esbuild in watch mode. The output is the root `main.js` expected by Obsidian.
 
 ## Portable Config
 
@@ -86,7 +94,7 @@ npm run smoke
 
 ## Obsidian Install
 
-Ante md can be installed in several ways:
+Ante Obsidian can be installed in several ways:
 
 - Obsidian Community Plugins browser, after official review and listing
 - Manual install from a GitHub release
@@ -105,7 +113,7 @@ For GitHub Releases, generate a single installable archive with:
 npm run build:release
 ```
 
-That creates `.release/ante-md-<version>.zip`, which expands to an `ante-md/` folder containing:
+That creates `.release/ante-obsidian-<version>.zip`, which expands to an `ante-obsidian/` folder containing:
 
 - `manifest.json`
 - `main.js`
@@ -113,11 +121,11 @@ That creates `.release/ante-md-<version>.zip`, which expands to an `ante-md/` fo
 
 After installation:
 
-1. Enable `Ante md` in `Settings -> Community plugins`.
+1. Enable `Ante Obsidian` in `Settings -> Community plugins`.
 2. Confirm the local Ante runtime status and provider/model settings if needed.
-3. By default, Ante md follows `~/.ante/settings.json` for provider and model.
-4. Review preset visibility and ordering in `Ante md Settings -> Presets` if you want to customize the editor menu.
-5. If you switch Ante md to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.
+3. By default, Ante Obsidian follows `~/.ante/settings.json` for provider and model.
+4. Review preset visibility and ordering in `Ante Obsidian Settings -> Presets` if you want to customize the editor menu.
+5. If you switch Ante Obsidian to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.
 
 The Obsidian plugin still stores local machine settings in its own plugin data file at runtime. That is expected user-local configuration, not repository configuration.
 
@@ -155,5 +163,31 @@ That updates:
 
 - `manifest.json`
 - `versions.json`
+- `packages/ante-obsidian-plugin/package.json`
 
-The bundle entrypoint is `src/obsidian/main.ts`.
+## SDK Package
+
+The SDK package is `@antigma/ante-sdk`. It exposes:
+
+- `query({ prompt, options })`, following the Claude Code SDK style
+- `createAnteClient()` for lower-level session control
+- protocol, transport, event parsing, and approval helpers used by the Obsidian plugin
+
+Before publishing:
+
+```bash
+npm login
+npm whoami
+npm run typecheck
+npm test
+npm run build
+npm pack --dry-run -w @antigma/ante-sdk
+```
+
+Publish with:
+
+```bash
+npm publish -w @antigma/ante-sdk
+```
+
+The package is configured with `publishConfig.access = public`; the npm account still needs permission to publish under the `@antigma` scope.
