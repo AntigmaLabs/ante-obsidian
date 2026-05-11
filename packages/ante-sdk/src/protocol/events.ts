@@ -1,12 +1,10 @@
 import type {
-  RuntimeApprovalRequest,
-  RuntimeEvent,
-  RuntimeToolCall,
-  RuntimeUsage,
-  RuntimeProcessLane,
-  RuntimeProcessStep,
-  RuntimeProcessStepStatus
-} from "../core/types";
+  ApprovalRequest,
+  ProcessLane,
+  ProcessStep,
+  ToolCall,
+  Usage
+} from "../types";
 
 const getStringField = (value: unknown, keys: string[]): string | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -128,7 +126,7 @@ export const extractErrorMessage = (value: unknown): string => {
   return direct ?? "Ante returned an unknown error";
 };
 
-export const extractUsage = (value: unknown): RuntimeUsage => {
+export const extractUsage = (value: unknown): Usage => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { raw: value };
   }
@@ -168,7 +166,7 @@ export const extractInfoMessage = (value: unknown): string | undefined => {
   return direct?.trim() || undefined;
 };
 
-export const extractTurnPauseApproval = (value: unknown): RuntimeApprovalRequest | null => {
+export const extractTurnPauseApproval = (value: unknown): ApprovalRequest | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
@@ -187,7 +185,7 @@ export const extractTurnPauseApproval = (value: unknown): RuntimeApprovalRequest
   const message = findNestedStringField(approvalRecord, ["message"]) ?? "Please approve the following tool calls";
   const tools =
     Array.isArray(approvalRecord.tools)
-      ? approvalRecord.tools.reduce<RuntimeApprovalRequest["tools"]>((all, tool) => {
+      ? approvalRecord.tools.reduce<ApprovalRequest["tools"]>((all, tool) => {
           if (!tool || typeof tool !== "object" || Array.isArray(tool)) {
             return all;
           }
@@ -233,7 +231,7 @@ export const extractTurnPauseDetail = (value: unknown): string => {
   return [toolSummary, approval.message].filter(Boolean).join(": ");
 };
 
-const normalizeProcessStepStatus = (value: unknown): RuntimeProcessStepStatus => {
+const normalizeProcessStepStatus = (value: unknown): ProcessStep["status"] => {
   if (typeof value !== "string") {
     return "pending";
   }
@@ -247,7 +245,7 @@ const normalizeProcessStepStatus = (value: unknown): RuntimeProcessStepStatus =>
   return "pending";
 };
 
-const extractTodoSteps = (value: unknown): RuntimeProcessStep[] => {
+const extractTodoSteps = (value: unknown): ProcessStep[] => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return [];
   }
@@ -264,7 +262,7 @@ const extractTodoSteps = (value: unknown): RuntimeProcessStep[] => {
     if (!Array.isArray(candidate)) {
       continue;
     }
-    return candidate.reduce<RuntimeProcessStep[]>((steps, entry, index) => {
+    return candidate.reduce<ProcessStep[]>((steps, entry, index) => {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
         return steps;
       }
@@ -291,8 +289,8 @@ const extractTodoSteps = (value: unknown): RuntimeProcessStep[] => {
 export const buildProcessLaneFromToolPayload = (
   eventName: "ToolStart" | "ToolUpdate" | "ToolEnd",
   payload: unknown,
-  current: RuntimeProcessLane | undefined
-): RuntimeProcessLane | undefined => {
+  current: ProcessLane | undefined
+): ProcessLane | undefined => {
   const toolName = getStringField(payload, ["name", "tool_name"]) ?? current?.toolName;
   const todoSteps = extractTodoSteps(payload);
 
@@ -328,7 +326,7 @@ export const buildProcessLaneFromToolPayload = (
 export const extractToolCall = (
   eventName: "ToolStart" | "ToolEnd",
   payload: unknown
-): RuntimeToolCall | null => {
+): ToolCall | null => {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null;
   }
@@ -494,7 +492,7 @@ const extractStructuredTextFallback = (message: string): string | null => {
   }
 };
 
-export const parseAssistantMessage = (message: string): RuntimeEvent[] => {
+export const parseAssistantMessage = (message: string): Array<{ type: "result.text"; text: string }> => {
   const parsed = parseJsonPayload(message);
   if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
     const record = parsed as Record<string, unknown>;

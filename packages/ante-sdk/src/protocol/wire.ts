@@ -1,5 +1,4 @@
-import type { AnteThinkingLevel } from "../core/ante-thinking";
-import type { RuntimeApprovalDecision } from "../core/types";
+import type { AnteThinkingLevel, ApprovalDecision } from "../types";
 
 export interface AnteEventEnvelope {
   event?: unknown;
@@ -13,6 +12,12 @@ export type AnteOperation =
         provider: string;
         streaming: boolean;
         thinking: AnteThinkingLevel | null;
+        policy?: "Auto" | "Ask" | "Deny";
+        system_prompt?: string;
+        append_system_prompt?: string;
+        allowed_tools?: string[];
+        disallowed_tools?: string[];
+        cwd?: string;
       };
     }
   | {
@@ -34,7 +39,7 @@ export type AnteOperation =
   | {
       ApprovalResponse: {
         turn_id: string;
-        responses: Array<[string, RuntimeApprovalDecision]>;
+        responses: Array<[string, ApprovalDecision]>;
       };
     }
   | "Interrupt"

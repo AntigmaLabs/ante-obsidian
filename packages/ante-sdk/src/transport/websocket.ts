@@ -1,8 +1,8 @@
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import { createConnection } from "node:net";
 import type { Readable } from "node:stream";
-import type { AnteTransport } from "./ante-transport";
-import { resolveCommandPath } from "./ante-stdio-transport";
+import type { AnteTransport } from "./transport";
+import { resolveCommandPath } from "./stdio";
 
 export interface AnteWebSocketTransportConfig {
   command: string;

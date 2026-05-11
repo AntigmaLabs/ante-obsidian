@@ -3,6 +3,7 @@ const { join } = require("node:path");
 
 const repoRoot = join(__dirname, "..");
 const packageJsonPath = join(repoRoot, "package.json");
+const pluginPackageJsonPath = join(repoRoot, "packages", "ante-obsidian-plugin", "package.json");
 const manifestJsonPath = join(repoRoot, "manifest.json");
 const versionsJsonPath = join(repoRoot, "versions.json");
 
@@ -12,6 +13,7 @@ const writeJson = (path, value) => {
 };
 
 const packageJson = readJson(packageJsonPath);
+const pluginPackageJson = readJson(pluginPackageJsonPath);
 const manifestJson = readJson(manifestJsonPath);
 const versionsJson = readJson(versionsJsonPath);
 
@@ -27,6 +29,7 @@ if (typeof minAppVersion !== "string" || !minAppVersion.trim()) {
 }
 
 manifestJson.version = version;
+pluginPackageJson.version = version;
 
 const nextVersionsJson = {
   ...versionsJson,
@@ -34,6 +37,7 @@ const nextVersionsJson = {
 };
 
 writeJson(manifestJsonPath, manifestJson);
+writeJson(pluginPackageJsonPath, pluginPackageJson);
 writeJson(versionsJsonPath, nextVersionsJson);
 
-console.log(`Synced version ${version} to manifest.json and versions.json`);
+console.log(`Synced version ${version} to manifest.json, versions.json, and ante-obsidian-plugin package.json`);

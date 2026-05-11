@@ -1,4 +1,7 @@
 node_modules
 main.js
+packages/*/dist
 .env
 .release
+.DS_Store
+data.json

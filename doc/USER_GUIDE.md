@@ -1,12 +1,12 @@
-# Ante md User Guide
+# Ante Obsidian User Guide
 
-Ante md is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to note editing, diff review, chat, and terminal-style interaction inside Obsidian.
+Ante Obsidian is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to note editing, diff review, chat, and terminal-style interaction inside Obsidian.
 
-This guide is written for end users. It focuses on what Ante md can do today, where each feature is triggered, and where the results appear.
+This guide is written for end users. It focuses on what Ante Obsidian can do today, where each feature is triggered, and where the results appear.
 
 ## What The Plugin Does
 
-Ante md currently provides 6 main user-facing capabilities:
+Ante Obsidian currently provides 6 main user-facing capabilities:
 
 1. Trigger inline note actions by typing `@ante` and pressing `Enter` to submit the line.
 2. Run built-in or custom presets from the editor context menu.
@@ -29,22 +29,22 @@ For more structured research, planning, or summarization, use presets from the c
 
 ### What Happens After Triggering
 
-- If you have selected text, Ante md uses the selection first.
-- If there is no selection, Ante md tries to use the current paragraph around the cursor.
+- If you have selected text, Ante Obsidian uses the selection first.
+- If there is no selection, Ante Obsidian tries to use the current paragraph around the cursor.
 - The plugin inserts a temporary running placeholder into the note.
 - If Ante returns plain text, the placeholder is replaced with the final content.
-- If Ante returns inline Markdown changes, Ante md applies the changes directly and leaves a success message in the note.
-- If Ante returns file-level or multi-file changes, Ante md applies them directly.
+- If Ante returns inline Markdown changes, Ante Obsidian applies the changes directly and leaves a success message in the note.
+- If Ante returns file-level or multi-file changes, Ante Obsidian applies them directly.
 
 ### Typical Uses
 
 - Add `@ante` after a rough paragraph, then press `Enter` to rewrite it.
-- Select a checklist or draft section and ask Ante md to clean up the wording.
+- Select a checklist or draft section and ask Ante Obsidian to clean up the wording.
 - Use presets when the task already fits a repeatable pattern.
 
 ## Feature 2: Editor Context Menu Presets
 
-When you right-click in the Obsidian editor with text selected, Ante md adds visible presets to the menu.
+When you right-click in the Obsidian editor with text selected, Ante Obsidian adds visible presets to the menu.
 
 By default, the built-in presets are:
 
@@ -69,7 +69,7 @@ The same menu also includes:
 
 ## Feature 3: Command Palette Commands
 
-Ante md also registers these commands in the Obsidian command palette:
+Ante Obsidian also registers these commands in the Obsidian command palette:
 
 - `Chat with Ante`
 - `Open Ante Terminal`
@@ -131,7 +131,7 @@ If Ante asks to use tools during a run, the terminal view can show an approval c
 
 ## Feature 6: Settings And Preset Management
 
-Besides runtime configuration, Ante md now includes dedicated update checks and preset management sections in settings.
+Besides runtime configuration, Ante Obsidian now includes dedicated update checks and preset management sections in settings.
 
 ### Available Settings
 
@@ -160,27 +160,27 @@ Besides runtime configuration, Ante md now includes dedicated update checks and 
 
 1. Open a Markdown note.
 2. Select text or place the cursor in the target paragraph.
-3. Trigger Ante md with `@ante` plus `Enter`, a preset from the context menu, or a command palette action.
+3. Trigger Ante Obsidian with `@ante` plus `Enter`, a preset from the context menu, or a command palette action.
 4. If the result is inline text, it appears in the note.
 5. If you need follow-up discussion, continue in `Chat with Ante`.
 6. If you want a more runtime-focused flow, use `Ante Terminal`.
 
 ## Requirements
 
-Ante md does not provide model access by itself. It depends on a working local Ante runtime.
+Ante Obsidian does not provide model access by itself. It depends on a working local Ante runtime.
 
-Before using Ante md, make sure:
+Before using Ante Obsidian, make sure:
 
 - You are on Obsidian desktop
-- Ante md is installed and enabled
-- The standard `ante` command runs on your machine, or you can install it first from Ante md settings
+- Ante Obsidian is installed and enabled
+- The standard `ante` command runs on your machine, or you can install it first from Ante Obsidian settings
 - Ante provider and model are already configured; if you use Gemini, you can also fill in or override the API key from plugin settings
 
-If Ante is not available, Ante md will not work.
+If Ante is not available, Ante Obsidian will not work.
 
 ## Summary
 
-In one sentence, Ante md is:
+In one sentence, Ante Obsidian is:
 
 "Ante-powered Markdown workflows inside Obsidian, so you can trigger AI actions in notes, inspect diffs, manage reusable presets, and continue follow-up interactions in chat or terminal views."
 

@@ -1073,7 +1073,7 @@ export class TmdTerminalView extends ItemView {
     renderMissingAnteState(helpEl, {
       title: "Ante CLI is missing",
       description:
-        "Open Ante md Settings to install Ante, then refresh runtime detection here.",
+        "Open Ante Obsidian Settings to install Ante, then refresh runtime detection here.",
       onOpenSettings: () => this.plugin.openPluginSettings(),
       onRefresh: () =>
         this.plugin.refreshAnteEnvironment().then(() => {

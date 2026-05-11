@@ -38,13 +38,13 @@ export class PluginUpdater {
             latestUrl: DEFAULT_UPDATE_CONFIG.pluginReleasesPageUrl
           };
         }
-        throw new Error(`Failed to fetch Ante md release info (${response.status})`);
+        throw new Error(`Failed to fetch Ante Obsidian release info (${response.status})`);
       }
 
       const body = response.json as Record<string, unknown>;
       const latestVersion = typeof body.tag_name === "string" ? normalizePluginVersion(body.tag_name) : "";
       if (!latestVersion) {
-        throw new Error("Ante md release info missing tag_name");
+        throw new Error("Ante Obsidian release info missing tag_name");
       }
 
       const latestUrl = typeof body.html_url === "string" ? body.html_url : undefined;
@@ -64,7 +64,7 @@ export class PluginUpdater {
         sourceAvailable: true,
         checkedAt,
         latestUrl: DEFAULT_UPDATE_CONFIG.pluginReleasesPageUrl,
-        error: error instanceof Error ? error.message : "Failed to check Ante md updates"
+        error: error instanceof Error ? error.message : "Failed to check Ante Obsidian updates"
       };
     }
   }

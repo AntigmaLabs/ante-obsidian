@@ -114,7 +114,7 @@ export class AnteUpdater {
   private getErrorMessage(error: unknown): string {
     const message = error instanceof Error ? error.message : "Failed to check Ante version";
     if (/command not found/i.test(message) || /not configured/i.test(message)) {
-      return "Ante is not installed yet. Ante md only supports the standard `ante` executable.";
+      return "Ante is not installed yet. Ante Obsidian only supports the standard `ante` executable.";
     }
     return message;
   }

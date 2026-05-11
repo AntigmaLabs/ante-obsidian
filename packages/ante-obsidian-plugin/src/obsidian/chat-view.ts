@@ -1183,7 +1183,7 @@ export class TmdChatView extends ItemView {
         className: "tmd-chat-empty",
         title: "Ante is not installed yet.",
         description:
-          "Open Ante md Settings to install the local Ante CLI before starting chat.",
+          "Open Ante Obsidian Settings to install the local Ante CLI before starting chat.",
         onOpenSettings: () => this.plugin.openPluginSettings(),
         onRefresh: () => this.plugin.refreshAnteEnvironment().then(() => this.render()),
       })

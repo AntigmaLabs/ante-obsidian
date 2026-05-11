@@ -1,7 +1,7 @@
 {
-  "id": "ante-md",
-  "name": "Ante md",
-  "version": "0.5.2",
+  "id": "ante-obsidian",
+  "name": "Ante Obsidian",
+  "version": "0.6.0",
   "minAppVersion": "1.6.0",
   "description": "AI second brian, continous ingestion, indexing, and evolving. Powered by Ante agent core from Antigma Labs ",
   "author": "Antigma Labs",

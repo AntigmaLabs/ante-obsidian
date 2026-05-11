@@ -50,7 +50,7 @@ export class TmdSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass("tmd-settings");
-    containerEl.createEl("h2", { text: "Ante md Settings" });
+    containerEl.createEl("h2", { text: "Ante Obsidian Settings" });
 
     const tabsEl = containerEl.createDiv({ cls: "tmd-settings-tabs" });
     const panelsEl = containerEl.createDiv({ cls: "tmd-settings-panels" });
@@ -81,7 +81,7 @@ export class TmdSettingTab extends PluginSettingTab {
 
     new Setting(runtimeSectionEl)
       .setName("Auto-approve Ante tools")
-      .setDesc("Automatically approve Ante tool calls inside Ante md. Default: on.")
+      .setDesc("Automatically approve Ante tool calls inside Ante Obsidian. Default: on.")
       .addToggle((toggle) =>
         toggle.setValue(this.pluginRef.settings.autoApproveAnteTools).onChange(async (value) => {
           this.pluginRef.settings.autoApproveAnteTools = value;
@@ -306,7 +306,7 @@ export class TmdSettingTab extends PluginSettingTab {
     const bodyEl = itemEl.createDiv({ cls: "tmd-update-item-body" });
     const headerEl = bodyEl.createDiv({ cls: "tmd-update-item-header" });
     const titleRowEl = headerEl.createDiv({ cls: "tmd-update-item-title-row" });
-    titleRowEl.createSpan({ cls: "tmd-update-item-title", text: "Ante md" });
+    titleRowEl.createSpan({ cls: "tmd-update-item-title", text: "Ante Obsidian" });
     titleRowEl.createSpan({ cls: "tmd-update-item-status", text: this.getPluginUpdateStatusLabel() });
 
     bodyEl.createDiv({

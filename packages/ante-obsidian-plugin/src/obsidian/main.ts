@@ -152,7 +152,7 @@ export default class TmdPlugin extends Plugin {
   }
 
   notifyAnteMissing(sourceLabel: string): void {
-    new Notice(`${sourceLabel} needs the local Ante CLI. Open Ante md Settings to install Ante.`, 9000);
+    new Notice(`${sourceLabel} needs the local Ante CLI. Open Ante Obsidian Settings to install Ante.`, 9000);
   }
 
   ensureAnteInstalled(sourceLabel: string): boolean {
@@ -249,7 +249,7 @@ export default class TmdPlugin extends Plugin {
 
   async runPresetFromContextMenu(presetId: PresetId): Promise<void> {
     try {
-      if (!this.ensureAnteInstalled("Ante md")) {
+      if (!this.ensureAnteInstalled("Ante Obsidian")) {
         return;
       }
       const context = await this.hostAdapter.getActiveContext();
@@ -391,7 +391,7 @@ export default class TmdPlugin extends Plugin {
       "Obsidian CLI is available in this session.",
       "If needed, you may use the `obsidian` command for vault-aware operations.",
       "Reference: https://obsidian.md/zh/cli",
-      "Prefer the current note/selection first. For Markdown edits, prefer returning Ante md JSON changes instead of modifying files directly through shell."
+      "Prefer the current note/selection first. For Markdown edits, prefer returning Ante Obsidian JSON changes instead of modifying files directly through shell."
     ].join("\n");
   }
 
@@ -505,6 +505,6 @@ export default class TmdPlugin extends Plugin {
       pluginUpdateState: this.pluginUpdateState
     };
     await this.saveData(this.pluginData);
-    new Notice(`Ante md ${result.latestVersion} is available. Open settings to review the update.`, 9000);
+    new Notice(`Ante Obsidian ${result.latestVersion} is available. Open settings to review the update.`, 9000);
   }
 }

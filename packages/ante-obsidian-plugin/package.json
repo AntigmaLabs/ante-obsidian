@@ -1,0 +1,20 @@
+{
+  "name": "ante-obsidian-plugin",
+  "version": "0.6.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Obsidian desktop plugin for Ante-powered terminal Markdown workflows with diff previews and Chat with Ante.",
+  "scripts": {
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@antigma/ante-sdk": "file:../ante-sdk",
+    "diff": "^8.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "obsidian": "^1.12.3",
+    "typescript": "^5.9.3"
+  }
+}

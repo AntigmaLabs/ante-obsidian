@@ -3,7 +3,7 @@ import esbuild from "esbuild";
 const production = process.argv.includes("production");
 
 const context = await esbuild.context({
-  entryPoints: ["src/obsidian/main.ts"],
+  entryPoints: ["packages/ante-obsidian-plugin/src/obsidian/main.ts"],
   bundle: true,
   format: "cjs",
   platform: "node",

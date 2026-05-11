@@ -1,0 +1,49 @@
+{
+  "name": "@antigma/ante-sdk",
+  "version": "0.1.0",
+  "private": false,
+  "license": "MIT",
+  "description": "TypeScript SDK for launching Ante, managing sessions, and streaming protocol messages.",
+  "homepage": "https://github.com/AntigmaLabs/ante-obsidian#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/AntigmaLabs/ante-obsidian.git",
+    "directory": "packages/ante-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/AntigmaLabs/ante-obsidian/issues"
+  },
+  "keywords": [
+    "ante",
+    "antigma",
+    "agent",
+    "sdk",
+    "typescript"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

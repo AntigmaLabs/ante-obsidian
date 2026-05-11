@@ -1,23 +1,24 @@
 {
-  "name": "ante-md",
-  "version": "0.5.3",
+  "name": "ante-obsidian",
+  "version": "0.6.0",
   "private": true,
   "license": "MIT",
   "description": "Obsidian desktop plugin for Ante-powered terminal Markdown workflows with diff previews and Chat with Ante.",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "npm run sync-version && node esbuild.config.mjs production",
+    "build": "npm run sync-version && npm run build -w @antigma/ante-sdk && node esbuild.config.mjs production",
     "build:release": "npm run build && node scripts/package-release.cjs",
-    "dev": "node esbuild.config.mjs",
+    "dev": "npm run sync-version && npm run build -w @antigma/ante-sdk && node esbuild.config.mjs",
     "probe": "node scripts/ante-protocol-probe.cjs",
     "release:package": "node scripts/package-release.cjs",
     "smoke": "node scripts/ante-smoke.cjs",
     "sync-version": "node scripts/sync-version.cjs",
-    "test": "node --import tsx --test tests/**/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "test": "npm run build -w @antigma/ante-sdk && node --import tsx --test \"packages/*/tests/**/*.test.ts\"",
+    "typecheck": "npm run build -w @antigma/ante-sdk && npm run typecheck -w ante-obsidian-plugin"
   },
-  "dependencies": {
-    "diff": "^8.0.3"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^24.0.0",
     "esbuild": "^0.27.3",

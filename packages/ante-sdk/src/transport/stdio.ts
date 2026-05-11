@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, isAbsolute, join } from "node:path";
-import type { AnteTransport } from "./ante-transport";
+import type { AnteTransport } from "./transport";
 
 export interface AnteStdioTransportConfig {
   command: string;
