@@ -1,7 +1,7 @@
-# Ante Obsidian
+# Ante
 
 <p align="center">
-  <a href="https://github.com/AntigmaLabs/ante-obsidian/releases"><img src="https://img.shields.io/badge/Release-v0.6.2-purple" alt="Latest Release" /></a>
+  <a href="https://github.com/AntigmaLabs/ante-obsidian/releases"><img src="https://img.shields.io/badge/Release-v0.6.3-purple" alt="Latest Release" /></a>
   <a href="https://obsidian.md"><img src="https://img.shields.io/badge/Obsidian-v1.6.0%2B-blueviolet" alt="Obsidian Minimum Version" /></a>
   <a href="https://github.com/AntigmaLabs/ante-obsidian/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License" /></a>
 </p>
@@ -12,7 +12,7 @@
 
 ---
 
-**Ante Obsidian** 是一款专为桌面端 Obsidian 打造的 AI 插件。它将笔记编辑、差异化评审 (Diff Reviews)、交互式侧边栏和对话流无缝连接至本地 **Ante 智能体运行环境 (Agentic Runtime)**，为您提供一个具备极佳笔记感知力与沉静编辑感（editorial calm）的本地 AI 第二大脑。
+**Ante** 是一款专为桌面端 Obsidian 打造的 AI 插件。它将笔记编辑、差异化评审 (Diff Reviews)、交互式侧边栏和对话流无缝连接至本地 **Ante 智能体运行环境 (Agentic Runtime)**，为您提供一个具备极佳笔记感知力与沉静编辑感（editorial calm）的本地 AI 第二大脑。
 
 本项目使用 npm workspaces 组织的 Monorepo 单体多包结构：
 *   `packages/ante-obsidian-plugin`: Obsidian 插件核心代码。
@@ -34,7 +34,7 @@ curl -sS https://raw.githubusercontent.com/AntigmaLabs/ante-obsidian/main/script
 
 ### 2. 本地运行环境配置
 插件完全在本地运行，并依赖 `ante` 运行环境。启用插件后，配置完全自动化：
-1. 打开 **Obsidian 设置** -> **Ante Obsidian**。
+1. 打开 **Obsidian 设置** -> **Ante**。
 2. 在 **Runtime** 设置面板下，点击 **Install** 按钮，插件将为您自动下载并安装本地的 `ante` 运行环境。
 3. 选择您喜欢的模型服务商（Gemini、Anthropic 或 OpenAI）并配置相应的 API Key 凭证。
 

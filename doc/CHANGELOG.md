@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.3 - 2026-05-28
+
+- **Community Directory Readiness**: Rename the marketplace plugin identity to Ante so the manifest follows current Obsidian community plugin rules
+- **Release Packaging**: Publish standalone `main.js`, `manifest.json`, and `styles.css` assets alongside the release archive for official directory validation
+- **Installation Updates**: Align manual installation paths and documentation with the new `ante` plugin folder
+
 ## v0.6.2 - 2026-05-20
 
 - **Dynamic Model Loading**: Load chat models dynamically from your active Ante provider configuration

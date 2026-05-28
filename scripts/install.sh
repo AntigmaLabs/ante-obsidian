@@ -2,7 +2,7 @@
 set -e
 
 REPO="AntigmaLabs/ante-obsidian"
-PLUGIN_ID="ante-obsidian"
+PLUGIN_ID="ante"
 
 show_help() {
   echo "Usage: $0 <path-to-your-obsidian-vault> [path-to-release-zip]"
@@ -11,7 +11,7 @@ show_help() {
   echo "  $0 ~/Documents/MyVault"
   echo "    (Downloads and installs the latest release from GitHub)"
   echo ""
-  echo "  $0 ~/Documents/MyVault ~/Downloads/ante-obsidian-0.2.0.zip"
+  echo "  $0 ~/Documents/MyVault ~/Downloads/ante-0.6.3.zip"
   echo "    (Installs from a locally downloaded release zip)"
 }
 
@@ -97,7 +97,7 @@ mkdir -p "$PLUGIN_DIR"
 echo "Extracting..."
 unzip -q -o "$ZIP_FILE" -d "$TMP_DIR/extracted"
 
-# The zip contents might be directly in the zip, or inside a folder named `ante-obsidian`
+# The zip contents might be directly in the zip, or inside a folder named after the plugin ID
 if [ -d "$TMP_DIR/extracted/$PLUGIN_ID" ]; then
   cp -R "$TMP_DIR/extracted/$PLUGIN_ID/"* "$PLUGIN_DIR/"
 else
