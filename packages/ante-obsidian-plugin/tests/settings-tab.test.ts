@@ -5,45 +5,41 @@ import {
   getSelectedModelForProvider,
 } from "../src/obsidian/settings-tab-helpers"
 
-test("applyProviderOverrideSelection resets model to provider default", () => {
+test("applyProviderOverrideSelection selects the first model returned by Ante", () => {
   const settings = {
     anteProvider: "openai-subscription" as const,
     anteModel: "gpt-5.4",
   }
 
-  applyProviderOverrideSelection(settings, "anthropic")
+  applyProviderOverrideSelection(settings, "anthropic", ["claude-opus-4-6", "claude-sonnet-4-5"])
 
   assert.equal(settings.anteProvider, "anthropic")
-  assert.equal(settings.anteModel, "claude-sonnet-4-5")
+  assert.equal(settings.anteModel, "claude-opus-4-6")
 })
 
-test("applyProviderOverrideSelection supports antix defaults", () => {
+test("applyProviderOverrideSelection falls back without an Ante model list", () => {
   const settings = {
     anteProvider: "openai-subscription" as const,
     anteModel: "gpt-5.4",
   }
 
-  applyProviderOverrideSelection(settings, "antix")
+  applyProviderOverrideSelection(settings, "antix", [])
 
   assert.equal(settings.anteProvider, "antix")
-  assert.equal(settings.anteModel, "qwen3.5-flash")
+  assert.equal(settings.anteModel, "gpt-5.4")
 })
 
-test("getSelectedModelForProvider falls back when current model is not available", () => {
+test("getSelectedModelForProvider uses the Ante returned list when available", () => {
   assert.equal(
-    getSelectedModelForProvider("gemini", "gpt-5.4"),
+    getSelectedModelForProvider("gpt-5.4", ["gemini-3-flash-preview"]),
     "gemini-3-flash-preview",
   )
   assert.equal(
-    getSelectedModelForProvider("openai-subscription", "gpt-5.3-codex"),
+    getSelectedModelForProvider("gpt-5.3-codex", ["gpt-5.5", "gpt-5.3-codex"]),
     "gpt-5.3-codex",
   )
   assert.equal(
-    getSelectedModelForProvider("antix", "claude-sonnet-4-5"),
-    "claude-sonnet-4-5",
-  )
-  assert.equal(
-    getSelectedModelForProvider("antix", "unknown-model"),
-    "qwen3.5-flash",
+    getSelectedModelForProvider("unknown-model", ["gpt-5.5", "gpt-5.4"]),
+    "gpt-5.5",
   )
 })

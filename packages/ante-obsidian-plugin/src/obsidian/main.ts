@@ -1,5 +1,5 @@
 import { App, MarkdownView, Notice, Plugin, type WorkspaceLeaf } from "obsidian";
-import { resolveAnteThinkingPreference, type AnteThinkingLevel } from "../core/ante-thinking";
+import { resolveAnteThinkingPreference, type AnteThinkingLevel, type AnteThinkingPreference } from "../core/ante-thinking";
 import { TaskEngine } from "../core/task-engine";
 import type { ContextSnapshot, PresetId } from "../core/types";
 import { MentionTriggerService } from "./mention-trigger";
@@ -13,6 +13,7 @@ import { DEFAULT_ANTE_ARGS_JSON, createAnteRuntime } from "../runtime/create-ant
 import { TMD_CHAT_VIEW_TYPE, TmdChatView } from "./chat-view";
 import { TMD_TERMINAL_VIEW_TYPE, TmdTerminalView } from "./terminal-view";
 import type { TaskRecord } from "../core/types";
+import type { ChatConversationRecord } from "../core/chat-types";
 import { readAnteDefaults, type AnteDefaults } from "./ante-defaults";
 import { normalizeEnvVarName, readCommandPathFromLoginShell, readEnvVarFromLoginShell } from "./shell-env";
 import { ChatSessionManager } from "../core/chat-session-manager";
@@ -47,16 +48,22 @@ export default class TmdPlugin extends Plugin {
   pluginUpdater!: PluginUpdater;
   obsidianCliStatus: ObsidianCliStatus = { available: false };
   private readonly obsidianCli = new ObsidianCliService();
+  private readonly modelNamesByProvider = new Map<string, string[]>();
   private runtime!: AnteRuntime;
   private pluginData: TmdPluginData = {};
   private pluginUpdateState: { lastNotifiedVersion: string | null } = {
     lastNotifiedVersion: null
   };
+  // Serializes concurrent conversation switches to prevent race conditions.
+  private conversationSwitchLock: Promise<void> = Promise.resolve();
+  // Debounce timer for editor-change events.
+  private editorChangeDebounceTimer: number | null = null;
+  private delayedInitializationComplete = false;
+  private unsubscribeTaskEngine: (() => void) | null = null;
 
   async onload(): Promise<void> {
+    // Load settings first; defer slow shell/defaults reads to background.
     await this.loadSettings();
-    await this.loadAnteDefaults();
-    await this.loadShellEnv();
 
     this.hostAdapter = new ObsidianHostAdapter(this.app);
     this.anteUpdater = new AnteUpdater();
@@ -76,7 +83,10 @@ export default class TmdPlugin extends Plugin {
       () => this.getObsidianCliPromptBlock()
     );
     this.chatManager = new ChatSessionManager({ saveChatState: (chatState) => this.saveChatState(chatState) }, this.pluginData.chatState);
-    this.taskEngine.subscribe((state) => {
+    this.unsubscribeTaskEngine = this.taskEngine.subscribe((state) => {
+      for (const task of state.tasks) {
+        this.captureRuntimeModelList(task.runtimeSession);
+      }
       this.chatManager.syncFromTaskState(state);
     });
     this.mentionTrigger = new MentionTriggerService(this.app, this, () => this.settings.mentionTriggerDebug);
@@ -90,9 +100,28 @@ export default class TmdPlugin extends Plugin {
     this.registerMentionTrigger();
     void this.checkForPluginUpdateOnStartup();
     void this.refreshObsidianCliStatus();
+    void this.delayedInitialization();
+  }
+
+  // Runs slow I/O (shell env, ante defaults) in the background so onload stays fast.
+  private async delayedInitialization(): Promise<void> {
+    try {
+      await this.loadAnteDefaults();
+      await this.loadShellEnv();
+      this.delayedInitializationComplete = true;
+      console.info("[tmd] Plugin fully initialized");
+    } catch (error) {
+      console.error("[tmd] Failed to complete delayed initialization:", error);
+    }
   }
 
   async onunload(): Promise<void> {
+    if (this.editorChangeDebounceTimer != null) {
+      window.clearTimeout(this.editorChangeDebounceTimer);
+      this.editorChangeDebounceTimer = null;
+    }
+    this.unsubscribeTaskEngine?.();
+
     this.mentionTrigger?.destroy();
     await this.runtime?.persistActiveSession().catch(() => {});
     this.chatManager?.dispose();
@@ -170,35 +199,60 @@ export default class TmdPlugin extends Plugin {
   }
 
   async activateChatConversation(conversationId: string): Promise<void> {
-    if (this.chatManager.getActiveConversation().id === conversationId) {
-      return;
-    }
-    await this.handoffAnteSession(
-      () => {
-        this.chatManager.setActiveConversation(conversationId);
-      },
-      `Switching chat conversation · next=${conversationId}`
-    );
+    const work = this.conversationSwitchLock.then(async () => {
+      if (this.chatManager.getActiveConversation().id === conversationId) {
+        return;
+      }
+      await this.handoffAnteSession(
+        () => {
+          this.chatManager.setActiveConversation(conversationId);
+        },
+        `Switching chat conversation · next=${conversationId}`
+      );
+    });
+    // Swallow errors at the lock level so a failed switch doesn't break the chain.
+    this.conversationSwitchLock = work.catch((error) => {
+      console.error("[tmd] Failed to switch conversation:", error);
+      new Notice("Failed to switch conversation. Please try again.");
+    });
+    return work;
   }
 
-  async createChatConversation(context?: ContextSnapshot | null): Promise<void> {
-    await this.handoffAnteSession(
-      () => {
-        this.chatManager.createConversation({ context: context ?? undefined });
-      },
-      "Creating new chat conversation"
-    );
+  async createChatConversation(context?: ContextSnapshot | null, options?: { forceNew?: boolean }): Promise<ChatConversationRecord> {
+    let conversation: ChatConversationRecord | null = null;
+    const work = this.conversationSwitchLock.then(async () => {
+      await this.handoffAnteSession(
+        () => {
+          conversation = this.chatManager.createConversation({
+            context: context ?? undefined,
+            forceNew: options?.forceNew
+          });
+        },
+        "Creating new chat conversation"
+      );
+    });
+    this.conversationSwitchLock = work.catch((error) => {
+      console.error("[tmd] Failed to create conversation:", error);
+    });
+    await work;
+    return conversation ?? this.chatManager.getActiveConversation();
   }
 
   async deleteChatConversation(conversationId: string): Promise<void> {
-    const sessionId = this.chatManager.getConversationRuntimeSessionId(conversationId);
-    const activeSessionId = this.runtime.getActiveSessionId();
-    console.info(
-      "[tmd session]",
-      `Deleting chat conversation · id=${conversationId} · session=${sessionId ?? "none"} · active=${activeSessionId ?? "none"}`
-    );
-    const removedTaskIds = this.chatManager.removeConversation(conversationId);
-    this.taskEngine.clearTasks(removedTaskIds);
+    const work = this.conversationSwitchLock.then(async () => {
+      const sessionId = this.chatManager.getConversationRuntimeSessionId(conversationId);
+      const activeSessionId = this.runtime.getActiveSessionId();
+      console.info(
+        "[tmd session]",
+        `Deleting chat conversation · id=${conversationId} · session=${sessionId ?? "none"} · active=${activeSessionId ?? "none"}`
+      );
+      const removedTaskIds = this.chatManager.removeConversation(conversationId);
+      this.taskEngine.clearTasks(removedTaskIds);
+    });
+    this.conversationSwitchLock = work.catch((error) => {
+      console.error("[tmd] Failed to delete conversation:", error);
+    });
+    return work;
   }
 
   async persistIdleAnteSession(): Promise<void> {
@@ -371,6 +425,36 @@ export default class TmdPlugin extends Plugin {
     };
   }
 
+  getModelNamesForProvider(provider: string, currentModel?: string): string[] {
+    const models = this.getAvailableModelNamesForProvider(provider);
+    const current = currentModel?.trim();
+    if (models.length === 0 && current) {
+      return [current, ...models];
+    }
+    return [...models];
+  }
+
+  getAvailableModelNamesForProvider(provider: string): string[] {
+    return [...(this.modelNamesByProvider.get(provider.trim()) ?? [])];
+  }
+
+  async warmAnteModelCatalog(target?: { provider: string; model: string; thinking: AnteThinkingPreference }): Promise<void> {
+    if (!this.isAnteInstalled()) {
+      return;
+    }
+    await this.runtime.ensureWarmSession(target);
+    this.captureRuntimeModelList(this.runtime.getActiveSessionInfo());
+  }
+
+  private captureRuntimeModelList(session: TaskRecord["runtimeSession"] | null | undefined): void {
+    const provider = session?.activeProvider?.trim();
+    const models = session?.availableModels?.map((model) => model.trim()).filter(Boolean) ?? [];
+    if (!provider || models.length === 0) {
+      return;
+    }
+    this.modelNamesByProvider.set(provider, [...new Set(models)]);
+  }
+
   getResolvedAnteThinking(): AnteThinkingLevel | null {
     return resolveAnteThinkingPreference(this.settings.anteThinking);
   }
@@ -474,9 +558,16 @@ export default class TmdPlugin extends Plugin {
   }
 
   private registerMentionTrigger(): void {
+    // Debounce editor-change to avoid firing mention detection on every keystroke.
     this.registerEvent(
       this.app.workspace.on("editor-change", (editor) => {
-        void this.mentionTrigger.handleEditorChange(editor);
+        if (this.editorChangeDebounceTimer != null) {
+          window.clearTimeout(this.editorChangeDebounceTimer);
+        }
+        this.editorChangeDebounceTimer = window.setTimeout(() => {
+          void this.mentionTrigger.handleEditorChange(editor);
+          this.editorChangeDebounceTimer = null;
+        }, 150);
       })
     );
   }

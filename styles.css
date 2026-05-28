@@ -823,6 +823,33 @@ button.tmd-diff-file-main {
   width: 100%;
 }
 
+.tmd-provider-switch-modal .modal {
+  width: min(480px, calc(100vw - 48px));
+}
+
+.tmd-provider-switch-modal h3 {
+  margin: 0 0 10px;
+}
+
+.tmd-provider-switch-modal p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.tmd-provider-switch-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 58%, transparent);
+}
+
+.tmd-provider-switch-actions button {
+  min-width: 112px;
+}
+
 .tmd-diff-file-chevron {
   display: inline-grid;
   place-items: center;
@@ -1331,7 +1358,7 @@ button.tmd-diff-file-main {
   display: grid;
   position: relative;
   grid-template-rows: auto auto minmax(0, 1fr);
-  min-width: 0;
+  min-width: 300px;
   min-height: 0;
   overflow: hidden;
   border-radius: var(--tmd-radius-lg) 0 0 var(--tmd-radius-lg);
@@ -1830,6 +1857,7 @@ button.tmd-diff-file-main {
   backdrop-filter: blur(14px) saturate(1.08);
   -webkit-backdrop-filter: blur(14px) saturate(1.08);
   pointer-events: none;
+  container-type: inline-size;
 }
 
 .tmd-chat-input-shell {
@@ -1895,9 +1923,10 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-picker {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
   min-width: 0;
   height: 20px;
   padding: 0 14px 0 0;
@@ -1908,7 +1937,7 @@ button.tmd-diff-file-main {
   font-family: var(--font-text);
   font-size: 11px;
   font-weight: 600;
-  line-height: 1;
+  line-height: 20px;
   box-shadow: none !important;
   outline: none;
   opacity: 0.9;
@@ -1918,18 +1947,18 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-provider-picker {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   max-width: 72px;
 }
 
 .tmd-chat-model-picker {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   max-width: 168px;
   text-align: left;
 }
 
 .tmd-chat-thinking-picker {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   max-width: 96px;
   text-align: left;
 }
@@ -1961,6 +1990,22 @@ button.tmd-diff-file-main {
 .tmd-chat-picker:focus-visible::after {
   border-right-color: color-mix(in srgb, var(--text-normal) 92%, transparent);
   border-bottom-color: color-mix(in srgb, var(--text-normal) 92%, transparent);
+}
+
+@container (max-width: 380px) {
+  .tmd-chat-composer-meta {
+    gap: 8px;
+  }
+}
+
+@container (max-width: 320px) {
+  .tmd-chat-composer-meta {
+    gap: 6px;
+    right: 52px;
+  }
+  .tmd-chat-picker {
+    font-size: 10px;
+  }
 }
 
 .tmd-chat-input {
@@ -2723,4 +2768,18 @@ button.tmd-diff-file-main {
   100% {
     opacity: 0.18;
   }
+}
+
+@keyframes tmd-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tmd-spin svg,
+svg.tmd-spin {
+  animation: tmd-spin 1.2s linear infinite;
 }

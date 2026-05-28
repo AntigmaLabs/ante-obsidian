@@ -16,34 +16,15 @@ export type AnteProvider =
   | typeof ANTIX_PROVIDER;
 export type AnteConnectionMode = "stdio" | "websocket";
 
-export const PROVIDER_MODELS: Record<AnteProvider, readonly string[]> = {
-  [OPENAI_PROVIDER]: ["gpt-5.1-codex", "gpt-5.3-codex", "gpt-5.4"],
-  [GEMINI_PROVIDER]: ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-3.1-pro-preview"],
-  [ANTHROPIC_PROVIDER]: ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-sonnet-4-6", "claude-opus-4-6"],
-  [ANTIX_PROVIDER]: [
-    "qwen3.5-flash",
-    "gemini-3.1-flash-lite-preview",
-    "qwen3.5-plus",
-    "qwen3.6-plus",
-    "gemini-3.1-pro-preview",
-    "claude-haiku-4-5",
-    "claude-sonnet-4-5",
-    "claude-sonnet-4-6",
-    "claude-opus-4-6",
-    "gpt-4o",
-    "gpt-5.4",
-    "gpt-5.3-codex"
-  ]
-};
+export const DEFAULT_ANTE_MODEL = "gpt-5.4";
 
-export const getDefaultModelForProvider = (provider: AnteProvider): string =>
-  provider === GEMINI_PROVIDER
-    ? "gemini-3-flash-preview"
-    : provider === ANTHROPIC_PROVIDER
-      ? "claude-sonnet-4-5"
-      : provider === ANTIX_PROVIDER
-        ? "qwen3.5-flash"
-        : "gpt-5.4";
+// Unified provider configuration - single source of truth
+export const AVAILABLE_PROVIDERS = [
+  { id: OPENAI_PROVIDER, label: "OpenAI Subscription" },
+  { id: GEMINI_PROVIDER, label: "Gemini API" },
+  { id: ANTHROPIC_PROVIDER, label: "Anthropic API" },
+  { id: ANTIX_PROVIDER, label: "Antix" },
+] as const;
 
 export const normalizeProvider = (provider: string): AnteProvider =>
   provider === GEMINI_PROVIDER
@@ -77,7 +58,7 @@ export const DEFAULT_SETTINGS: TmdSettings = {
   wsAddress: "127.0.0.1:8765",
   useAnteDefaults: true,
   allowObsidianCli: true,
-  anteModel: getDefaultModelForProvider(OPENAI_PROVIDER),
+  anteModel: DEFAULT_ANTE_MODEL,
   anteThinking: ANTE_DEFAULT_THINKING,
   anteProvider: OPENAI_PROVIDER,
   autoApproveAnteTools: true,
@@ -164,11 +145,7 @@ const normalizeBuiltinPresetPreferences = (raw: unknown): BuiltinPresetPreferenc
 export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefined): TmdSettings => {
   const raw = stored ?? {};
   const anteProvider = normalizeProvider(typeof raw.anteProvider === "string" ? raw.anteProvider : DEFAULT_SETTINGS.anteProvider);
-  const providerModels = PROVIDER_MODELS[anteProvider];
-  const requestedModel = typeof raw.anteModel === "string" ? raw.anteModel.trim() : "";
-  const anteModel = providerModels.includes(requestedModel as (typeof providerModels)[number])
-    ? requestedModel
-    : getDefaultModelForProvider(anteProvider);
+  const anteModel = typeof raw.anteModel === "string" ? raw.anteModel.trim() : DEFAULT_SETTINGS.anteModel;
   const anteThinking = normalizeAnteThinkingPreference(raw.anteThinking);
 
   return {

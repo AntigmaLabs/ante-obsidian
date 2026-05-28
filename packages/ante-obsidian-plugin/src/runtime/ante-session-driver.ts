@@ -1,10 +1,17 @@
 import { buildInteractivePrompt } from "../core/runtime-prompt";
 import {
   ANTE_DEFAULT_THINKING,
-  resolveAnteThinkingPreference
+  resolveAnteThinkingPreference,
+  type AnteThinkingPreference
 } from "../core/ante-thinking";
-import type { RuntimeApprovalDecision, RuntimeApprovalRequest, TaskRequest } from "../core/types";
-import { extractErrorMessage, extractSessionId, getVariant } from "./ante-event-parser";
+import type { RuntimeApprovalDecision, RuntimeApprovalRequest, RuntimeSessionInfo, TaskRequest } from "../core/types";
+import {
+  extractErrorMessage,
+  extractSessionId,
+  extractSessionModelSpec,
+  extractSessionProviderSpec,
+  getVariant
+} from "./ante-event-parser";
 import { buildApprovalResponseOperation } from "./ante-approval";
 import { reduceRunVariant, type ActiveRun } from "./ante-run-event-reducer";
 import type { AnteRuntime, RuntimeObserver } from "./ante-runtime";
@@ -55,6 +62,11 @@ export class AnteSessionDriver implements AnteRuntime {
   private interruptState: InterruptState | null = null;
   private lastSentContextFingerprint: string | null = null;
   private pendingSessionTargetSignature: string | null = null;
+  private activeSessionDetails: {
+    activeProvider?: string;
+    activeModel?: string;
+    availableModels?: string[];
+  } = {};
 
   constructor(
     private readonly getConfig: () => AnteRuntimeConfig,
@@ -63,11 +75,23 @@ export class AnteSessionDriver implements AnteRuntime {
     this.lifecycle = new AnteSessionLifecycle(createTransport);
   }
 
-  async ensureWarmSession(): Promise<void> {
-    const config = this.getConfig();
+  async ensureWarmSession(target?: { provider: string; model: string; thinking: AnteThinkingPreference }): Promise<void> {
+    const config = target ? this.resolveTargetConfig(target) : this.getConfig();
     await this.lifecycle.ensureWarmSession(config, this.createTransportHooks(), (warmConfig) => {
       this.beginSession(warmConfig);
     });
+  }
+
+  getActiveSessionInfo(): RuntimeSessionInfo | null {
+    const sessionId = this.lifecycle.getActiveSessionId();
+    if (!sessionId) {
+      return null;
+    }
+    return {
+      provider: "ante",
+      sessionId,
+      ...this.activeSessionDetails
+    };
   }
 
   run(request: TaskRequest, observer: RuntimeObserver): void {
@@ -216,8 +240,8 @@ export class AnteSessionDriver implements AnteRuntime {
       observer.onExit({ status: "failed", error: "Ante command is required" });
       return;
     }
-    if (!config.model.trim() || !config.provider.trim()) {
-      observer.onExit({ status: "failed", error: "Ante model and provider are required" });
+    if (!config.provider.trim()) {
+      observer.onExit({ status: "failed", error: "Ante provider is required" });
       return;
     }
     if (this.activeRun) {
@@ -282,7 +306,12 @@ export class AnteSessionDriver implements AnteRuntime {
 
     const activeSessionId = this.lifecycle.getActiveSessionId();
     if (activeSessionId) {
-      observer.onEvent({ type: "runtime.session", provider: "ante", sessionId: activeSessionId });
+      observer.onEvent({
+        type: "runtime.session",
+        provider: "ante",
+        sessionId: activeSessionId,
+        ...this.activeSessionDetails
+      });
     }
     this.sendUserInput(request);
   }
@@ -347,6 +376,13 @@ export class AnteSessionDriver implements AnteRuntime {
     switch (variantName) {
       case "SessionStart": {
         const sessionId = extractSessionId(payload) ?? crypto.randomUUID();
+        const modelSpec = extractSessionModelSpec(payload);
+        const providerSpec = extractSessionProviderSpec(payload);
+        this.activeSessionDetails = {
+          activeProvider: providerSpec?.name,
+          activeModel: modelSpec?.name,
+          availableModels: providerSpec?.preferredModels.map((model) => model.name)
+        };
         this.lifecycle.resolveWarmup(sessionId);
         this.lifecycle.handleSessionStart(sessionId, emitDiagnosticLog);
         emitDiagnosticLog(
@@ -357,7 +393,12 @@ export class AnteSessionDriver implements AnteRuntime {
           return true;
         }
         this.activeRun.sessionReadyAtMs = performance.now();
-        this.activeRun.observer.onEvent({ type: "runtime.session", provider: "ante", sessionId });
+        this.activeRun.observer.onEvent({
+          type: "runtime.session",
+          provider: "ante",
+          sessionId,
+          ...this.activeSessionDetails
+        });
         return true;
       }
       case "Error": {
@@ -400,6 +441,18 @@ export class AnteSessionDriver implements AnteRuntime {
         );
         return true;
       case "SessionUpdated":
+        {
+          const modelSpec = extractSessionModelSpec(payload);
+          const providerSpec = extractSessionProviderSpec(payload);
+          this.activeSessionDetails = {
+            activeProvider: providerSpec?.name ?? this.activeSessionDetails.activeProvider,
+            activeModel: modelSpec?.name ?? this.activeSessionDetails.activeModel,
+            availableModels:
+              providerSpec && providerSpec.preferredModels.length > 0
+                ? providerSpec.preferredModels.map((model) => model.name)
+                : this.activeSessionDetails.availableModels
+          };
+        }
         this.lifecycle.handleSessionUpdated(emitDiagnosticLog);
         if (this.pendingSessionTargetSignature) {
           this.lifecycle.setSessionTargetSignature(this.pendingSessionTargetSignature);
@@ -556,14 +609,21 @@ export class AnteSessionDriver implements AnteRuntime {
     if (!request.runtimeTarget) {
       return config;
     }
+    return this.resolveTargetConfig(request.runtimeTarget);
+  }
+
+  private resolveTargetConfig(
+    target: { provider: string; model: string; thinking: AnteThinkingPreference }
+  ): AnteRuntimeConfig {
+    const config = this.getConfig();
     return {
       ...config,
-      provider: request.runtimeTarget.provider.trim(),
-      model: request.runtimeTarget.model.trim(),
+      provider: target.provider.trim(),
+      model: target.model.trim(),
       thinking:
-        request.runtimeTarget.thinking === ANTE_DEFAULT_THINKING
+        target.thinking === ANTE_DEFAULT_THINKING
           ? config.thinking
-          : resolveAnteThinkingPreference(request.runtimeTarget.thinking)
+          : resolveAnteThinkingPreference(target.thinking)
     };
   }
 

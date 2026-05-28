@@ -20,7 +20,7 @@ export const BUILTIN_PRESETS: Record<PresetId, PresetDefinition> = {
     label: "@ante research",
     goal: "Expand the current topic into a research-oriented Markdown block.",
     systemInstructions:
-      "Structure the output as: 问题, 背景, 关键观点, 风险或反例, 后续问题. Prefer append-block unless the user clearly asked for another operation.",
+      "Structure the output as: Questions, Background, Key Insights, Risks or Counterexamples, Follow-up Questions. Prefer appending to the document unless the user clearly asked for another operation.",
     source: "builtin",
     enabled: true,
     sortOrder: 1,
@@ -31,7 +31,7 @@ export const BUILTIN_PRESETS: Record<PresetId, PresetDefinition> = {
     label: "@ante plan",
     goal: "Turn the current idea into an actionable plan block.",
     systemInstructions:
-      "Structure the output as: 目标, 前置条件, 步骤, 验收标准, 风险与待确认项. Prefer append-block unless the user clearly asked for another operation.",
+      "Structure the output as: Objectives, Prerequisites, Steps, Acceptance Criteria, Risks and Open Questions. Prefer appending to the document unless the user clearly asked for another operation.",
     source: "builtin",
     enabled: true,
     sortOrder: 2,
@@ -42,7 +42,7 @@ export const BUILTIN_PRESETS: Record<PresetId, PresetDefinition> = {
     label: "@ante summary",
     goal: "Summarize the selected Markdown content into a concise, useful block.",
     systemInstructions:
-      "Structure the output as: 摘要, 关键点, 待跟进项. Prefer append-block unless the user clearly asked for another operation.",
+      "Structure the output as: Summary, Key Points, Next Steps. Prefer appending to the document unless the user clearly asked for another operation.",
     source: "builtin",
     enabled: true,
     sortOrder: 3,

@@ -32,9 +32,8 @@ For more structured research, planning, or summarization, use presets from the c
 - If you have selected text, Ante Obsidian uses the selection first.
 - If there is no selection, Ante Obsidian tries to use the current paragraph around the cursor.
 - The plugin inserts a temporary running placeholder into the note.
-- If Ante returns plain text, the placeholder is replaced with the final content.
-- If Ante returns inline Markdown changes, Ante Obsidian applies the changes directly and leaves a success message in the note.
-- If Ante returns file-level or multi-file changes, Ante Obsidian applies them directly.
+- Ante will evaluate your request and use its tools to edit the document directly or return plain text.
+- Once the tools finish executing, the changes will appear in your document and the placeholder will be removed.
 
 ### Typical Uses
 

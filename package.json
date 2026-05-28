@@ -1,6 +1,6 @@
 {
   "name": "ante-obsidian",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "private": true,
   "license": "MIT",
   "description": "Obsidian desktop plugin for Ante-powered terminal Markdown workflows with diff previews and Chat with Ante.",
@@ -12,7 +12,9 @@
     "build:release": "npm run build && node scripts/package-release.cjs",
     "dev": "npm run sync-version && npm run build -w @antigma/ante-sdk && node esbuild.config.mjs",
     "probe": "node scripts/ante-protocol-probe.cjs",
+    "release:context": "node scripts/collect-release-context.cjs",
     "release:package": "node scripts/package-release.cjs",
+    "release:prepare": "npm run build && node scripts/package-release.cjs && node scripts/collect-release-context.cjs",
     "smoke": "node scripts/ante-smoke.cjs",
     "sync-version": "node scripts/sync-version.cjs",
     "test": "npm run build -w @antigma/ante-sdk && node --import tsx --test \"packages/*/tests/**/*.test.ts\"",

@@ -4,6 +4,8 @@ import { homedir } from "node:os";
 import {
   extractErrorMessage,
   extractInfoMessage,
+  extractSessionModelSpec,
+  extractSessionProviderSpec,
   extractTurnPauseApproval,
   extractTurnStatus,
   extractUsage,
@@ -175,6 +177,39 @@ test("extractInfoMessage prefers structured text fields", () => {
     }),
     "context compacted"
   );
+});
+
+test("SessionStart provider spec exposes preferred models", () => {
+  const payload = {
+    model: {
+      name: "gpt-5.4",
+      description: "GPT-5.4 model powering Codex and Codex CLI",
+      thinking: "Enabled"
+    },
+    provider: {
+      name: "openai-subscription",
+      display_name: "OpenAI Subscription",
+      preferred_models: [
+        { name: "gpt-5.5", description: "Latest model" },
+        { name: "gpt-5.4", thinking: "Enabled" }
+      ]
+    }
+  };
+
+  assert.deepEqual(extractSessionModelSpec(payload), {
+    name: "gpt-5.4",
+    description: "GPT-5.4 model powering Codex and Codex CLI",
+    thinking: "Enabled"
+  });
+  assert.deepEqual(extractSessionProviderSpec(payload), {
+    name: "openai-subscription",
+    displayName: "OpenAI Subscription",
+    baseUrl: undefined,
+    preferredModels: [
+      { name: "gpt-5.5", description: "Latest model", thinking: undefined },
+      { name: "gpt-5.4", description: undefined, thinking: "Enabled" }
+    ]
+  });
 });
 
 test("resolveCommandPath falls back to ~/.ante/bin for bare ante command", () => {

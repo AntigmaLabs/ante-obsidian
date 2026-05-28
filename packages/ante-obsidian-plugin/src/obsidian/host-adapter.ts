@@ -53,22 +53,79 @@ export class ObsidianHostAdapter implements HostAdapter {
 
   async applyDocumentChange(change: DocumentChangeArtifact): Promise<void> {
     const targetPath = getArtifactTargetPath(change);
-    const nextText = change.stagedPath ? await readFsFile(change.stagedPath, "utf8") : change.afterText;
+
+    // Pre-read all content before any vault mutations so we never fail mid-operation.
+    let nextText: string;
+    try {
+      nextText = change.stagedPath
+        ? await readFsFile(change.stagedPath, "utf8")
+        : change.afterText;
+    } catch (error) {
+      throw new Error(
+        `Failed to read staged content: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`
+      );
+    }
+
     if (change.operation === "create-file") {
       const relativePath = this.requireVaultPath(targetPath);
       const existing = this.app.vault.getAbstractFileByPath(relativePath);
       if (existing) {
-        throw new Error(`File already exists: ${targetPath}`);
+        throw new Error(
+          `File already exists: ${targetPath}. Please choose a different name or delete the existing file.`
+        );
       }
-      await this.ensureFolderForPath(relativePath);
-      await this.app.vault.create(relativePath, nextText);
-      new Notice(`Created ${targetPath}`);
+      try {
+        await this.ensureFolderForPath(relativePath);
+        await this.app.vault.create(relativePath, nextText);
+        new Notice(`Created ${targetPath}`);
+      } catch (error) {
+        throw new Error(
+          `Failed to create file: ${
+            error instanceof Error ? error.message : "unknown error"
+          }`
+        );
+      }
       return;
     }
 
     const file = this.requireFile(targetPath);
-    await this.app.vault.modify(file, nextText);
-    new Notice(`Updated ${targetPath}`);
+
+    // Take a snapshot of the current on-disk content so we can roll back if modify() fails.
+    // vault.read() is used (not cachedRead) to guarantee we have the real persisted content.
+    let previousText: string;
+    try {
+      previousText = await this.app.vault.read(file);
+    } catch (error) {
+      throw new Error(
+        `Failed to read original file content: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`
+      );
+    }
+
+    try {
+      await this.app.vault.modify(file, nextText);
+      new Notice(`Updated ${targetPath}`);
+    } catch (error) {
+      try {
+        await this.app.vault.modify(file, previousText);
+        console.error("[tmd] File modification failed, restored original content:", error);
+      } catch (restoreError) {
+        console.error("[tmd] Failed to restore original file content:", restoreError);
+        throw new Error(
+          `Failed to update file: ${
+            error instanceof Error ? error.message : "unknown error"
+          }. Restoration also failed. Please manually restore from backup.`
+        );
+      }
+      throw new Error(
+        `Failed to update file: ${
+          error instanceof Error ? error.message : "unknown error"
+        }. Original content has been restored.`
+      );
+    }
   }
 
   async revertDocumentChange(change: DocumentChangeArtifact): Promise<void> {
@@ -76,15 +133,32 @@ export class ObsidianHostAdapter implements HostAdapter {
     if (change.operation === "create-file") {
       const file = this.getFile(targetPath);
       if (file instanceof TFile) {
-        await this.app.vault.delete(file);
-        new Notice(`Removed ${targetPath}`);
+        try {
+          await this.app.vault.delete(file);
+          new Notice(`Deleted ${targetPath}`);
+        } catch (error) {
+          throw new Error(
+            `Failed to delete file: ${
+              error instanceof Error ? error.message : "unknown error"
+            }`
+          );
+        }
       }
       return;
     }
 
     const file = this.requireFile(targetPath);
-    await this.app.vault.modify(file, change.beforeText);
-    new Notice(`Reverted ${targetPath}`);
+    
+    try {
+      await this.app.vault.modify(file, change.beforeText);
+      new Notice(`Reverted ${targetPath}`);
+    } catch (error) {
+      throw new Error(
+        `Failed to revert file: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`
+      );
+    }
   }
 
   async revealDocumentChange(change: DocumentChangeArtifact): Promise<void> {

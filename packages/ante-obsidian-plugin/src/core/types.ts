@@ -58,6 +58,9 @@ export interface LogEntry {
 export interface RuntimeSessionInfo {
   provider: "ante";
   sessionId: string;
+  activeProvider?: string;
+  activeModel?: string;
+  availableModels?: string[];
 }
 
 export interface RuntimeApprovalTool {
@@ -194,7 +197,14 @@ export interface TaskRequest {
 
 export type RuntimeEvent =
   | { type: "log"; stream: LogStream; text: string }
-  | { type: "runtime.session"; provider: "ante"; sessionId: string }
+  | {
+      type: "runtime.session";
+      provider: "ante";
+      sessionId: string;
+      activeProvider?: string;
+      activeModel?: string;
+      availableModels?: string[];
+    }
   | { type: "session.approval"; approval: RuntimeApprovalRequest }
   | { type: "session.tool"; phase: "start" | "end"; tool: RuntimeToolCall }
   | { type: "process.update"; process?: RuntimeProcessLane }

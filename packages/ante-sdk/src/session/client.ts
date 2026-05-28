@@ -7,6 +7,8 @@ import {
   buildProcessLaneFromToolPayload,
   extractErrorMessage,
   extractInfoMessage,
+  extractSessionModelSpec,
+  extractSessionProviderSpec,
   extractSessionId,
   extractText,
   extractToolCall,
@@ -163,14 +165,18 @@ export class AnteProtocolClient implements AnteClient {
     switch (name) {
       case "SessionStart": {
         this.sessionId = extractSessionId(payload) ?? this.sessionId;
+        const modelSpec = extractSessionModelSpec(payload);
+        const providerSpec = extractSessionProviderSpec(payload);
         this.resolvePendingSession(this.sessionId);
         this.emit({
           type: "system",
           subtype: "init",
           session_id: this.sessionId ?? "",
           cwd: this.options.cwd,
-          model: this.options.model,
-          provider: this.options.provider,
+          model: modelSpec?.name ?? this.options.model,
+          provider: providerSpec?.name ?? this.options.provider,
+          modelSpec: modelSpec ?? undefined,
+          providerSpec: providerSpec ?? undefined,
           permissionMode: this.options.permissionMode
         });
         return;

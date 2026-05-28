@@ -45,6 +45,19 @@ export interface Usage {
   raw?: unknown;
 }
 
+export interface ModelSpec {
+  name: string;
+  description?: string;
+  thinking?: AnteThinkingLevel | string;
+}
+
+export interface ProviderSpec {
+  name: string;
+  displayName?: string;
+  baseUrl?: string;
+  preferredModels: ModelSpec[];
+}
+
 export interface ProcessStep {
   id: string;
   label: string;
@@ -65,7 +78,17 @@ export type SDKUserMessage = {
 };
 
 export type SDKMessage =
-  | { type: "system"; subtype: "init"; session_id: string; cwd: string; model: string; provider: string; permissionMode: PermissionMode }
+  | {
+      type: "system";
+      subtype: "init";
+      session_id: string;
+      cwd: string;
+      model: string;
+      provider: string;
+      permissionMode: PermissionMode;
+      modelSpec?: ModelSpec;
+      providerSpec?: ProviderSpec;
+    }
   | { type: "assistant"; message: { content: Array<{ type: "text"; text: string }> }; session_id?: string }
   | { type: "stream_event"; event: { type: "text_delta" | "thinking_delta"; text: string }; session_id?: string }
   | { type: "tool"; phase: "start" | "end"; tool: ToolCall; session_id?: string }

@@ -6,10 +6,31 @@ const packageJsonPath = join(repoRoot, "package.json");
 const pluginPackageJsonPath = join(repoRoot, "packages", "ante-obsidian-plugin", "package.json");
 const manifestJsonPath = join(repoRoot, "manifest.json");
 const versionsJsonPath = join(repoRoot, "versions.json");
+const readmePaths = [
+  join(repoRoot, "README.md"),
+  join(repoRoot, "README.zh-CN.md")
+];
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const writeJson = (path, value) => {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+};
+
+const syncReleaseBadge = (path, version) => {
+  const content = readFileSync(path, "utf8");
+  const badgePattern =
+    /https:\/\/img\.shields\.io\/badge\/Release-v\d+\.\d+\.\d+-purple/g;
+  const matches = content.match(badgePattern);
+  if (!matches) {
+    throw new Error(`Missing static release badge in ${path}`);
+  }
+
+  const nextContent = content.replace(
+    badgePattern,
+    `https://img.shields.io/badge/Release-v${version}-purple`
+  );
+
+  writeFileSync(path, nextContent, "utf8");
 };
 
 const packageJson = readJson(packageJsonPath);
@@ -39,5 +60,8 @@ const nextVersionsJson = {
 writeJson(manifestJsonPath, manifestJson);
 writeJson(pluginPackageJsonPath, pluginPackageJson);
 writeJson(versionsJsonPath, nextVersionsJson);
+for (const readmePath of readmePaths) {
+  syncReleaseBadge(readmePath, version);
+}
 
-console.log(`Synced version ${version} to manifest.json, versions.json, and ante-obsidian-plugin package.json`);
+console.log(`Synced version ${version} to manifest.json, versions.json, ante-obsidian-plugin package.json, and README release badges`);

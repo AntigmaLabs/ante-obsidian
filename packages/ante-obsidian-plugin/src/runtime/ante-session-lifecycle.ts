@@ -81,7 +81,7 @@ export class AnteSessionLifecycle {
     hooks: AnteTransportHooks,
     beginSession: (config: AnteRuntimeConfig) => void
   ): Promise<void> {
-    if (!config.command.trim() || !config.model.trim() || !config.provider.trim()) {
+    if (!config.command.trim() || !config.provider.trim()) {
       return;
     }
 

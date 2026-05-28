@@ -183,7 +183,6 @@ test("non-approval TurnPause still emits a log when auto-approve is enabled", ()
       }
     })
   );
-
   assert.equal(events.length, 1);
   assert.match(events[0]?.text ?? "", /Ante TurnPause/);
 });
@@ -438,6 +437,58 @@ test("runtime target think level is forwarded when starting a fresh session", as
       thinking: "Max"
     }
   });
+});
+
+test("SessionStart preferred models are surfaced on runtime session events", async () => {
+  const transport = new FakeTransport();
+  const driver = new TestSessionDriver(() => config, () => transport);
+  const events: Array<{
+    type: string;
+    sessionId?: string;
+    activeProvider?: string;
+    activeModel?: string;
+    availableModels?: string[];
+  }> = [];
+
+  driver.run(
+    {
+      ...request,
+      kind: "chat",
+      triggerSource: "chat",
+      mode: "initial"
+    },
+    {
+      onEvent: (event) => {
+        if (event.type === "runtime.session") {
+          events.push(event);
+        }
+      },
+      onExit: () => {}
+    }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  driver.emit(
+    JSON.stringify({
+      event: {
+        SessionStart: {
+          session_id: "ses_models",
+          model: { name: "gpt-5.4" },
+          provider: {
+            name: "openai-subscription",
+            preferred_models: [{ name: "gpt-5.5" }, { name: "gpt-5.4" }]
+          }
+        }
+      }
+    })
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.sessionId, "ses_models");
+  assert.equal(events[0]?.activeProvider, "openai-subscription");
+  assert.equal(events[0]?.activeModel, "gpt-5.4");
+  assert.deepEqual(events[0]?.availableModels, ["gpt-5.5", "gpt-5.4"]);
 });
 
 test("resuming a different saved session on a compatible transport does not report reuse", async () => {

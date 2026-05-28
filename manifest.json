@@ -1,9 +1,9 @@
 {
   "id": "ante-obsidian",
   "name": "Ante Obsidian",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "minAppVersion": "1.6.0",
-  "description": "AI second brian, continous ingestion, indexing, and evolving. Powered by Ante agent core from Antigma Labs ",
+  "description": "AI second brain, continuous ingestion, indexing, and evolving. Powered by Ante agent core from Antigma Labs",
   "author": "Antigma Labs",
   "isDesktopOnly": true
 }

@@ -149,9 +149,8 @@ const emptyRuntime = () => ({
   artifactIds: [] as string[]
 });
 
-const STRUCTURED_JSON_TYPE_PATTERN = /"type"\s*:\s*"(text|change|changes)"/;
+const STRUCTURED_JSON_TYPE_PATTERN = /"type"\s*:\s*"text"/;
 const STRUCTURED_TEXT_TYPE_PATTERN = /"type"\s*:\s*"text"/;
-const STRUCTURED_CHANGE_TYPE_PATTERN = /"type"\s*:\s*"(change|changes)"/;
 
 const extractJsonCandidates = (text: string): string[] => {
   const trimmed = text.trim();
@@ -241,10 +240,6 @@ const extractStructuredStreamingText = (text: string): string | null => {
       continue;
     }
 
-    if (STRUCTURED_CHANGE_TYPE_PATTERN.test(candidate)) {
-      return "";
-    }
-
     if (!STRUCTURED_TEXT_TYPE_PATTERN.test(candidate)) {
       return "";
     }
@@ -281,12 +276,7 @@ const extractStructuredStreamingText = (text: string): string | null => {
 };
 
 const shouldHideStructuredStreamingText = (text: string): boolean => {
-  return extractJsonCandidates(text).some(
-    (candidate) =>
-      candidate.startsWith("{") &&
-      STRUCTURED_JSON_TYPE_PATTERN.test(candidate) &&
-      STRUCTURED_CHANGE_TYPE_PATTERN.test(candidate)
-  );
+  return false;
 };
 
 const isRecoverableConversationSession = (task: TaskRecord): boolean => Boolean(task.runtimeSession?.sessionId && task.endedAt);
@@ -362,9 +352,9 @@ export class ChatSessionManager {
     };
   }
 
-  createConversation(options?: { title?: string; context?: ContextSnapshot | null }): ChatConversationRecord {
+  createConversation(options?: { title?: string; context?: ContextSnapshot | null; forceNew?: boolean }): ChatConversationRecord {
     const requestedTitle = options?.title?.trim() || "New chat";
-    if (requestedTitle === "New chat") {
+    if (requestedTitle === "New chat" && !options?.forceNew) {
       const existingDraft = sortConversations([...this.conversations.values()]).find((conversation) =>
         isEmptyDraftConversation(conversation)
       );

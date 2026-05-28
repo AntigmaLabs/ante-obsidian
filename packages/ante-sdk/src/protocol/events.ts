@@ -1,7 +1,9 @@
 import type {
   ApprovalRequest,
+  ModelSpec,
   ProcessLane,
   ProcessStep,
+  ProviderSpec,
   ToolCall,
   Usage
 } from "../types";
@@ -362,6 +364,77 @@ export const extractToolCall = (
 };
 
 export const extractSessionId = (value: unknown): string | null => getStringField(value, ["session_id", "sessionId", "id"]);
+
+export const extractModelSpec = (value: unknown): ModelSpec | null => {
+  if (typeof value === "string" && value.trim()) {
+    return { name: value.trim() };
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const name = typeof record.name === "string" ? record.name.trim() : "";
+  if (!name) {
+    return null;
+  }
+  return {
+    name,
+    description: typeof record.description === "string" && record.description.trim() ? record.description.trim() : undefined,
+    thinking: typeof record.thinking === "string" && record.thinking.trim() ? record.thinking.trim() : undefined
+  };
+};
+
+export const extractSessionModelSpec = (value: unknown): ModelSpec | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return extractModelSpec((value as Record<string, unknown>).model);
+};
+
+export const extractProviderSpec = (value: unknown): ProviderSpec | null => {
+  if (typeof value === "string" && value.trim()) {
+    return { name: value.trim(), preferredModels: [] };
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const name = typeof record.name === "string" ? record.name.trim() : "";
+  if (!name) {
+    return null;
+  }
+  const rawModels = Array.isArray(record.preferred_models)
+    ? record.preferred_models
+    : Array.isArray(record.preferredModels)
+      ? record.preferredModels
+      : [];
+  return {
+    name,
+    displayName:
+      typeof record.display_name === "string" && record.display_name.trim()
+        ? record.display_name.trim()
+        : typeof record.displayName === "string" && record.displayName.trim()
+          ? record.displayName.trim()
+          : undefined,
+    baseUrl:
+      typeof record.base_url === "string" && record.base_url.trim()
+        ? record.base_url.trim()
+        : typeof record.baseUrl === "string" && record.baseUrl.trim()
+          ? record.baseUrl.trim()
+          : undefined,
+    preferredModels: rawModels.flatMap((entry) => {
+      const model = extractModelSpec(entry);
+      return model ? [model] : [];
+    })
+  };
+};
+
+export const extractSessionProviderSpec = (value: unknown): ProviderSpec | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return extractProviderSpec((value as Record<string, unknown>).provider);
+};
 
 export const extractTurnStatus = (value: unknown): string | null => {
   const direct = getStringField(value, ["status", "finish_reason", "finishReason"]);
