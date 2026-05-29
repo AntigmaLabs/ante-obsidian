@@ -19,7 +19,7 @@ curl -sS https://raw.githubusercontent.com/AntigmaLabs/ante-obsidian/main/script
 ### 手动解压
 
 1. 打开 Ante Obsidian 在 GitHub 上的最新 Release 页面。
-2. 下载插件发布压缩包（例如 `ante-0.6.3.zip`），请勿下载源码包。
+2. 下载插件发布压缩包（例如 `ante-0.6.4.zip`），请勿下载源码包。
 3. 解压后将得到的 `ante/` 文件夹放到你的 Vault 插件目录下：
    `<your-vault>/.obsidian/plugins/`
 4. 打开 Obsidian，在 `Settings -> Community plugins` 中启用 `Ante Obsidian`。

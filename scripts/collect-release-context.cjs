@@ -137,13 +137,14 @@ const versionsJson = readJson("versions.json");
 const changelog = parseChangelog();
 const tags = getTags();
 const latestTag = getLatestTag();
-const expectedCurrentTag = `v${packageJson.version}`;
+const expectedCurrentTag = packageJson.version;
+const legacyPrefixedCurrentTag = `v${packageJson.version}`;
 const currentVersionTag =
-  [expectedCurrentTag, packageJson.version].find((tag) => tags.includes(tag)) ||
+  [expectedCurrentTag].find((tag) => tags.includes(tag)) ||
   null;
 const currentVersionTagExists = currentVersionTag !== null;
 const latestChangelogTag = changelog.latest
-  ? [`v${changelog.latest.version}`, changelog.latest.version].find((tag) =>
+  ? [changelog.latest.version].find((tag) =>
       tags.includes(tag)
     ) || null
   : null;
@@ -167,6 +168,8 @@ const context = {
   release: {
     version: packageJson.version,
     expectedTag: expectedCurrentTag,
+    legacyPrefixedTag: legacyPrefixedCurrentTag,
+    legacyPrefixedTagExists: tags.includes(legacyPrefixedCurrentTag),
     currentVersionTag,
     currentVersionTagExists,
     latestTag,

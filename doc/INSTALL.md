@@ -19,7 +19,7 @@ Run the same command again to update an existing manual install in that vault. T
 ### Manual Extraction
 
 1. Open the latest Ante Obsidian release on GitHub.
-2. Download the plugin release archive (e.g., `ante-0.6.3.zip`).
+2. Download the plugin release archive (e.g., `ante-0.6.4.zip`). Do not download the source code archive.
 3. Extract the archive and place the `ante/` folder in `<your-vault>/.obsidian/plugins/`.
 4. Open Obsidian and enable `Ante Obsidian` in `Settings -> Community plugins`.
 

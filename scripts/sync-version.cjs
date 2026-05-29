@@ -19,7 +19,7 @@ const writeJson = (path, value) => {
 const syncReleaseBadge = (path, version) => {
   const content = readFileSync(path, "utf8");
   const badgePattern =
-    /https:\/\/img\.shields\.io\/badge\/Release-v\d+\.\d+\.\d+-purple/g;
+    /https:\/\/img\.shields\.io\/badge\/Release-v?\d+\.\d+\.\d+-purple/g;
   const matches = content.match(badgePattern);
   if (!matches) {
     throw new Error(`Missing static release badge in ${path}`);
@@ -27,7 +27,7 @@ const syncReleaseBadge = (path, version) => {
 
   const nextContent = content.replace(
     badgePattern,
-    `https://img.shields.io/badge/Release-v${version}-purple`
+    `https://img.shields.io/badge/Release-${version}-purple`
   );
 
   writeFileSync(path, nextContent, "utf8");

@@ -82,6 +82,60 @@ That updates:
 - `versions.json`
 - `packages/ante-obsidian-plugin/package.json`
 
+## Release Version Policy
+
+Use plain SemVer strings without a leading `v` for every Obsidian-facing release identifier.
+
+- `package.json.version`: `0.6.4`
+- `manifest.json.version`: `0.6.4`
+- `versions.json` key: `"0.6.4"`
+- Git tag: `0.6.4`
+- GitHub Release title: `0.6.4`
+- GitHub Release tag: `0.6.4`
+
+Do not publish Obsidian plugin releases with tags like `v0.6.4`. Obsidian resolves plugin assets by matching the GitHub Release tag exactly against `manifest.json.version`; a leading `v` makes the Community Plugin directory reject the release even when the package assets are present.
+
+The repository includes `.npmrc` with `tag-version-prefix=` so `npm version` creates plain version tags. Before creating a release, run:
+
+```bash
+npm run release:validate
+```
+
+That validation checks version sync, README release badges, `versions.json`, and the current release tag format.
+
+## GitHub Release Flow
+
+For each Obsidian plugin release:
+
+1. Update `package.json.version` to the plain SemVer version.
+2. Run `npm run sync-version`.
+3. Update `doc/CHANGELOG.md` with a heading like `## 0.6.4 - YYYY-MM-DD`.
+4. Run `npm run typecheck`, `npm test`, and `npm run release:prepare`.
+5. Commit release metadata and release automation changes.
+6. Push `main`.
+7. Create and push an annotated tag matching the manifest version exactly:
+
+```bash
+VERSION=$(node -p "require('./package.json').version")
+git tag -a "$VERSION" -m "$VERSION"
+git push origin "$VERSION"
+```
+
+8. Create the GitHub Release against that exact tag:
+
+```bash
+gh release create "$VERSION" \
+  ".release/ante-${VERSION}.zip" \
+  ".release/main.js" \
+  ".release/manifest.json" \
+  ".release/styles.css" \
+  --repo AntigmaLabs/ante-obsidian \
+  --title "$VERSION" \
+  --notes-file ".release/release-notes.md" \
+  --draft \
+  --verify-tag
+```
+
 ## SDK Package Publishing
 
 The SDK package is `@antigma/ante-sdk`. It exposes:
