@@ -1,7 +1,7 @@
 # Ante Obsidian
 
 <p align="center">
-  <a href="https://github.com/AntigmaLabs/ante-obsidian/releases"><img src="https://img.shields.io/badge/Release-0.6.4-purple" alt="Latest Release" /></a>
+  <a href="https://github.com/AntigmaLabs/ante-obsidian/releases"><img src="https://img.shields.io/badge/Release-0.6.5-purple" alt="Latest Release" /></a>
   <a href="https://obsidian.md"><img src="https://img.shields.io/badge/Obsidian-v1.6.0%2B-blueviolet" alt="Obsidian Minimum Version" /></a>
   <a href="https://github.com/AntigmaLabs/ante-obsidian/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License" /></a>
 </p>
@@ -84,6 +84,8 @@ The plugin runs completely locally and relies on the `ante` runtime. Setup is fu
 ## ⚙️ How It Works (Architecture)
 
 Ante Obsidian leverages a lightweight, local-first agent architecture. It streams protocol messages directly over standard input/output (`stdin/stdout`) without needing PTY or heavy terminal emulation, ensuring maximum performance and complete privacy.
+
+The plugin is desktop-only because it launches the local Ante runtime and reads local Ante defaults from `~/.ante/settings.json`. Vault content is read and written through the Obsidian Vault API; temporary filesystem reads are limited to staged diff previews created by the plugin. Clipboard access is write-only and only happens after the user clicks a copy action.
 
 ```mermaid
 graph TD

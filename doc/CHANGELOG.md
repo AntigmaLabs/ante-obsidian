@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.5 - 2026-05-29
+
+- **Community Review Readiness**: Clarify desktop-only runtime, filesystem, Vault API, and clipboard behavior for Obsidian plugin review
+- **Marketplace Metadata**: Ensure the plugin manifest description follows Obsidian community plugin metadata checks
+- **Vault Access Scope**: Resolve vault files without full-vault enumeration during document change handling
+- **CSS Compatibility**: Clean up unsupported scrollbar declarations, duplicate style declarations, broad resets, and unnecessary important overrides
+
 ## 0.6.4 - 2026-05-29
 
 - **Plugin Update Guidance**: Keep the settings update check aligned with Obsidian's official update flow by opening the repository instead of running the manual installer inside the plugin

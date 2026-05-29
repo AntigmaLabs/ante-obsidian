@@ -231,25 +231,9 @@ export class ObsidianHostAdapter implements HostAdapter {
       return null;
     }
 
-    const vaultPath = this.getVaultPath();
-    const normalizedVaultPath = vaultPath ? this.normalizeLookupPath(vaultPath) : null;
-
-    for (const file of this.app.vault.getFiles()) {
-      const relativeCandidate = this.normalizeLookupPath(file.path);
-      if (relativeCandidate === normalizedInput) {
-        return file;
-      }
-
-      if (normalizedInput.endsWith(`/${relativeCandidate}`) || normalizedInput === relativeCandidate) {
-        return file;
-      }
-
-      if (normalizedVaultPath) {
-        const absoluteCandidate = this.normalizeLookupPath(`${normalizedVaultPath}/${file.path}`);
-        if (absoluteCandidate === normalizedInput) {
-          return file;
-        }
-      }
+    const linked = this.app.metadataCache.getFirstLinkpathDest(normalizedInput, "");
+    if (linked instanceof TFile) {
+      return linked;
     }
 
     return null;

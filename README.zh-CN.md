@@ -1,7 +1,7 @@
 # Ante Obsidian
 
 <p align="center">
-  <a href="https://github.com/AntigmaLabs/ante-obsidian/releases"><img src="https://img.shields.io/badge/Release-0.6.4-purple" alt="Latest Release" /></a>
+  <a href="https://github.com/AntigmaLabs/ante-obsidian/releases"><img src="https://img.shields.io/badge/Release-0.6.5-purple" alt="Latest Release" /></a>
   <a href="https://obsidian.md"><img src="https://img.shields.io/badge/Obsidian-v1.6.0%2B-blueviolet" alt="Obsidian Minimum Version" /></a>
   <a href="https://github.com/AntigmaLabs/ante-obsidian/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License" /></a>
 </p>
@@ -82,6 +82,8 @@ graph TD
     class Obsidian,Plugin,Notes default;
     class SDK,Runtime highlight;
 ```
+
+插件仅支持桌面端，因为它需要启动本地 Ante runtime，并读取 `~/.ante/settings.json` 中的本地 Ante 默认配置。库内文件的读写均通过 Obsidian Vault API 完成；临时文件系统读取仅用于插件自己生成的 staged diff 预览。剪贴板访问只在用户点击复制按钮后写入文本，不读取剪贴板内容。
 
 ---
 

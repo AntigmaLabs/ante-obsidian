@@ -190,11 +190,14 @@
 }
 
 .tmd-diff-file-main {
-  all: unset;
   display: flex;
   align-items: center;
   width: 100%;
   min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -204,10 +207,10 @@
 
 button.tmd-diff-file-main {
   appearance: none;
-  background: none !important;
+  background: none;
   border: 0;
   border-radius: 0;
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 .tmd-diff-file-main:hover .tmd-diff-file-name {
@@ -247,7 +250,7 @@ button.tmd-diff-file-main {
 
 .tmd-settings > h2 {
   margin: 0 0 20px;
-  padding: 0 !important;
+  padding: 0;
   color: var(--text-normal);
   font-size: 1.18rem;
   font-weight: 700;
@@ -310,7 +313,7 @@ button.tmd-diff-file-main {
 .tmd-settings .tmd-preset-title,
 .tmd-settings .tmd-preset-modal-title {
   margin: 0;
-  padding: 0 !important;
+  padding: 0;
   color: var(--text-normal);
   font-size: 1rem;
   font-weight: 600;
@@ -1116,7 +1119,7 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-view button {
-  box-shadow: none !important;
+  box-shadow: none;
   cursor: pointer;
 }
 
@@ -1160,12 +1163,11 @@ button.tmd-diff-file-main {
   gap: 12px;
   min-width: 0;
   padding: 0;
-  border: 0 !important;
+  border: 0;
   border-radius: 0;
-  background: transparent !important;
+  background: transparent;
   color: var(--text-muted);
-  box-shadow: none !important;
-  border: none;
+  box-shadow: none;
   transition:
     color 160ms ease,
     background-color 160ms ease;
@@ -1201,7 +1203,7 @@ button.tmd-diff-file-main {
   width: 100%;
   padding: 10px 12px;
   border-radius: var(--tmd-radius-sm);
-  background: transparent !important;
+  background: transparent;
   color: var(--text-normal);
   font-size: 15px;
   font-weight: 600;
@@ -1328,9 +1330,9 @@ button.tmd-diff-file-main {
   min-width: 22px;
   margin-right: 2px;
   padding: 0;
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--text-muted);
   line-height: 0;
   border-radius: 0;
@@ -1468,8 +1470,6 @@ button.tmd-diff-file-main {
   padding: 24px 20px calc(var(--tmd-chat-composer-offset) + 24px);
   user-select: text;
   -webkit-user-select: text;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text-muted) 38%, transparent) transparent;
 }
 
 .tmd-chat-load-more {
@@ -1654,18 +1654,18 @@ button.tmd-diff-file-main {
   height: 22px;
   min-width: 22px;
   padding: 0;
-  border: 0 !important;
+  border: 0;
   border-radius: var(--tmd-radius-sm);
-  background: transparent !important;
-  color: var(--text-muted) !important;
-  box-shadow: none !important;
+  background: transparent;
+  color: var(--text-muted);
+  box-shadow: none;
   cursor: pointer;
 }
 
 .tmd-chat-message-action:hover,
 .tmd-chat-message-action:focus-visible {
-  background: color-mix(in srgb, var(--tmd-chat-panel) 76%, transparent) !important;
-  color: var(--text-normal) !important;
+  background: color-mix(in srgb, var(--tmd-chat-panel) 76%, transparent);
+  color: var(--text-normal);
 }
 
 .tmd-chat-message-action:disabled {
@@ -1836,7 +1836,7 @@ button.tmd-diff-file-main {
 
 .tmd-chat-secondary-action {
   align-self: flex-start;
-  box-shadow: none !important;
+  box-shadow: none;
   cursor: pointer;
 }
 
@@ -1862,7 +1862,6 @@ button.tmd-diff-file-main {
 
 .tmd-chat-input-shell {
   position: relative;
-  background: inherit;
   pointer-events: auto;
   background: transparent;
 }
@@ -1901,18 +1900,18 @@ button.tmd-diff-file-main {
   height: 20px;
   min-width: 20px;
   padding: 0;
-  border: 0 !important;
+  border: 0;
   border-radius: 999px;
-  background: transparent !important;
-  color: color-mix(in srgb, var(--text-muted) 90%, white 10%) !important;
-  box-shadow: none !important;
+  background: transparent;
+  color: color-mix(in srgb, var(--text-muted) 90%, white 10%);
+  box-shadow: none;
   opacity: 0.9;
 }
 
 .tmd-chat-attachment-button:hover,
 .tmd-chat-attachment-button:focus-visible {
-  color: var(--text-normal) !important;
-  background: color-mix(in srgb, var(--background-modifier-hover) 48%, transparent) !important;
+  color: var(--text-normal);
+  background: color-mix(in srgb, var(--background-modifier-hover) 48%, transparent);
   opacity: 1;
 }
 
@@ -1930,15 +1929,15 @@ button.tmd-diff-file-main {
   min-width: 0;
   height: 20px;
   padding: 0 14px 0 0;
-  border: 0 !important;
+  border: 0;
   border-radius: 0;
-  background: transparent !important;
-  color: color-mix(in srgb, var(--text-muted) 90%, white 10%) !important;
+  background: transparent;
+  color: color-mix(in srgb, var(--text-muted) 90%, white 10%);
   font-family: var(--font-text);
   font-size: 11px;
   font-weight: 600;
   line-height: 20px;
-  box-shadow: none !important;
+  box-shadow: none;
   outline: none;
   opacity: 0.9;
   cursor: pointer;
@@ -1965,9 +1964,9 @@ button.tmd-diff-file-main {
 
 .tmd-chat-picker:hover,
 .tmd-chat-picker:focus-visible {
-  color: var(--text-normal) !important;
+  color: var(--text-normal);
   opacity: 1;
-  background: transparent !important;
+  background: transparent;
 }
 
 .tmd-chat-picker::after {
@@ -2040,11 +2039,11 @@ button.tmd-diff-file-main {
   height: 34px;
   min-width: 34px;
   padding: 0;
-  border: 0 !important;
+  border: 0;
   border-radius: var(--tmd-radius-pill);
-  background: color-mix(in srgb, var(--text-normal) 94%, black 6%) !important;
-  color: color-mix(in srgb, var(--background-primary) 96%, white 4%) !important;
-  box-shadow: none !important;
+  background: color-mix(in srgb, var(--text-normal) 94%, black 6%);
+  color: color-mix(in srgb, var(--background-primary) 96%, white 4%);
+  box-shadow: none;
   cursor: pointer;
   transition:
     background-color 140ms ease,
@@ -2054,7 +2053,7 @@ button.tmd-diff-file-main {
 
 .tmd-chat-primary-action:hover,
 .tmd-chat-primary-action:focus-visible {
-  background: color-mix(in srgb, var(--text-normal) 84%, var(--interactive-accent) 16%) !important;
+  background: color-mix(in srgb, var(--text-normal) 84%, var(--interactive-accent) 16%);
 }
 
 .tmd-chat-primary-action:disabled {
@@ -2062,7 +2061,7 @@ button.tmd-diff-file-main {
 }
 
 .tmd-chat-primary-action .svg-icon {
-  color: inherit !important;
+  color: inherit;
 }
 
 .tmd-chat-primary-action svg {
@@ -2141,11 +2140,11 @@ button.tmd-diff-file-main {
   height: 16px;
   min-width: 16px;
   padding: 0;
-  border: 0 !important;
+  border: 0;
   border-radius: 999px;
-  background: transparent !important;
-  color: inherit !important;
-  box-shadow: none !important;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
 }
 
 .tmd-chat-attachments.tmd-is-compact .tmd-chat-attachment-remove {
@@ -2156,8 +2155,8 @@ button.tmd-diff-file-main {
 
 .tmd-chat-attachment-remove:hover,
 .tmd-chat-attachment-remove:focus-visible {
-  background: color-mix(in srgb, var(--background-modifier-hover) 56%, transparent) !important;
-  color: var(--text-normal) !important;
+  background: color-mix(in srgb, var(--background-modifier-hover) 56%, transparent);
+  color: var(--text-normal);
 }
 
 .tmd-chat-attachment-remove .svg-icon,

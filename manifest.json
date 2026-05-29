@@ -1,9 +1,9 @@
 {
   "id": "ante",
   "name": "Ante",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "minAppVersion": "1.6.0",
-  "description": "AI second brain, continuous ingestion, indexing, and evolving. Powered by Ante agent core from Antigma Labs",
+  "description": "AI second brain, continuous ingestion, indexing, and evolving. Powered by Ante agent core from Antigma Labs.",
   "author": "Antigma Labs",
   "isDesktopOnly": true
 }
