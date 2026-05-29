@@ -95,27 +95,38 @@ const getCommits = (baseRef) => {
     });
 };
 
+const getAssetInfo = (assetPath) => {
+  const stat = fs.statSync(assetPath);
+  return {
+    name: path.basename(assetPath),
+    path: path.relative(rootDir, assetPath),
+    sizeBytes: stat.size
+  };
+};
+
 const getReleaseAssets = (pluginId, version) => {
   if (!fs.existsSync(releaseDir)) {
-    return { current: null, otherZipAssets: [] };
+    return { currentZip: null, standalone: [], missingStandalone: [], otherZipAssets: [] };
   }
 
   const expectedZip = `${pluginId}-${version}.zip`;
+  const expectedStandaloneAssets = ["main.js", "manifest.json", "styles.css"];
   const zipAssets = fs
     .readdirSync(releaseDir)
     .filter((name) => name.endsWith(".zip"))
     .map((name) => {
-      const assetPath = path.join(releaseDir, name);
-      const stat = fs.statSync(assetPath);
-      return {
-        name,
-        path: path.relative(rootDir, assetPath),
-        sizeBytes: stat.size
-      };
+      return getAssetInfo(path.join(releaseDir, name));
     });
+  const standalone = expectedStandaloneAssets
+    .filter((name) => fs.existsSync(path.join(releaseDir, name)))
+    .map((name) => getAssetInfo(path.join(releaseDir, name)));
 
   return {
-    current: zipAssets.find((asset) => asset.name === expectedZip) || null,
+    currentZip: zipAssets.find((asset) => asset.name === expectedZip) || null,
+    standalone,
+    missingStandalone: expectedStandaloneAssets.filter(
+      (name) => !fs.existsSync(path.join(releaseDir, name))
+    ),
     otherZipAssets: zipAssets.filter((asset) => asset.name !== expectedZip)
   };
 };
@@ -161,7 +172,8 @@ const context = {
     latestTag,
     latestChangelogVersion: changelog.latest,
     baseRef,
-    asset: releaseAssets.current,
+    asset: releaseAssets.currentZip,
+    assets: releaseAssets,
     otherZipAssets: releaseAssets.otherZipAssets
   },
   package: {

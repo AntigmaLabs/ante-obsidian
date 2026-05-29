@@ -1,10 +1,16 @@
 # Changelog
 
+## v0.6.4 - 2026-05-29
+
+- **Plugin Update Guidance**: Keep the settings update check aligned with Obsidian's official update flow by opening the repository instead of running the manual installer inside the plugin
+- **Manual Install Updates**: Clarify that the install script can also update existing manual installs by overwriting the plugin folder with the latest release archive
+
 ## v0.6.3 - 2026-05-28
 
 - **Community Directory Readiness**: Rename the marketplace plugin identity to Ante so the manifest follows current Obsidian community plugin rules
+- **Product Naming**: Restore Ante Obsidian across user-facing documentation and settings copy while keeping marketplace metadata compatible
 - **Release Packaging**: Publish standalone `main.js`, `manifest.json`, and `styles.css` assets alongside the release archive for official directory validation
-- **Installation Updates**: Align manual installation paths and documentation with the new `ante` plugin folder
+- **Installation Updates**: Install plugin updates directly from the settings page with the release installer script, and align manual installation paths with the new `ante` plugin folder
 
 ## v0.6.2 - 2026-05-20
 

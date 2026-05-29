@@ -17,6 +17,9 @@ const releaseDir = path.join(rootDir, ".release");
 const stagingDir = path.join(releaseDir, pluginId);
 const zipName = `${pluginId}-${version}.zip`;
 const zipPath = path.join(releaseDir, zipName);
+const standaloneAssetPaths = requiredFiles.map((file) =>
+  path.join(releaseDir, file)
+);
 
 if (manifestJson.version !== version) {
   throw new Error(
@@ -36,6 +39,7 @@ fs.mkdirSync(stagingDir, { recursive: true });
 
 for (const file of requiredFiles) {
   fs.copyFileSync(path.join(rootDir, file), path.join(stagingDir, file));
+  fs.copyFileSync(path.join(rootDir, file), path.join(releaseDir, file));
 }
 
 fs.rmSync(zipPath, { force: true });
@@ -52,3 +56,6 @@ try {
 }
 
 console.log(`Created release package: ${zipPath}`);
+for (const assetPath of standaloneAssetPaths) {
+  console.log(`Created release asset: ${assetPath}`);
+}

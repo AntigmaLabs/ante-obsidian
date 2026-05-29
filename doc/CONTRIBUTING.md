@@ -29,17 +29,19 @@ npm run smoke
 
 Ante Obsidian can be installed in several ways during development or from source. 
 
-For GitHub Releases, generate a single installable archive with:
+For GitHub Releases, generate the installable archive and the standalone Obsidian release assets with:
 
 ```bash
 npm run build:release
 ```
 
-That creates `.release/ante-obsidian-<version>.zip`, which expands to an `ante-obsidian/` folder containing:
+That creates `.release/ante-<version>.zip`, which expands to an `ante/` folder containing:
 
 - `manifest.json`
 - `main.js`
 - `styles.css`
+
+It also copies those three files to `.release/main.js`, `.release/manifest.json`, and `.release/styles.css`. Attach the standalone files to GitHub releases for Obsidian Community Plugin validation, alongside the zip archive for manual installs.
 
 After manual installation:
 

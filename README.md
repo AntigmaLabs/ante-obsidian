@@ -1,7 +1,7 @@
-# Ante
+# Ante Obsidian
 
 <p align="center">
-  <a href="https://github.com/AntigmaLabs/ante-obsidian/releases"><img src="https://img.shields.io/badge/Release-v0.6.3-purple" alt="Latest Release" /></a>
+  <a href="https://github.com/AntigmaLabs/ante-obsidian/releases"><img src="https://img.shields.io/badge/Release-v0.6.4-purple" alt="Latest Release" /></a>
   <a href="https://obsidian.md"><img src="https://img.shields.io/badge/Obsidian-v1.6.0%2B-blueviolet" alt="Obsidian Minimum Version" /></a>
   <a href="https://github.com/AntigmaLabs/ante-obsidian/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License" /></a>
 </p>
@@ -12,7 +12,7 @@
 
 ---
 
-**Ante** is a desktop-only Obsidian plugin for Ante-powered Markdown workflows. It bridges note editing, diff review, interactive sidebars, and chat flows with a local agentic runtime, delivering an editorial, note-aware AI second brain.
+**Ante Obsidian** is a desktop-only Obsidian plugin for Ante-powered Markdown workflows. It bridges note editing, diff review, interactive sidebars, and chat flows with a local agentic runtime, delivering an editorial, note-aware AI second brain.
 
 The repository is organized as a monorepo:
 
@@ -38,9 +38,9 @@ fi
 curl -sS https://raw.githubusercontent.com/AntigmaLabs/ante-obsidian/main/scripts/install.sh | bash -s -- "$VAULT_PATH"
 ```
 
-### 1. Install the Plugin
+### 1. Install or Update the Plugin
 
-You can install the plugin via the official Obsidian Community Plugins catalog (once approved), or use the automated installer script below inside your terminal:
+You can install the plugin via the official Obsidian Community Plugins catalog (once approved). For manual installs, use the automated installer script below inside your terminal. Running it again updates an existing manual install in the same vault:
 
 ```bash
 curl -sS https://raw.githubusercontent.com/AntigmaLabs/ante-obsidian/main/scripts/install.sh | bash -s -- /path/to/your/vault
@@ -55,7 +55,7 @@ Replace `/path/to/your/vault` with your actual Obsidian vault path (same as Step
 
 The plugin runs completely locally and relies on the `ante` runtime. Setup is fully automated after enabling the plugin:
 
-1. Open **Obsidian Settings** -> **Ante**.
+1. Open **Obsidian Settings** -> **Ante Obsidian**.
 2. Under the **Runtime** settings panel, click **Install** to set up the local `ante` runtime automatically.
 3. Configure your preferred provider (Gemini, Anthropic, or OpenAI) and verify your key configurations.
 

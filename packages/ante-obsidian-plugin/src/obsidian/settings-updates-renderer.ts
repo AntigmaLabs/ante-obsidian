@@ -77,11 +77,7 @@ export class SettingsUpdatesRenderer {
         cls: this.pluginVersionState.updateAvailable ? "mod-cta" : ""
       });
       openButton.addClass("tmd-update-item-button");
-      this.decorateAnteActionButton(
-        openButton,
-        "external-link",
-        this.pluginVersionState.updateAvailable ? "Open release" : "Open repo"
-      );
+      this.decorateAnteActionButton(openButton, "external-link", "Open repo");
       openButton.addEventListener("click", () => {
         window.open(this.pluginVersionState?.latestUrl, "_blank", "noopener");
       });
