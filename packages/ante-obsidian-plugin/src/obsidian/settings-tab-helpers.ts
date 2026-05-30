@@ -18,7 +18,7 @@ export const getSelectedModelForProvider = (
 }
 
 export const applyProviderOverrideSelection = (
-  settings: Pick<TmdPlugin["settings"], "anteProvider" | "anteModel">,
+  settings: { anteProvider: string; anteModel: string },
   value: string,
   availableModels: readonly string[],
 ): void => {
@@ -27,6 +27,6 @@ export const applyProviderOverrideSelection = (
   // Preserve current model if still valid, otherwise select first available
   settings.anteModel = getSelectedModelForProvider(
     settings.anteModel,
-    availableModels
+    availableModels,
   )
 }

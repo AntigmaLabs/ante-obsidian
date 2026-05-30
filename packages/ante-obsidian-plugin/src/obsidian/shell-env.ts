@@ -85,6 +85,38 @@ export const readEnvVarFromLoginShell = async (variableName: string): Promise<st
   }
 };
 
+export const readFullEnvFromLoginShell = async (): Promise<Record<string, string>> => {
+  const shellPath = process.env.SHELL?.trim() || DEFAULT_SHELL;
+  const runForShell = async (path: string): Promise<Record<string, string>> => {
+    const stdout = await runShellCommand(path, ["-lc"], "env");
+    const envMap: Record<string, string> = {};
+    stdout.split(/\r?\n/).forEach((line) => {
+      const index = line.indexOf("=");
+      if (index > 0) {
+        const key = line.slice(0, index).trim();
+        const value = line.slice(index + 1).trim();
+        if (key) {
+          envMap[key] = value;
+        }
+      }
+    });
+    return envMap;
+  };
+
+  try {
+    return await runForShell(shellPath);
+  } catch {
+    if (shellPath !== DEFAULT_SHELL) {
+      try {
+        return await runForShell(DEFAULT_SHELL);
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }
+};
+
 export const normalizeCommandName = (commandName: string): string => {
   const trimmed = commandName.trim();
   return VALID_COMMAND_NAME.test(trimmed) ? trimmed : "";

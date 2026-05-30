@@ -7,7 +7,7 @@ import type { HostAdapter } from "../core/host-adapter";
 import { ObsidianHostAdapter } from "./host-adapter";
 import { populateEditorMenu } from "./editor-menu";
 import { TmdSettingTab } from "./settings-tab";
-import { DEFAULT_SETTINGS, normalizeSettings, type TmdSettings } from "./settings";
+import { DEFAULT_SETTINGS, normalizeSettings, AVAILABLE_PROVIDERS, type TmdSettings } from "./settings";
 import type { AnteRuntime } from "../runtime/ante-runtime";
 import { DEFAULT_ANTE_ARGS_JSON, createAnteRuntime } from "../runtime/create-ante-runtime";
 import { TMD_CHAT_VIEW_TYPE, TmdChatView } from "./chat-view";
@@ -15,7 +15,7 @@ import { TMD_TERMINAL_VIEW_TYPE, TmdTerminalView } from "./terminal-view";
 import type { TaskRecord } from "../core/types";
 import type { ChatConversationRecord } from "../core/chat-types";
 import { readAnteDefaults, type AnteDefaults } from "./ante-defaults";
-import { normalizeEnvVarName, readCommandPathFromLoginShell, readEnvVarFromLoginShell } from "./shell-env";
+import { normalizeEnvVarName, readCommandPathFromLoginShell, readFullEnvFromLoginShell } from "./shell-env";
 import { ChatSessionManager } from "../core/chat-session-manager";
 import type { ChatPersistenceState } from "../core/chat-types";
 import { getResolvedPreset, listResolvedPresets } from "../core/presets";
@@ -131,7 +131,6 @@ export default class TmdPlugin extends Plugin {
   }
 
   async saveSettings(): Promise<void> {
-    await this.loadShellEnv();
     this.pluginData = {
       ...this.pluginData,
       settings: this.settings,
@@ -274,13 +273,25 @@ export default class TmdPlugin extends Plugin {
   async loadShellEnv(): Promise<void> {
     this.resolvedAnteCommand = await readCommandPathFromLoginShell("ante");
     const envMap: Record<string, string> = {};
-    const envKeys = [
-      normalizeEnvVarName(this.settings.geminiApiKeyEnvKey),
-      normalizeEnvVarName(this.settings.anthropicApiKeyEnvKey)
-    ].filter((key, index, keys) => key && keys.indexOf(key) === index);
 
-    for (const envKey of envKeys) {
-      const value = await readEnvVarFromLoginShell(envKey);
+    // Collect all env keys to load:
+    //   1. Default env keys for every API-key provider in the built-in list
+    //   2. Any custom env key names the user has configured per-provider
+    const keysToLoad = new Set<string>();
+    for (const provider of AVAILABLE_PROVIDERS) {
+      if (provider.defaultEnvKey) {
+        const key = normalizeEnvVarName(provider.defaultEnvKey);
+        if (key) keysToLoad.add(key);
+      }
+    }
+    for (const config of Object.values(this.settings.providerKeys)) {
+      const key = normalizeEnvVarName(config.envKey);
+      if (key) keysToLoad.add(key);
+    }
+
+    const fullEnv = await readFullEnvFromLoginShell();
+    for (const envKey of keysToLoad) {
+      const value = fullEnv[envKey];
       if (value) {
         envMap[envKey] = value;
       }
@@ -435,24 +446,79 @@ export default class TmdPlugin extends Plugin {
   }
 
   getAvailableModelNamesForProvider(provider: string): string[] {
-    return [...(this.modelNamesByProvider.get(provider.trim()) ?? [])];
+    const cached = this.modelNamesByProvider.get(provider.trim());
+    if (cached && cached.length > 0) {
+      return [...cached];
+    }
+    // Fall back to static built-in models configured in AVAILABLE_PROVIDERS
+    const providerMeta = AVAILABLE_PROVIDERS.find((p) => p.id === provider.trim());
+    if (providerMeta?.defaultModels) {
+      return [...providerMeta.defaultModels];
+    }
+    return [];
   }
+
+  /**
+   * Returns the subset of AVAILABLE_PROVIDERS that the user has actually configured:
+   * - OAuth providers: present if the corresponding auth token file exists on disk.
+   * - API-key providers: present if a key is available via shellEnv or providerKeys.
+   * - local (no-auth): always included.
+   * Falls back to the full list if we cannot determine status (e.g. before delayed init).
+   */
+  getConfiguredProviders(): import("./settings").ProviderMeta[] {
+    const { homedir } = require("node:os") as typeof import("node:os");
+    const { join } = require("node:path") as typeof import("node:path");
+    const { existsSync } = require("node:fs") as typeof import("node:fs");
+    const anteHome = process.env.ANTE_HOME || join(homedir(), ".ante");
+
+    // OAuth preset name → auth file base name mapping (based on ~/.ante/auth/ observations)
+    const oauthAuthFile: Record<string, string> = {
+      "openai-subscription": "openai",
+      "anthropic-subscription": "anthropic",
+      "antix": "antix",
+    };
+
+    return AVAILABLE_PROVIDERS.filter((p) => {
+      if (p.authType === "none") {
+        // local — always show
+        return true;
+      }
+      if (p.authType === "oauth") {
+        const fileName = oauthAuthFile[p.id];
+        if (!fileName) return false;
+        return existsSync(join(anteHome, "auth", `${fileName}.json`));
+      }
+      // api-key: show if any key source is non-empty
+      const envKey = this.settings.providerKeys[p.id]?.envKey || p.defaultEnvKey || "";
+      const hasShellKey = envKey ? Boolean(this.shellEnv[envKey]?.trim()) : false;
+      const hasDirectKey = Boolean(this.settings.providerKeys[p.id]?.apiKey?.trim());
+      return hasShellKey || hasDirectKey;
+    });
+  }
+
 
   async warmAnteModelCatalog(target?: { provider: string; model: string; thinking: AnteThinkingPreference }): Promise<void> {
     if (!this.isAnteInstalled()) {
       return;
     }
+    console.info(`[tmd session] Warming model catalog for provider: ${target?.provider ?? "default"}`);
     await this.runtime.ensureWarmSession(target);
-    this.captureRuntimeModelList(this.runtime.getActiveSessionInfo());
+    const session = this.runtime.getActiveSessionInfo();
+    console.info(`[tmd session] Warming complete. Session info:`, session);
+    this.captureRuntimeModelList(session);
   }
 
   private captureRuntimeModelList(session: TaskRecord["runtimeSession"] | null | undefined): void {
     const provider = session?.activeProvider?.trim();
     const models = session?.availableModels?.map((model) => model.trim()).filter(Boolean) ?? [];
+    if (provider) {
+      console.info(`[tmd session] Active provider: ${provider}, Active model: ${session?.activeModel ?? "default"}, Available models:`, models);
+    }
     if (!provider || models.length === 0) {
       return;
     }
-    this.modelNamesByProvider.set(provider, [...new Set(models)]);
+    const uniqueModels = [...new Set(models)];
+    this.modelNamesByProvider.set(provider, uniqueModels);
   }
 
   getResolvedAnteThinking(): AnteThinkingLevel | null {

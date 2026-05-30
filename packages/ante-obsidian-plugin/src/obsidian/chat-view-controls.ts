@@ -1,10 +1,8 @@
 import { App, Menu, Notice } from "obsidian"
 import type TmdPlugin from "./main"
 import {
-  DEFAULT_ANTE_MODEL,
   normalizeProvider,
   type AnteProvider,
-  AVAILABLE_PROVIDERS,
 } from "./settings"
 import {
   ANTE_DEFAULT_THINKING,
@@ -21,7 +19,7 @@ import type { ContextSnapshot } from "../core/types"
 
 export class ChatViewControls {
   private selectedProvider: AnteProvider = "openai-subscription"
-  private selectedModel = DEFAULT_ANTE_MODEL
+  private selectedModel = ""
   private selectedThinking: AnteThinkingPreference = ANTE_DEFAULT_THINKING
   private loadingModelProvider: string | null = null
   private modelLoadFailedProvider: string | null = null
@@ -46,23 +44,50 @@ export class ChatViewControls {
     this.populateModelSelect()
     this.populateThinkingSelect()
 
+    // Warm the model catalog for the initial provider so the model list
+    // is populated before the user opens the model picker.
+    if (!this.plugin.getAvailableModelNamesForProvider(this.selectedProvider).length) {
+      this.loadingModelProvider = this.selectedProvider
+      this.populateModelSelect()
+      this.plugin.warmAnteModelCatalog({
+        provider: this.selectedProvider,
+        model: this.selectedModel,
+        thinking: this.selectedThinking,
+      }).then(() => {
+        if (this.loadingModelProvider !== this.selectedProvider) return
+        this.loadingModelProvider = null
+        const best = this.getSelectableModel(this.selectedProvider, this.selectedModel)
+        if (best && best !== this.selectedModel) {
+          this.selectedModel = best
+        }
+        this.populateModelSelect()
+      }).catch(() => {
+        if (this.loadingModelProvider !== this.selectedProvider) return
+        this.loadingModelProvider = null
+        this.modelLoadFailedProvider = this.selectedProvider
+        this.populateModelSelect()
+      })
+    }
+
     this.providerButtonEl.addEventListener("click", (event) => {
       const menu = new Menu()
-      const providers: AnteProvider[] = AVAILABLE_PROVIDERS.map(p => p.id)
-      for (const provider of providers) {
+      const configuredProviders = this.plugin.getConfiguredProviders()
+      for (const providerMeta of configuredProviders) {
+        const providerId = providerMeta.id
+        const label = PROVIDER_LABELS[providerId] ?? providerMeta.label
         menu.addItem((item) => {
           item
-            .setTitle(PROVIDER_LABELS[provider])
-            .setChecked(provider === this.selectedProvider)
+            .setTitle(label)
+            .setChecked(providerId === this.selectedProvider)
             .onClick(() => {
-              if (provider === this.selectedProvider) {
+              if (providerId === this.selectedProvider) {
                 return
               }
               new ChatProviderSwitchModal(
                 this.app,
-                PROVIDER_LABELS[provider],
+                label,
                 () => {
-                  this.switchProviderConversation(provider).catch((error) => {
+                  this.switchProviderConversation(providerId).catch((error) => {
                     console.error("Failed to switch provider conversation:", error)
                   })
                 },
@@ -155,11 +180,9 @@ export class ChatViewControls {
   }
 
   populateProviderSelect(): void {
-    this.providerButtonEl.setText(PROVIDER_LABELS[this.selectedProvider])
-    this.providerButtonEl.setAttribute(
-      "title",
-      PROVIDER_LABELS[this.selectedProvider],
-    )
+    const label = PROVIDER_LABELS[this.selectedProvider] ?? this.selectedProvider
+    this.providerButtonEl.setText(label)
+    this.providerButtonEl.setAttribute("title", label)
   }
 
   populateModelSelect(): void {
@@ -180,9 +203,13 @@ export class ChatViewControls {
       return preferred
     }
     if (availableModels.length > 0) {
-      return availableModels[0] ?? DEFAULT_ANTE_MODEL
+      // Pick first cached model for this provider — do NOT fall back to a
+      // cross-provider default like gpt-5.4, which would cause ante to reject
+      // the session when the active provider doesn't support that model.
+      return availableModels[0]!
     }
-    return preferred
+    // No cache yet — return empty string so ante picks the provider's own default.
+    return ""
   }
 
   async switchProviderConversation(provider: AnteProvider): Promise<void> {
@@ -272,7 +299,11 @@ export class ChatViewControls {
     const provider = normalizeProvider(
       conversationTarget?.provider ?? fallbackTarget.provider
     )
-    const model = this.getSelectableModel(provider, conversationTarget?.model ?? fallbackTarget.model)
+    // When syncing, use the conversation's own model if present. If absent (new
+    // conversation) or if the provider has changed, resolve via the provider's
+    // own cache — never inherit a model from a different provider.
+    const rawModel = conversationTarget?.model ?? ""
+    const model = this.getSelectableModel(provider, rawModel)
     const thinking =
       conversationTarget?.thinking ?? this.plugin.settings.anteThinking
 

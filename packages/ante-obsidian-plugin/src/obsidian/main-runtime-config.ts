@@ -4,7 +4,7 @@ import {
 } from "../core/ante-thinking"
 import { DEFAULT_ANTE_ARGS_JSON } from "../runtime/create-ante-runtime"
 import { normalizeEnvVarName } from "./shell-env"
-import type { TmdSettings } from "./settings"
+import { AVAILABLE_PROVIDERS, type TmdSettings } from "./settings"
 import type { AnteDefaults } from "./ante-defaults"
 
 export interface AnteRuntimeConfigInput {
@@ -14,10 +14,7 @@ export interface AnteRuntimeConfigInput {
     | "wsAddress"
     | "autoApproveAnteTools"
     | "anteThinking"
-    | "geminiApiKeyEnvKey"
-    | "geminiApiKey"
-    | "anthropicApiKeyEnvKey"
-    | "anthropicApiKey"
+    | "providerKeys"
   >
   resolvedTarget: AnteDefaults
   shellEnv: Record<string, string>
@@ -38,17 +35,57 @@ export const buildAnteRuntimeConfig = (
   autoApproveTools: boolean
   env: Record<string, string>
 } => {
-  const geminiEnvKey = normalizeEnvVarName(input.settings.geminiApiKeyEnvKey)
-  const anthropicEnvKey = normalizeEnvVarName(input.settings.anthropicApiKeyEnvKey)
+  const env: Record<string, string> = {}
   const processEnv = input.processEnv ?? process.env
-  const geminiApiKey =
-    input.settings.geminiApiKey.trim() ||
-    (geminiEnvKey ? input.shellEnv[geminiEnvKey]?.trim() ?? "" : "") ||
-    (geminiEnvKey ? processEnv[geminiEnvKey]?.trim() ?? "" : "")
-  const anthropicApiKey =
-    input.settings.anthropicApiKey.trim() ||
-    (anthropicEnvKey ? input.shellEnv[anthropicEnvKey]?.trim() ?? "" : "") ||
-    (anthropicEnvKey ? processEnv[anthropicEnvKey]?.trim() ?? "" : "")
+
+  // Populate credentials for all known API-key providers
+  const providerKeys = input.settings.providerKeys ?? {}
+  const legacySettings = input.settings as any
+
+  for (const provider of AVAILABLE_PROVIDERS) {
+    if (provider.authType !== "api-key") {
+      continue
+    }
+
+    const providerId = provider.id
+    const keyConfig = providerKeys[providerId]
+
+    // Determine the environment variable name to use
+    let envKey = keyConfig?.envKey
+    if (!envKey) {
+      if (providerId === "gemini") {
+        envKey = legacySettings.geminiApiKeyEnvKey || provider.defaultEnvKey
+      } else if (providerId === "anthropic") {
+        envKey = legacySettings.anthropicApiKeyEnvKey || provider.defaultEnvKey
+      } else {
+        envKey = provider.defaultEnvKey
+      }
+    }
+    const normalizedKey = normalizeEnvVarName(envKey)
+    if (!normalizedKey) {
+      continue
+    }
+
+    // Determine the API key value
+    let apiKey = keyConfig?.apiKey ?? ""
+    if (!apiKey) {
+      if (providerId === "gemini") {
+        apiKey = legacySettings.geminiApiKey ?? ""
+      } else if (providerId === "anthropic") {
+        apiKey = legacySettings.anthropicApiKey ?? ""
+      }
+    }
+
+    const trimmedKey = apiKey.trim()
+    const resolvedValue =
+      trimmedKey ||
+      (input.shellEnv[normalizedKey]?.trim() ?? "") ||
+      (processEnv[normalizedKey]?.trim() ?? "")
+
+    if (resolvedValue) {
+      env[normalizedKey] = resolvedValue
+    }
+  }
 
   return {
     connectionMode: "stdio",
@@ -60,11 +97,6 @@ export const buildAnteRuntimeConfig = (
     provider: input.resolvedTarget.provider,
     thinking: resolveAnteThinkingPreference(input.settings.anteThinking),
     autoApproveTools: input.settings.autoApproveAnteTools,
-    env: {
-      ...(geminiEnvKey && geminiApiKey ? { [geminiEnvKey]: geminiApiKey } : {}),
-      ...(anthropicEnvKey && anthropicApiKey
-        ? { [anthropicEnvKey]: anthropicApiKey }
-        : {}),
-    }
+    env,
   }
 }

@@ -1,4 +1,4 @@
-import { DropdownComponent, PluginSettingTab, Setting } from "obsidian";
+import { PluginSettingTab, Setting } from "obsidian";
 import {
   ANTE_DEFAULT_THINKING,
   ANTE_THINKING_LEVELS,
@@ -6,16 +6,13 @@ import {
 } from "../core/ante-thinking";
 import type TmdPlugin from "./main";
 import {
-  ANTHROPIC_PROVIDER,
-  GEMINI_PROVIDER,
-  normalizeProvider,
   AVAILABLE_PROVIDERS,
+  OVERRIDE_PROVIDERS,
+  normalizeProvider,
+  type ProviderKeyConfig,
 } from "./settings";
 import { renderSettingsSection } from "./settings-section-renderer";
-import {
-  applyProviderOverrideSelection,
-  getSelectedModelForProvider,
-} from "./settings-tab-helpers";
+import { applyProviderOverrideSelection } from "./settings-tab-helpers";
 import { SettingsUpdatesRenderer } from "./settings-updates-renderer";
 import { SettingsPresetsRenderer } from "./settings-presets-renderer";
 
@@ -32,6 +29,8 @@ const THINKING_LABELS: Record<AnteThinkingPreference, string> = {
 export class TmdSettingTab extends PluginSettingTab {
   private activeTab: SettingsTabId = "runtime";
   private updatesRenderer: SettingsUpdatesRenderer | null = null;
+  private isWarmingProvider = false;
+  private warmingSessionId = 0;
 
   constructor(private readonly pluginRef: TmdPlugin) {
     super(pluginRef.app, pluginRef);
@@ -56,7 +55,7 @@ export class TmdSettingTab extends PluginSettingTab {
       "Model",
       "These settings override Ante defaults for this plugin. Actual availability still depends on your local Ante runtime."
     );
-    
+
     // Delegate Presets rendering to SettingsPresetsRenderer
     const presetsRenderer = new SettingsPresetsRenderer(this.pluginRef, () => this.display());
     const presetsSectionEl = presetsRenderer.render(panelsEl);
@@ -113,7 +112,7 @@ export class TmdSettingTab extends PluginSettingTab {
 
     new Setting(modelSectionEl)
       .setName("Follow Ante")
-      .setDesc("Use provider and model from Ante.")
+      .setDesc(`Use provider and model from Ante. Current default: \`${anteDefaultTarget.provider}\` / \`${anteDefaultTarget.model}\``)
       .addToggle((toggle) =>
         toggle.setValue(this.pluginRef.settings.useAnteDefaults).onChange(async (value) => {
           this.pluginRef.settings.useAnteDefaults = value;
@@ -121,8 +120,6 @@ export class TmdSettingTab extends PluginSettingTab {
           this.display();
         })
       );
-
-    new Setting(modelSectionEl).setName("Ante default").setDesc(`\`${anteDefaultTarget.provider}\` / \`${anteDefaultTarget.model}\``);
 
     new Setting(modelSectionEl)
       .setName("Think level")
@@ -137,115 +134,76 @@ export class TmdSettingTab extends PluginSettingTab {
       );
 
     if (!this.pluginRef.settings.useAnteDefaults) {
+      // ── Provider override ──────────────────────────────────────────────────
+      // Only shows API-key providers (no OAuth/subscription providers).
       new Setting(modelSectionEl)
         .setName("Provider override")
-        .setDesc("Ask Ante to use this provider. Final support and auth still depend on Ante.")
+        .setDesc(
+          this.isWarmingProvider
+            ? "Ask Ante to use this provider. Subscription providers (OAuth) are managed via the Ante TUI and excluded here. (🔄 Fetching model list from Ante...)"
+            : "Ask Ante to use this provider. Subscription providers (OAuth) are managed via the Ante TUI and excluded here."
+        )
         .addDropdown((dropdown) => {
-          for (const provider of AVAILABLE_PROVIDERS) {
+          for (const provider of OVERRIDE_PROVIDERS) {
             dropdown.addOption(provider.id, provider.label);
           }
+          // Ensure current value is in the override list; fall back to first entry
+          const currentProvider = this.pluginRef.settings.anteProvider;
+          const validId = OVERRIDE_PROVIDERS.some((p) => p.id === currentProvider)
+            ? currentProvider
+            : (OVERRIDE_PROVIDERS[0]?.id ?? currentProvider);
           return dropdown
-            .setValue(this.pluginRef.settings.anteProvider)
+            .setValue(validId)
             .onChange(async (value) => {
               const provider = normalizeProvider(value);
-              
+
               // Update provider first
               this.pluginRef.settings.anteProvider = provider;
-              
-              // Warm the model catalog from Ante runtime to get fresh list
-              try {
-                await this.pluginRef.warmAnteModelCatalog({
-                  provider,
-                  model: "",
-                  thinking: this.pluginRef.settings.anteThinking,
-                });
-              } catch (e) {
-                console.warn("Failed to warm model catalog for provider:", provider, e);
-                // Continue with fallback to cached or hardcoded models
-              }
-              
+
               // Select valid model from loaded list (consistent with chat behavior)
               applyProviderOverrideSelection(
                 this.pluginRef.settings,
                 value,
                 this.pluginRef.getAvailableModelNamesForProvider(provider)
               );
-              
+
               await this.pluginRef.saveSettings();
+
+              // Set warming loading state and re-render instantly to display updated key fields
+              const currentSessionId = ++this.warmingSessionId;
+              this.isWarmingProvider = true;
               this.display();
-            })
+
+              // Warm the model catalog from Ante runtime to get fresh list
+              setTimeout(async () => {
+                try {
+                  await this.pluginRef.warmAnteModelCatalog({
+                    provider,
+                    model: "",
+                    thinking: this.pluginRef.settings.anteThinking,
+                  });
+                } catch (e) {
+                  console.warn("Failed to warm model catalog for provider:", provider, e);
+                  // Continue with fallback to cached or default models
+                } finally {
+                  if (currentSessionId === this.warmingSessionId) {
+                    this.isWarmingProvider = false;
+                    this.display();
+                  }
+                }
+              }, 50);
+            });
         });
 
-      new Setting(modelSectionEl)
-        .setName("Model override")
-        .setDesc("Ask Ante to use this model for the selected provider.")
-        .addDropdown((dropdown) =>
-          this.addModelOptions(dropdown)
-            .setValue(
-              getSelectedModelForProvider(
-                this.pluginRef.settings.anteModel,
-                this.pluginRef.getAvailableModelNamesForProvider(this.pluginRef.settings.anteProvider),
-              ),
-            )
-            .onChange(async (value) => {
-              const currentProvider = normalizeProvider(
-                this.pluginRef.settings.anteProvider
-              );
-              const availableModels = this.pluginRef.getAvailableModelNamesForProvider(
-                currentProvider
-              );
-              // Validate model is in available list, fallback to first available if not
-              this.pluginRef.settings.anteModel = getSelectedModelForProvider(
-                value,
-                availableModels
-              );
-              await this.pluginRef.saveSettings();
-            })
-        );
-
-      new Setting(modelSectionEl).setName("Scope").setDesc("Overrides apply only in this plugin. Final availability depends on Ante.");
-    }
-
-    const effectiveProvider = this.pluginRef.settings.useAnteDefaults ? resolvedAnteTarget.provider : this.pluginRef.settings.anteProvider;
-
-    if (effectiveProvider === GEMINI_PROVIDER) {
-      this.renderCredentialSetting(
-        modelSectionEl,
-        "Gemini API key",
-        "Set the env var name Ante reads for x-goog-api-key, and optionally override the local Gemini key here.",
-        "GEMINI_API_KEY",
-        "AIza...",
-        this.pluginRef.settings.geminiApiKeyEnvKey,
-        this.pluginRef.settings.geminiApiKey,
-        async (value) => {
-          this.pluginRef.settings.geminiApiKeyEnvKey = value.trim() || "GEMINI_API_KEY";
-          await this.pluginRef.saveSettings();
-        },
-        async (value) => {
-          this.pluginRef.settings.geminiApiKey = value.trim();
-          await this.pluginRef.saveSettings();
-        }
-      );
-    }
-
-    if (effectiveProvider === ANTHROPIC_PROVIDER) {
-      this.renderCredentialSetting(
-        modelSectionEl,
-        "Anthropic API key",
-        "Set the env var name Ante reads for Anthropic, and optionally override the local API key here.",
-        "ANTHROPIC_API_KEY",
-        "sk-ant-...",
-        this.pluginRef.settings.anthropicApiKeyEnvKey,
-        this.pluginRef.settings.anthropicApiKey,
-        async (value) => {
-          this.pluginRef.settings.anthropicApiKeyEnvKey = value.trim() || "ANTHROPIC_API_KEY";
-          await this.pluginRef.saveSettings();
-        },
-        async (value) => {
-          this.pluginRef.settings.anthropicApiKey = value.trim();
-          await this.pluginRef.saveSettings();
-        }
-      );
+      // ── API key section (dynamic per provider) ─────────────────────────────
+      // Determine the effective provider for credential rendering.
+      // When "Follow Ante" is off, use the override; otherwise the resolved default.
+      const effectiveProvider = this.pluginRef.settings.anteProvider;
+      this.renderProviderCredentialSetting(modelSectionEl, effectiveProvider);
+    } else {
+      // "Follow Ante" is on — show credentials for whatever the resolved provider is.
+      const effectiveProvider = resolvedAnteTarget.provider;
+      this.renderProviderCredentialSetting(modelSectionEl, effectiveProvider);
     }
 
     new Setting(advancedSectionEl)
@@ -273,6 +231,66 @@ export class TmdSettingTab extends PluginSettingTab {
 
   private createSettingsSection(containerEl: HTMLElement, title: string, summary: string): HTMLDivElement {
     return renderSettingsSection(containerEl, { title, summary });
+  }
+
+  /**
+   * Dynamically render API key fields for the given provider.
+   * Reads the provider's metadata to determine the correct label, env key name,
+   * and placeholder. OAuth providers and local provider show nothing.
+   */
+  private renderProviderCredentialSetting(containerEl: HTMLElement, providerId: string): void {
+    const meta = AVAILABLE_PROVIDERS.find((p) => p.id === providerId);
+    if (!meta || meta.authType !== "api-key" || !meta.defaultEnvKey) {
+      // local (authType "none") and OAuth providers need no credential UI
+      return;
+    }
+
+    const existing: ProviderKeyConfig = this.pluginRef.settings.providerKeys[providerId] ?? {
+      envKey: meta.defaultEnvKey,
+      apiKey: "",
+    };
+
+    this.renderCredentialSetting(
+      containerEl,
+      `${meta.label} API key`,
+      this.isWarmingProvider
+        ? `Set the env var name Ante reads for ${meta.label}, and optionally enter the key directly here. (🔄 Fetching model list from Ante...)`
+        : `Set the env var name Ante reads for ${meta.label}, and optionally enter the key directly here.`,
+      meta.defaultEnvKey,
+      meta.keyPlaceholder ?? "",
+      existing.envKey || meta.defaultEnvKey,
+      existing.apiKey,
+      async (value) => {
+        this.pluginRef.settings.providerKeys[providerId] = {
+          ...existing,
+          envKey: value.trim() || meta.defaultEnvKey!,
+        };
+        // Keep legacy flat fields in sync for Gemini/Anthropic
+        this.syncLegacyKeyFields(providerId);
+        await this.pluginRef.saveSettings();
+      },
+      async (value) => {
+        this.pluginRef.settings.providerKeys[providerId] = {
+          ...existing,
+          apiKey: value.trim(),
+        };
+        this.syncLegacyKeyFields(providerId);
+        await this.pluginRef.saveSettings();
+      }
+    );
+  }
+
+  /** Keep the legacy flat fields (geminiApiKey etc.) in sync with providerKeys. */
+  private syncLegacyKeyFields(providerId: string): void {
+    const cfg = this.pluginRef.settings.providerKeys[providerId];
+    if (!cfg) return;
+    if (providerId === "gemini") {
+      this.pluginRef.settings.geminiApiKey = cfg.apiKey;
+      this.pluginRef.settings.geminiApiKeyEnvKey = cfg.envKey;
+    } else if (providerId === "anthropic") {
+      this.pluginRef.settings.anthropicApiKey = cfg.apiKey;
+      this.pluginRef.settings.anthropicApiKeyEnvKey = cfg.envKey;
+    }
   }
 
   private renderCredentialSetting(
@@ -309,30 +327,11 @@ export class TmdSettingTab extends PluginSettingTab {
     });
   }
 
-  private addModelOptions(dropdown: DropdownComponent): DropdownComponent {
-    const models = this.pluginRef.getAvailableModelNamesForProvider(this.pluginRef.settings.anteProvider);
-    for (const model of models) {
-      dropdown.addOption(model, model);
-    }
-    if (models.length === 0) {
-      const model = this.pluginRef.settings.anteModel.trim();
-      dropdown.addOption(model, model || "Load models from Ante");
-    }
-    return dropdown;
-  }
-
   private addThinkingOptions(dropdown: DropdownComponent): DropdownComponent {
     dropdown.addOption(ANTE_DEFAULT_THINKING, THINKING_LABELS[ANTE_DEFAULT_THINKING]);
     for (const thinking of ANTE_THINKING_LEVELS) {
       dropdown.addOption(thinking, THINKING_LABELS[thinking]);
     }
     return dropdown;
-  }
-
-  private getSelectedModel(): string {
-    return getSelectedModelForProvider(
-      this.pluginRef.settings.anteModel,
-      this.pluginRef.getAvailableModelNamesForProvider(this.pluginRef.settings.anteProvider),
-    );
   }
 }
