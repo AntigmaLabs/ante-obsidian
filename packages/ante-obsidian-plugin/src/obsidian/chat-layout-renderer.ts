@@ -19,6 +19,7 @@ export interface ChatLayoutNodes {
   contextEl: HTMLDivElement
   contextTitleEl: HTMLDivElement
   contextValueEl: HTMLDivElement
+  contextRuntimeEl: HTMLDivElement
   timelineEl: HTMLDivElement
   composerContainerEl: HTMLDivElement
   inputShellEl: HTMLDivElement
@@ -70,6 +71,7 @@ interface ChatComposerNodes {
   composerEl: HTMLTextAreaElement
   composerActionButtonEl: HTMLButtonElement
   fileInputEl: HTMLInputElement
+  contextRuntimeEl: HTMLDivElement
 }
 
 const renderChatSidebar = (shellEl: HTMLDivElement): ChatSidebarNodes => {
@@ -168,6 +170,11 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
     cls: "tmd-chat-picker tmd-chat-thinking-picker",
   }).appendTo(thinkingBlockEl)
 
+  // 2. Render runtime text display above input shell
+  const contextRuntimeEl = div({ cls: "tmd-chat-context-runtime" }).appendTo(
+    composerContainerEl,
+  )
+
   // 3. Create input shell and textarea below
   const inputShellEl = div({ cls: "tmd-chat-input-shell" }).appendTo(
     composerContainerEl,
@@ -215,6 +222,7 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
     composerEl,
     composerActionButtonEl,
     fileInputEl,
+    contextRuntimeEl,
   }
 }
 
@@ -263,6 +271,7 @@ export const renderChatLayout = (
     contextEl: main.context.contextEl,
     contextTitleEl: main.context.contextTitleEl,
     contextValueEl: main.context.contextValueEl,
+    contextRuntimeEl: main.composer.contextRuntimeEl,
     timelineEl: main.timelineEl,
     composerContainerEl: main.composer.composerContainerEl,
     inputShellEl: main.composer.inputShellEl,

@@ -466,7 +466,7 @@ export default class TmdPlugin extends Plugin {
     const { homedir } = require("node:os") as typeof import("node:os");
     const { join } = require("node:path") as typeof import("node:path");
     const { existsSync } = require("node:fs") as typeof import("node:fs");
-    const anteHome = process.env.ANTE_HOME || join(homedir(), ".ante");
+    const anteHome = (typeof process !== "undefined" && process.env?.ANTE_HOME) || join(homedir(), ".ante");
 
     // OAuth preset name → auth file base name mapping (based on ~/.ante/auth/ observations)
     const oauthAuthFile: Record<string, string> = {

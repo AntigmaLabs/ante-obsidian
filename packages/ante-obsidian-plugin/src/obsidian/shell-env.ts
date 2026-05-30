@@ -74,7 +74,7 @@ export const readEnvVarFromLoginShell = async (variableName: string): Promise<st
   if (!normalized) {
     return "";
   }
-  const shellPath = process.env.SHELL?.trim() || DEFAULT_SHELL;
+  const shellPath = (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
   try {
     return await readFromShell(shellPath, normalized);
   } catch {
@@ -86,9 +86,17 @@ export const readEnvVarFromLoginShell = async (variableName: string): Promise<st
 };
 
 export const readFullEnvFromLoginShell = async (): Promise<Record<string, string>> => {
-  const shellPath = process.env.SHELL?.trim() || DEFAULT_SHELL;
-  const runForShell = async (path: string): Promise<Record<string, string>> => {
-    const stdout = await runShellCommand(path, ["-lc"], "env");
+  const shellPath = (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
+  const shellName = basename(shellPath).toLowerCase();
+  
+  // Try interactive login shell first (-lic) to ensure ~/.zshrc is loaded,
+  // then fallback to login shell (-lc) or interactive shell (-ic)
+  const argCandidates = (shellName === "zsh" || shellName === "bash")
+    ? [["-lic"], ["-lc"], ["-ic"]]
+    : [["-lc"]];
+
+  const runForShell = async (path: string, args: string[]): Promise<Record<string, string>> => {
+    const stdout = await runShellCommand(path, args, "env");
     const envMap: Record<string, string> = {};
     stdout.split(/\r?\n/).forEach((line) => {
       const index = line.indexOf("=");
@@ -103,18 +111,32 @@ export const readFullEnvFromLoginShell = async (): Promise<Record<string, string
     return envMap;
   };
 
-  try {
-    return await runForShell(shellPath);
-  } catch {
-    if (shellPath !== DEFAULT_SHELL) {
+  for (const args of argCandidates) {
+    try {
+      const env = await runForShell(shellPath, args);
+      if (Object.keys(env).length > 0) {
+        return env;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  // Fallback to DEFAULT_SHELL candidates
+  if (shellPath !== DEFAULT_SHELL) {
+    for (const args of [["-lic"], ["-lc"]]) {
       try {
-        return await runForShell(DEFAULT_SHELL);
+        const env = await runForShell(DEFAULT_SHELL, args);
+        if (Object.keys(env).length > 0) {
+          return env;
+        }
       } catch {
-        return {};
+        continue;
       }
     }
-    return {};
   }
+
+  return {};
 };
 
 export const normalizeCommandName = (commandName: string): string => {
@@ -157,7 +179,7 @@ export const readCommandPathFromLoginShell = async (commandName: string): Promis
     return "";
   }
 
-  const shellCandidates = [process.env.SHELL?.trim() || DEFAULT_SHELL, DEFAULT_SHELL].filter(
+  const shellCandidates = [(typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL, DEFAULT_SHELL].filter(
     (shellPath, index, shells) => shellPath && shells.indexOf(shellPath) === index
   );
   const command = `command -v -- ${normalized}`;

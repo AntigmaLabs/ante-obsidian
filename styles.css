@@ -267,6 +267,9 @@ button.tmd-diff-file-main {
 }
 
 .tmd-settings-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid color-mix(in srgb, var(--background-modifier-border) 78%, transparent);
   border-radius: var(--tmd-radius-pill);
   background: color-mix(in srgb, var(--background-secondary) 70%, transparent);
@@ -1202,16 +1205,16 @@ button.tmd-diff-file-main {
   overflow: hidden;
 }
 
-.tmd-chat-sidebar-toggle,
-.tmd-chat-sidebar-new {
+.tmd-chat-shell button.tmd-chat-sidebar-toggle,
+.tmd-chat-shell button.tmd-chat-sidebar-new {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   min-width: 0;
   padding: 0;
-  border: 0;
-  border-radius: 0;
+  border: none;
+  border-radius: var(--tmd-radius-sm);
   background: transparent;
   color: var(--text-muted);
   box-shadow: none;
@@ -1220,12 +1223,14 @@ button.tmd-diff-file-main {
     background-color 160ms ease;
 }
 
-.tmd-chat-sidebar-toggle:hover,
-.tmd-chat-sidebar-toggle:focus-visible,
-.tmd-chat-sidebar-new:hover,
-.tmd-chat-sidebar-new:focus-visible {
+.tmd-chat-shell button.tmd-chat-sidebar-toggle:hover,
+.tmd-chat-shell button.tmd-chat-sidebar-toggle:focus-visible,
+.tmd-chat-shell button.tmd-chat-sidebar-new:hover,
+.tmd-chat-shell button.tmd-chat-sidebar-new:focus-visible {
   background: color-mix(in srgb, var(--background-modifier-hover) 22%, transparent);
   color: var(--text-normal);
+  border: none;
+  box-shadow: none;
 }
 
 .tmd-chat-sidebar-header {
@@ -1237,7 +1242,7 @@ button.tmd-diff-file-main {
   border-bottom: 1px solid color-mix(in srgb, var(--tmd-chat-line) 62%, transparent);
 }
 
-.tmd-chat-sidebar-toggle {
+.tmd-chat-shell button.tmd-chat-sidebar-toggle {
   justify-content: flex-start;
   width: 100%;
   height: 32px;
@@ -1245,7 +1250,7 @@ button.tmd-diff-file-main {
   color: var(--text-normal);
 }
 
-.tmd-chat-sidebar-new {
+.tmd-chat-shell button.tmd-chat-sidebar-new {
   justify-content: flex-start;
   width: 100%;
   padding: 10px 12px;
@@ -1292,7 +1297,7 @@ button.tmd-diff-file-main {
   border-bottom: 0;
 }
 
-.tmd-chat-sidebar.tmd-is-collapsed .tmd-chat-sidebar-new {
+.tmd-chat-sidebar.tmd-is-collapsed button.tmd-chat-sidebar-new {
   margin: 0 auto;
   justify-content: center;
   gap: 0;
@@ -1300,16 +1305,16 @@ button.tmd-diff-file-main {
   padding: 0;
   overflow: hidden;
   color: var(--text-normal);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  font-size: 0;
 }
 
 .tmd-chat-sidebar.tmd-is-collapsed .tmd-chat-sidebar-new-icon {
   width: 20px;
   height: 20px;
   min-width: 20px;
-}
-
-.tmd-chat-sidebar.tmd-is-collapsed .tmd-chat-sidebar-new {
-  font-size: 0;
 }
 
 .tmd-chat-conversation {
@@ -1441,46 +1446,68 @@ button.tmd-diff-file-main {
 .tmd-chat-header-actions {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 6px;
   min-height: 32px;
 }
 
-.tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-header-actions .tmd-chat-sidebar-toggle {
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  padding: 0;
+.tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-header-actions button.tmd-chat-sidebar-toggle,
+.tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-header-actions button.tmd-chat-sidebar-new {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  margin: 0;
+  border-radius: var(--tmd-radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  box-shadow: none;
+  transition: all 150ms ease;
 }
 
-.tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-header-actions .tmd-chat-sidebar-new {
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  padding: 0;
-  justify-content: center;
-  gap: 0;
+.tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-header-actions button.tmd-chat-sidebar-new {
   font-size: 0;
+  gap: 0;
+}
+
+.tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-header-actions button.tmd-chat-sidebar-toggle:hover,
+.tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-header-actions button.tmd-chat-sidebar-new:hover {
+  background: var(--background-modifier-hover);
+  border: none;
+  box-shadow: none;
+  color: var(--text-normal);
 }
 
 .tmd-chat-shell.tmd-chat-sidebar-collapsed .tmd-chat-header-actions .tmd-chat-sidebar-new-icon {
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
 }
 
 .tmd-chat-contextbar {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   padding: 8px 20px 10px;
   background: transparent;
 }
 
 .tmd-chat-context-title {
-  margin-bottom: 1px;
+  margin-bottom: 0;
   color: color-mix(in srgb, var(--text-muted) 82%, transparent);
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tmd-chat-context-title::after {
+  content: " ·";
+  opacity: 0.65;
 }
 
 .tmd-chat-context-value {
@@ -1488,6 +1515,9 @@ button.tmd-diff-file-main {
   font-size: 13px;
   font-weight: 450;
   line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tmd-chat-context-snippet {
@@ -1693,7 +1723,7 @@ button.tmd-diff-file-main {
   gap: 2px;
 }
 
-.tmd-chat-message-action {
+.tmd-chat-shell button.tmd-chat-message-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1701,17 +1731,20 @@ button.tmd-diff-file-main {
   height: 22px;
   min-width: 22px;
   padding: 0;
-  border: 0;
+  border: none;
   border-radius: var(--tmd-radius-sm);
   background: transparent;
   color: var(--text-muted);
   box-shadow: none;
   cursor: pointer;
+  transition: color 120ms ease;
 }
 
-.tmd-chat-message-action:hover,
-.tmd-chat-message-action:focus-visible {
-  background: color-mix(in srgb, var(--tmd-chat-panel) 76%, transparent);
+.tmd-chat-shell button.tmd-chat-message-action:hover,
+.tmd-chat-shell button.tmd-chat-message-action:focus-visible {
+  background: transparent;
+  border: none;
+  box-shadow: none;
   color: var(--text-normal);
 }
 
@@ -1905,6 +1938,42 @@ button.tmd-diff-file-main {
   -webkit-backdrop-filter: blur(14px) saturate(1.08);
   pointer-events: none;
   container-type: inline-size;
+}
+
+.tmd-chat-context-runtime {
+  display: block;
+  margin: 0 0 6px 12px;
+  height: 15px;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--text-muted) 75%, transparent);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  transition: opacity 220ms ease, transform 220ms ease, height 220ms ease, margin 220ms ease, color 120ms ease;
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.tmd-chat-context-runtime:hover {
+  color: var(--text-normal);
+}
+
+.tmd-chat-context-runtime.tmd-is-hidden {
+  opacity: 0;
+  height: 0;
+  margin-bottom: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+}
+
+.tmd-chat-console-drawer.is-open ~ .tmd-chat-context-runtime {
+  opacity: 0;
+  height: 0;
+  margin-bottom: 0;
+  pointer-events: none;
+  transform: translateY(4px);
 }
 
 .tmd-chat-input-shell {
@@ -3132,6 +3201,126 @@ svg.tmd-spin {
   width: 14px;
   height: 14px;
 }
+
+/* Settings Onboarding Visual Helpers */
+.tmd-tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.tmd-tab-dot.is-warning {
+  background-color: var(--color-orange);
+}
+
+.tmd-tab-dot.is-danger {
+  background-color: var(--color-red);
+}
+
+.tmd-tab-dot.tmd-pulse {
+  animation: tmd-blink-animation 1.4s infinite ease-in-out;
+}
+
+@keyframes tmd-blink-animation {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.25;
+    transform: scale(0.75);
+  }
+}
+
+.tmd-settings-warning-banner {
+  background: color-mix(in srgb, var(--color-red) 8%, var(--background-primary) 92%);
+  border: 1px solid color-mix(in srgb, var(--color-red) 24%, transparent);
+  border-radius: var(--tmd-radius-sm);
+  padding: 12px 14px;
+  margin: 12px 0 16px 0;
+}
+
+.tmd-settings-warning-title {
+  color: var(--text-error);
+  font-weight: 600;
+  font-size: 0.88rem;
+  margin-bottom: 6px;
+}
+
+.tmd-settings-warning-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-error);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.tmd-settings-warning-list li {
+  margin-bottom: 4px;
+}
+
+.tmd-settings-warning-list li::marker {
+  color: var(--text-error);
+  font-weight: 600;
+}
+
+.tmd-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.tmd-env-detected-badge {
+  font-size: 0.72rem;
+  color: var(--text-success);
+  background-color: color-mix(in srgb, var(--color-green) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-green) 24%, transparent);
+  border-radius: var(--tmd-radius-pill);
+  padding: 1px 8px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tmd-api-key-hint-override {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: -2px;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+/* Compact Settings Panel Buttons */
+.tmd-update-item-button,
+.tmd-ante-update-button {
+  min-width: auto !important;
+  padding: 4px 10px !important;
+  height: 26px !important;
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  border-radius: var(--tmd-radius-sm) !important;
+}
+
+.tmd-update-item-button-icon,
+.tmd-ante-update-button-icon {
+  margin-right: 5px !important;
+}
+
+.tmd-update-item-button-icon svg,
+.tmd-ante-update-button-icon svg {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+
+
+
 
 
 

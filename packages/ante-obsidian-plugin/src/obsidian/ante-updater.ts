@@ -21,7 +21,7 @@ export interface AnteVersionCheckResult {
 
 const runShellCommand = (command: string): Promise<string> =>
   new Promise((resolve, reject) => {
-    const shellPath = process.env.SHELL?.trim() || DEFAULT_SHELL;
+    const shellPath = (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
     const child = spawn(shellPath, ["-lc", command], {
       stdio: ["ignore", "pipe", "pipe"]
     });

@@ -77,7 +77,7 @@ export class SettingsUpdatesRenderer {
         cls: this.pluginVersionState.updateAvailable ? "mod-cta" : ""
       });
       openButton.addClass("tmd-update-item-button");
-      this.decorateAnteActionButton(openButton, "external-link", "Open repo");
+      this.decorateAnteActionButton(openButton, "external-link", "Repo");
       openButton.addEventListener("click", () => {
         window.open(this.pluginVersionState?.latestUrl, "_blank", "noopener");
       });
@@ -221,7 +221,7 @@ export class SettingsUpdatesRenderer {
 
     const docsButton = actionsEl.createEl("button");
     docsButton.addClass("tmd-update-item-button");
-    this.decorateAnteActionButton(docsButton, "external-link", "Open CLI docs");
+    this.decorateAnteActionButton(docsButton, "external-link", "Docs");
     docsButton.addEventListener("click", () => {
       window.open("https://obsidian.md/zh/cli", "_blank", "noopener");
     });

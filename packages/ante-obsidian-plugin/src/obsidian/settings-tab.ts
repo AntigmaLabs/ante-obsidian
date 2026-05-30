@@ -110,6 +110,42 @@ export class TmdSettingTab extends PluginSettingTab {
     const anteDefaultTarget = this.pluginRef.anteDefaults;
     const resolvedAnteTarget = this.pluginRef.getResolvedAnteTarget();
 
+    if (this.pluginRef.isAnteInstalled() && this.isProviderCredentialMissing(resolvedAnteTarget.provider)) {
+      const warningEl = modelSectionEl.createDiv({ cls: "tmd-settings-warning-banner" });
+      const targetProvider = resolvedAnteTarget.provider;
+      const meta = AVAILABLE_PROVIDERS.find(p => p.id === targetProvider);
+      const providerLabel = meta?.label ?? targetProvider;
+      
+      if (this.pluginRef.settings.useAnteDefaults) {
+        warningEl.createDiv({
+          text: `⚠️ Credential missing: No active session found for '${providerLabel}'. Please choose one of the following to resolve:`,
+          cls: "tmd-settings-warning-title"
+        });
+        const listEl = warningEl.createEl("ol", { cls: "tmd-settings-warning-list" });
+        listEl.createEl("li", {
+          text: `Run the 'ante' command in your terminal to complete the authentication config in the local Ante CLI.`
+        });
+        listEl.createEl("li", {
+          text: `Or, turn off 'Follow Ante CLI' below to directly select and configure an API Key for your preferred provider inside the plugin settings.`
+        });
+      } else {
+        warningEl.createDiv({
+          text: `⚠️ API Key missing: Your '${providerLabel}' API key is not configured. Please resolve using one of the following methods:`,
+          cls: "tmd-settings-warning-title"
+        });
+        const listEl = warningEl.createEl("ol", { cls: "tmd-settings-warning-list" });
+        listEl.createEl("li", {
+          text: `Enter your ${providerLabel} API key directly below, or ensure the environment variable '${meta?.defaultEnvKey || ""}' is set in your system shell.`
+        });
+        listEl.createEl("li", {
+          text: `Or, choose another provider from the 'Provider override' dropdown below and configure its API key.`
+        });
+        listEl.createEl("li", {
+          text: `Or, run the 'ante' command in your terminal to complete the configuration/auth in the local Ante CLI, and then enable 'Follow Ante CLI' below.`
+        });
+      }
+    }
+
     new Setting(modelSectionEl)
       .setName("Follow Ante CLI")
       .setDesc(`Use provider and model from Ante CLI. Current default: \`${anteDefaultTarget.provider}\` / \`${anteDefaultTarget.model}\``)
@@ -119,18 +155,6 @@ export class TmdSettingTab extends PluginSettingTab {
           await this.pluginRef.saveSettings();
           this.display();
         })
-      );
-
-    new Setting(modelSectionEl)
-      .setName("Think level")
-      .setDesc("Optional plugin-level thinking override. Leave on Ante default to avoid sending a thinking override.")
-      .addDropdown((dropdown) =>
-        this.addThinkingOptions(dropdown)
-          .setValue(this.pluginRef.settings.anteThinking)
-          .onChange(async (value) => {
-            this.pluginRef.settings.anteThinking = value as AnteThinkingPreference;
-            await this.pluginRef.saveSettings();
-          })
       );
 
     if (!this.pluginRef.settings.useAnteDefaults) {
@@ -208,6 +232,18 @@ export class TmdSettingTab extends PluginSettingTab {
       this.renderCustomModelsSetting(modelSectionEl, effectiveProvider);
     }
 
+    new Setting(modelSectionEl)
+      .setName("Think level")
+      .setDesc("Optional plugin-level thinking override. Leave on Ante default to avoid sending a thinking override.")
+      .addDropdown((dropdown) =>
+        this.addThinkingOptions(dropdown)
+          .setValue(this.pluginRef.settings.anteThinking)
+          .onChange(async (value) => {
+            this.pluginRef.settings.anteThinking = value as AnteThinkingPreference;
+            await this.pluginRef.saveSettings();
+          })
+      );
+
     new Setting(advancedSectionEl)
       .setName("Mention trigger debug")
       .setDesc("Show a Notice when a mention trigger is detected.")
@@ -221,9 +257,17 @@ export class TmdSettingTab extends PluginSettingTab {
 
   private createTabButton(containerEl: HTMLElement, tabId: SettingsTabId, label: string, panelEl: HTMLElement): void {
     const buttonEl = containerEl.createEl("button", {
-      text: label,
       cls: `tmd-settings-tab${this.activeTab === tabId ? " is-active" : ""}`
     });
+    buttonEl.createSpan({ text: label });
+    if (this.shouldShowTabDot(tabId)) {
+      const dotEl = buttonEl.createSpan({ cls: "tmd-tab-dot tmd-pulse" });
+      if (tabId === "runtime") {
+        dotEl.addClass("is-warning");
+      } else if (tabId === "model") {
+        dotEl.addClass("is-danger");
+      }
+    }
     panelEl.toggleClass("is-active", this.activeTab === tabId);
     buttonEl.addEventListener("click", () => {
       this.activeTab = tabId;
@@ -252,6 +296,20 @@ export class TmdSettingTab extends PluginSettingTab {
       apiKey: "",
     };
 
+    let envValue = existing.envKey || meta.defaultEnvKey;
+    let keyValue = existing.apiKey;
+
+    const checkDetected = (env: string, key: string): boolean => {
+      const hasShellKey = env ? Boolean(this.pluginRef.shellEnv[env]?.trim()) : false;
+      const hasProcessKey = (env && typeof process !== "undefined" && process.env)
+        ? Boolean(process.env[env]?.trim())
+        : false;
+      return (hasShellKey || hasProcessKey) && !key.trim();
+    };
+
+    const isEnvKeyDetected = checkDetected(envValue, keyValue);
+    let updateElements: ((env: string, key: string) => void) | null = null;
+
     this.renderCredentialSetting(
       containerEl,
       `${meta.label} API key`,
@@ -260,24 +318,42 @@ export class TmdSettingTab extends PluginSettingTab {
         : `Set the env var name Ante reads for ${meta.label}, and optionally enter the key directly here.`,
       meta.defaultEnvKey,
       meta.keyPlaceholder ?? "",
-      existing.envKey || meta.defaultEnvKey,
-      existing.apiKey,
+      envValue,
+      keyValue,
+      isEnvKeyDetected,
+      (badgeEl, hintEl) => {
+        updateElements = (env, key) => {
+          const detected = checkDetected(env, key);
+          badgeEl.style.display = detected ? "inline-flex" : "none";
+          hintEl.style.display = detected ? "block" : "none";
+        };
+      },
       async (value) => {
+        envValue = value.trim() || meta.defaultEnvKey!;
         this.pluginRef.settings.providerKeys[providerId] = {
           ...existing,
-          envKey: value.trim() || meta.defaultEnvKey!,
+          envKey: envValue,
+          apiKey: keyValue,
         };
         // Keep legacy flat fields in sync for Gemini/Anthropic
         this.syncLegacyKeyFields(providerId);
         await this.pluginRef.saveSettings();
+        if (updateElements) {
+          updateElements(envValue, keyValue);
+        }
       },
       async (value) => {
+        keyValue = value.trim();
         this.pluginRef.settings.providerKeys[providerId] = {
           ...existing,
-          apiKey: value.trim(),
+          envKey: envValue,
+          apiKey: keyValue,
         };
         this.syncLegacyKeyFields(providerId);
         await this.pluginRef.saveSettings();
+        if (updateElements) {
+          updateElements(envValue, keyValue);
+        }
       }
     );
   }
@@ -303,6 +379,8 @@ export class TmdSettingTab extends PluginSettingTab {
     keyPlaceholder: string,
     envValue: string,
     keyValue: string,
+    isEnvKeyDetected: boolean,
+    registerElements: (badgeEl: HTMLSpanElement, hintEl: HTMLDivElement) => void,
     onEnvChange: (value: string) => Promise<void>,
     onKeyChange: (value: string) => Promise<void>
   ): void {
@@ -311,7 +389,17 @@ export class TmdSettingTab extends PluginSettingTab {
     credentialSetting.controlEl.addClass("tmd-gemini-setting");
 
     const envFieldEl = credentialSetting.controlEl.createDiv({ cls: "tmd-gemini-field" });
-    envFieldEl.createSpan({ text: "Env key", cls: "tmd-gemini-field-label" });
+    const labelRow = envFieldEl.createDiv({ cls: "tmd-field-label-row" });
+    labelRow.createSpan({ text: "Env key", cls: "tmd-gemini-field-label" });
+    
+    const badgeEl = labelRow.createSpan({
+      text: "✓ Detected in shell environment",
+      cls: "tmd-env-detected-badge"
+    });
+    if (!isEnvKeyDetected) {
+      badgeEl.style.display = "none";
+    }
+
     new Setting(envFieldEl).addText((text) => {
       text.inputEl.addClass("tmd-gemini-field-input");
       text.setPlaceholder(envPlaceholder).setValue(envValue).onChange((value) => {
@@ -320,8 +408,19 @@ export class TmdSettingTab extends PluginSettingTab {
     });
 
     const keyFieldEl = credentialSetting.controlEl.createDiv({ cls: "tmd-gemini-field" });
-    keyFieldEl.createSpan({ text: "API key", cls: "tmd-gemini-field-label" });
+    const keyLabelRow = keyFieldEl.createDiv({ cls: "tmd-field-label-row" });
+    keyLabelRow.createSpan({ text: "API key", cls: "tmd-gemini-field-label" });
     
+    const hintEl = keyFieldEl.createDiv({
+      text: "Already detected in environment. No need to enter, but you can choose to override.",
+      cls: "tmd-api-key-hint-override"
+    });
+    if (!isEnvKeyDetected) {
+      hintEl.style.display = "none";
+    }
+    
+    registerElements(badgeEl, hintEl);
+
     const inputContainer = keyFieldEl.createDiv({ cls: "tmd-api-key-container" });
     let textInput: HTMLInputElement;
     new Setting(inputContainer).addText((text) => {
@@ -451,6 +550,54 @@ export class TmdSettingTab extends PluginSettingTab {
         void doAdd();
       }
     });
+  }
+
+  private isProviderCredentialMissing(providerId: string): boolean {
+    const meta = AVAILABLE_PROVIDERS.find((p) => p.id === providerId);
+    if (!meta) return true;
+    if (meta.authType === "none") {
+      return false; // local - no auth needed
+    }
+    if (meta.authType === "oauth") {
+      try {
+        const { homedir } = require("node:os");
+        const { join } = require("node:path");
+        const { existsSync } = require("node:fs");
+        const anteHome = (typeof process !== "undefined" && process.env?.ANTE_HOME) || join(homedir(), ".ante");
+        const oauthAuthFile: Record<string, string> = {
+          "openai-subscription": "openai",
+          "anthropic-subscription": "anthropic",
+          "antix": "antix",
+        };
+        const fileName = oauthAuthFile[providerId];
+        if (!fileName) return true;
+        return !existsSync(join(anteHome, "auth", `${fileName}.json`));
+      } catch {
+        return true;
+      }
+    }
+    // api-key
+    const keyConfig = this.pluginRef.settings.providerKeys[providerId];
+    const envKey = keyConfig?.envKey || meta.defaultEnvKey || "";
+    const hasDirectKey = Boolean(keyConfig?.apiKey?.trim());
+    const hasShellKey = envKey ? Boolean(this.pluginRef.shellEnv[envKey]?.trim()) : false;
+    const hasProcessKey = (envKey && typeof process !== "undefined" && process.env) ? Boolean(process.env[envKey]?.trim()) : false;
+    return !(hasDirectKey || hasShellKey || hasProcessKey);
+  }
+
+  private shouldShowTabDot(tabId: SettingsTabId): boolean {
+    const isInstalled = this.pluginRef.isAnteInstalled();
+    if (tabId === "runtime") {
+      return !isInstalled;
+    }
+    if (tabId === "model") {
+      if (!isInstalled) {
+        return false; // Don't show model warning if CLI is not even installed yet
+      }
+      const target = this.pluginRef.getResolvedAnteTarget();
+      return this.isProviderCredentialMissing(target.provider);
+    }
+    return false;
   }
 
   private addThinkingOptions(dropdown: DropdownComponent): DropdownComponent {

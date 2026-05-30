@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.7 - 2026-05-30
+
+- **Onboarding & Configuration Improvements**: Refine the initial settings setup with unified CLI terminology, smooth inline API key inputs, and quick-copy update helpers
+
 ## 0.6.6 - 2026-05-30
 
 - **Session Control Drawer**: Add a collapsible sliding Session Console drawer to the chat interface to house provider, model, and thinking selector dropdowns, freeing up composer space and resolving keyboard focus positioning

@@ -27,6 +27,8 @@ import {
 import {
   MESSAGE_WINDOW_SIZE,
   summarizeContext,
+  PROVIDER_LABELS,
+  THINKING_LABELS,
 } from "./chat-view-helpers"
 import { ChatViewControls } from "./chat-view-controls"
 import { ChatAttachmentManager } from "./chat-attachment-manager"
@@ -38,6 +40,7 @@ export const TMD_CHAT_VIEW_TYPE = "tmd-chat-view"
 interface ChatContextElements {
   titleEl: HTMLDivElement
   valueEl: HTMLDivElement
+  runtimeEl: HTMLDivElement
   snippetEl: HTMLDivElement | null
 }
 
@@ -187,11 +190,23 @@ export class TmdChatView extends ItemView {
     this.contextNodes = {
       titleEl: layout.contextTitleEl,
       valueEl: layout.contextValueEl,
+      runtimeEl: layout.contextRuntimeEl,
       snippetEl: null,
     }
     this.contextNodes.titleEl.setText("Current context")
 
     this.timelineEl = layout.timelineEl
+    let scrollTimer: number | null = null
+    this.registerDomEvent(this.timelineEl, "scroll", () => {
+      layout.contextRuntimeEl.classList.add("tmd-is-hidden")
+      if (scrollTimer != null) {
+        window.clearTimeout(scrollTimer)
+      }
+      scrollTimer = window.setTimeout(() => {
+        layout.contextRuntimeEl.classList.remove("tmd-is-hidden")
+        scrollTimer = null
+      }, 800)
+    })
     this.composerContainerEl = layout.composerContainerEl
     this.consoleDrawerEl = layout.consoleDrawerEl
     this.consoleToggleBtnEl = layout.consoleToggleBtnEl
@@ -207,6 +222,10 @@ export class TmdChatView extends ItemView {
 
     this.registerDomEvent(this.consoleToggleBtnEl, "click", (event) => {
       // Prevent outside-click listener from immediately closing the drawer we are opening
+      event.stopPropagation()
+      this.consoleDrawerEl.classList.toggle("is-open")
+    })
+    this.registerDomEvent(layout.contextRuntimeEl, "click", (event) => {
       event.stopPropagation()
       this.consoleDrawerEl.classList.toggle("is-open")
     })
@@ -566,6 +585,19 @@ export class TmdChatView extends ItemView {
     if (this.contextNodes.valueEl.dataset.value !== summary) {
       this.contextNodes.valueEl.dataset.value = summary
       this.contextNodes.valueEl.setText(summary)
+    }
+
+    const target = this.viewControls.getSelectedRuntimeTarget()
+    const providerLabel = PROVIDER_LABELS[target.provider as any] ?? target.provider
+    const thinkingLabel = THINKING_LABELS[target.thinking] ?? target.thinking
+    let displayModel = target.model || "default"
+    if (displayModel.includes("/") && !displayModel.startsWith("http")) {
+      displayModel = displayModel.split("/").pop() ?? displayModel
+    }
+    const runtimeSummary = `${providerLabel} · ${displayModel} · thinking: ${thinkingLabel}`
+    if (this.contextNodes.runtimeEl.dataset.value !== runtimeSummary) {
+      this.contextNodes.runtimeEl.dataset.value = runtimeSummary
+      this.contextNodes.runtimeEl.setText(runtimeSummary)
     }
 
     const snippet = context?.selection?.text?.trim().slice(0, 2000) ?? ""
