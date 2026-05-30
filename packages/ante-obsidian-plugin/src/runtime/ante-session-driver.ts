@@ -236,6 +236,7 @@ export class AnteSessionDriver implements AnteRuntime {
 
   private async runInternal(request: TaskRequest, observer: RuntimeObserver): Promise<void> {
     const config = this.resolveConfigForRequest(request);
+    console.info(`[tmd session] Executing turn with provider: "${config.provider}", model: "${config.model}", thinking: "${config.thinking ?? "default"}"`);
     if (!config.command.trim()) {
       observer.onExit({ status: "failed", error: "Ante command is required" });
       return;

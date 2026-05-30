@@ -24,6 +24,9 @@ export interface ChatLayoutNodes {
   inputShellEl: HTMLDivElement
   attachmentListEl: HTMLDivElement
   composerMetaEl: HTMLDivElement
+  consoleDrawerEl: HTMLDivElement
+  consoleToggleBtnEl: HTMLButtonElement
+  drawerCloseBtnEl: HTMLButtonElement
   attachmentButtonEl: HTMLButtonElement
   providerButtonEl: HTMLButtonElement
   modelButtonEl: HTMLButtonElement
@@ -57,6 +60,9 @@ interface ChatComposerNodes {
   inputShellEl: HTMLDivElement
   attachmentListEl: HTMLDivElement
   composerMetaEl: HTMLDivElement
+  consoleDrawerEl: HTMLDivElement
+  consoleToggleBtnEl: HTMLButtonElement
+  drawerCloseBtnEl: HTMLButtonElement
   attachmentButtonEl: HTMLButtonElement
   providerButtonEl: HTMLButtonElement
   modelButtonEl: HTMLButtonElement
@@ -128,6 +134,41 @@ const renderChatContext = (mainEl: HTMLDivElement): ChatContextNodes => {
 
 const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
   const composerContainerEl = div({ cls: "tmd-chat-composer" }).appendTo(mainEl)
+
+  // 1. Create Console Control Drawer inside the composer (collapsed by default)
+  const consoleDrawerEl = div({ cls: "tmd-chat-console-drawer" }).appendTo(
+    composerContainerEl,
+  )
+
+  // Render Console Drawer internal structure
+  const drawerHeaderEl = div({ cls: "tmd-console-drawer-header" }).appendTo(consoleDrawerEl)
+  drawerHeaderEl.createEl("div", { text: "Session Console", cls: "tmd-console-drawer-title" })
+  const drawerCloseBtnEl = button({
+    cls: "tmd-console-drawer-close-btn clickable-icon",
+  }).appendTo(drawerHeaderEl)
+
+  // Provider vertical field
+  const providerBlockEl = div({ cls: "tmd-console-field-block" }).appendTo(consoleDrawerEl)
+  providerBlockEl.createEl("span", { text: "Service Provider", cls: "tmd-console-field-label" })
+  const providerButtonEl = button({
+    cls: "tmd-chat-picker tmd-chat-provider-picker",
+  }).appendTo(providerBlockEl)
+
+  // Model vertical field
+  const modelBlockEl = div({ cls: "tmd-console-field-block" }).appendTo(consoleDrawerEl)
+  modelBlockEl.createEl("span", { text: "Model Target", cls: "tmd-console-field-label" })
+  const modelButtonEl = button({
+    cls: "tmd-chat-picker tmd-chat-model-picker",
+  }).appendTo(modelBlockEl)
+
+  // Thinking Level vertical field
+  const thinkingBlockEl = div({ cls: "tmd-console-field-block" }).appendTo(consoleDrawerEl)
+  thinkingBlockEl.createEl("span", { text: "Thinking Level", cls: "tmd-console-field-label" })
+  const thinkingButtonEl = button({
+    cls: "tmd-chat-picker tmd-chat-thinking-picker",
+  }).appendTo(thinkingBlockEl)
+
+  // 3. Create input shell and textarea below
   const inputShellEl = div({ cls: "tmd-chat-input-shell" }).appendTo(
     composerContainerEl,
   )
@@ -135,24 +176,24 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
   const attachmentListEl = div({ cls: "tmd-chat-attachments" }).appendTo(
     inputShellEl,
   )
+
+  // 4. Create composer metadata (bottom bar)
   const composerMetaEl = div({ cls: "tmd-chat-composer-meta" }).appendTo(
     inputShellEl,
   )
   const attachmentButtonEl = button({
     cls: "tmd-chat-attachment-button",
   }).appendTo(composerMetaEl)
-  const providerButtonEl = button({
-    cls: "tmd-chat-picker tmd-chat-provider-picker",
+  
+  // Console toggle button next to attachment button
+  const consoleToggleBtnEl = button({
+    cls: "clickable-icon tmd-chat-console-toggle-button",
   }).appendTo(composerMetaEl)
-  const modelButtonEl = button({
-    cls: "tmd-chat-picker tmd-chat-model-picker",
-  }).appendTo(composerMetaEl)
-  const thinkingButtonEl = button({
-    cls: "tmd-chat-picker tmd-chat-thinking-picker",
-  }).appendTo(composerMetaEl)
+
   const composerActionButtonEl = button({
     cls: "tmd-chat-primary-action",
   }).appendTo(inputShellEl)
+  
   const fileInputEl = inputShellEl.createEl("input", {
     cls: "tmd-chat-file-input",
   }) as HTMLInputElement
@@ -164,6 +205,9 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
     inputShellEl,
     attachmentListEl,
     composerMetaEl,
+    consoleDrawerEl,
+    consoleToggleBtnEl,
+    drawerCloseBtnEl,
     attachmentButtonEl,
     providerButtonEl,
     modelButtonEl,
@@ -224,6 +268,9 @@ export const renderChatLayout = (
     inputShellEl: main.composer.inputShellEl,
     attachmentListEl: main.composer.attachmentListEl,
     composerMetaEl: main.composer.composerMetaEl,
+    consoleDrawerEl: main.composer.consoleDrawerEl,
+    consoleToggleBtnEl: main.composer.consoleToggleBtnEl,
+    drawerCloseBtnEl: main.composer.drawerCloseBtnEl,
     attachmentButtonEl: main.composer.attachmentButtonEl,
     providerButtonEl: main.composer.providerButtonEl,
     modelButtonEl: main.composer.modelButtonEl,

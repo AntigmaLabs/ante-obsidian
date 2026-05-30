@@ -1,4 +1,4 @@
-import { PluginSettingTab, Setting } from "obsidian";
+import { PluginSettingTab, Setting, DropdownComponent, Notice, setIcon } from "obsidian";
 import {
   ANTE_DEFAULT_THINKING,
   ANTE_THINKING_LEVELS,
@@ -200,10 +200,12 @@ export class TmdSettingTab extends PluginSettingTab {
       // When "Follow Ante" is off, use the override; otherwise the resolved default.
       const effectiveProvider = this.pluginRef.settings.anteProvider;
       this.renderProviderCredentialSetting(modelSectionEl, effectiveProvider);
+      this.renderCustomModelsSetting(modelSectionEl, effectiveProvider);
     } else {
       // "Follow Ante" is on — show credentials for whatever the resolved provider is.
       const effectiveProvider = resolvedAnteTarget.provider;
       this.renderProviderCredentialSetting(modelSectionEl, effectiveProvider);
+      this.renderCustomModelsSetting(modelSectionEl, effectiveProvider);
     }
 
     new Setting(advancedSectionEl)
@@ -305,6 +307,7 @@ export class TmdSettingTab extends PluginSettingTab {
     onKeyChange: (value: string) => Promise<void>
   ): void {
     const credentialSetting = new Setting(containerEl).setName(name).setDesc(description);
+    credentialSetting.settingEl.addClass("tmd-vertical-setting");
     credentialSetting.controlEl.addClass("tmd-gemini-setting");
 
     const envFieldEl = credentialSetting.controlEl.createDiv({ cls: "tmd-gemini-field" });
@@ -318,12 +321,135 @@ export class TmdSettingTab extends PluginSettingTab {
 
     const keyFieldEl = credentialSetting.controlEl.createDiv({ cls: "tmd-gemini-field" });
     keyFieldEl.createSpan({ text: "API key", cls: "tmd-gemini-field-label" });
-    new Setting(keyFieldEl).addText((text) => {
-      text.inputEl.type = "password";
-      text.inputEl.addClass("tmd-gemini-field-input");
+    
+    const inputContainer = keyFieldEl.createDiv({ cls: "tmd-api-key-container" });
+    let textInput: HTMLInputElement;
+    new Setting(inputContainer).addText((text) => {
+      textInput = text.inputEl;
+      textInput.type = "password";
+      textInput.addClass("tmd-gemini-field-input");
       text.setPlaceholder(keyPlaceholder).setValue(keyValue).onChange((value) => {
         void onKeyChange(value);
       });
+    });
+
+    const toggleBtn = inputContainer.createEl("button", {
+      cls: "clickable-icon tmd-api-key-toggle-btn",
+      attr: { type: "button", title: "Show API key" }
+    });
+    setIcon(toggleBtn, "eye");
+
+    toggleBtn.addEventListener("click", () => {
+      if (textInput.type === "password") {
+        textInput.type = "text";
+        setIcon(toggleBtn, "eye-off");
+        toggleBtn.setAttribute("title", "Hide API key");
+      } else {
+        textInput.type = "password";
+        setIcon(toggleBtn, "eye");
+        toggleBtn.setAttribute("title", "Show API key");
+      }
+    });
+  }
+
+  private renderCustomModelsSetting(containerEl: HTMLElement, providerId: string): void {
+    const meta = AVAILABLE_PROVIDERS.find((p) => p.id === providerId);
+    if (!meta) return;
+
+    // We only support custom models for non-oauth providers
+    if (meta.authType === "oauth") {
+      return;
+    }
+
+    const setting = new Setting(containerEl)
+      .setName(`${meta.label} custom models`)
+      .setDesc("Add or manage custom model IDs that will be merged into your available model list.");
+    setting.settingEl.addClass("tmd-vertical-setting");
+
+    // Tailor descriptions to be common and standard
+    let placeholder = "e.g. custom-model-name";
+
+    if (providerId === "openrouter") {
+      placeholder = "e.g. anthropic/claude-3-5-sonnet";
+    } else if (providerId === "openai-compatible") {
+      placeholder = "e.g. qwen-max";
+    } else if (providerId === "openai") {
+      placeholder = "e.g. ft:gpt-4o-mini:my-org:...";
+    } else if (providerId === "local") {
+      placeholder = "e.g. llama3:8b";
+    }
+
+    const managerEl = setting.controlEl.createDiv({ cls: "tmd-custom-models-manager" });
+
+    // 1. Render existing list using custom compact model list styling
+    const currentModels = this.pluginRef.settings.customModels[providerId] ?? [];
+    if (currentModels.length > 0) {
+      const listEl = managerEl.createDiv({ cls: "tmd-preset-list" });
+      currentModels.forEach((model, index) => {
+        const rowEl = listEl.createDiv({ cls: "tmd-custom-model-preset-row" });
+        
+        const contentEl = rowEl.createDiv({ cls: "tmd-custom-model-preset-content" });
+        
+        const copyEl = contentEl.createDiv({ cls: "tmd-custom-model-preset-copy" });
+        copyEl.createDiv({ cls: "tmd-custom-model-preset-name", text: model });
+        
+        const controlsEl = contentEl.createDiv({ cls: "tmd-preset-controls" });
+        controlsEl.style.minWidth = "auto";
+        controlsEl.style.flex = "0 0 auto";
+        
+        const deleteBtn = controlsEl.createEl("button", { cls: "clickable-icon tmd-preset-icon-button" });
+        deleteBtn.setAttribute("aria-label", `Remove ${model}`);
+        setIcon(deleteBtn, "trash");
+        
+        deleteBtn.addEventListener("click", async () => {
+          const updated = [...currentModels];
+          updated.splice(index, 1);
+          if (updated.length > 0) {
+            this.pluginRef.settings.customModels[providerId] = updated;
+          } else {
+            delete this.pluginRef.settings.customModels[providerId];
+          }
+          await this.pluginRef.saveSettings();
+          this.display(); // Refresh settings tab to reflect changes
+        });
+      });
+    }
+
+    // 2. Render input row to add new model
+    const addRowEl = managerEl.createDiv({ cls: "tmd-custom-model-add-row" });
+    let inputEl: HTMLInputElement;
+    new Setting(addRowEl).addText((text) => {
+      inputEl = text.inputEl;
+      inputEl.addClass("tmd-gemini-field-input");
+      text.setPlaceholder(placeholder);
+    });
+
+    const addBtn = addRowEl.createEl("button", {
+      cls: "tmd-custom-model-add-btn mod-cta",
+      text: "Add",
+      attr: { type: "button" }
+    });
+
+    const doAdd = async () => {
+      const val = inputEl.value.trim();
+      if (!val) return;
+
+      const current = this.pluginRef.settings.customModels[providerId] ?? [];
+      if (!current.includes(val)) {
+        this.pluginRef.settings.customModels[providerId] = [...current, val];
+        await this.pluginRef.saveSettings();
+        this.display(); // Refresh settings tab to reflect changes
+      } else {
+        new Notice("Model ID already exists in custom list");
+      }
+    };
+
+    addBtn.addEventListener("click", doAdd);
+    inputEl!.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        void doAdd();
+      }
     });
   }
 

@@ -234,6 +234,8 @@ export interface TmdSettings extends PresetSettings {
   showChatRuntimeDetails: boolean;
   /** Per-provider API key configuration (keyed by provider id) */
   providerKeys: Record<string, ProviderKeyConfig>;
+  /** Per-provider custom models configured by the user (keyed by provider id) */
+  customModels: Record<string, string[]>;
   /** @deprecated Use providerKeys["gemini"] instead. Kept for migration. */
   geminiApiKey: string;
   /** @deprecated Use providerKeys["gemini"].envKey instead. Kept for migration. */
@@ -257,6 +259,7 @@ export const DEFAULT_SETTINGS: TmdSettings = {
   showFullProcessLogs: false,
   showChatRuntimeDetails: true,
   providerKeys: {},
+  customModels: {},
   geminiApiKey: "",
   geminiApiKeyEnvKey: "GEMINI_API_KEY",
   anthropicApiKey: "",
@@ -378,6 +381,20 @@ const normalizeProviderKeys = (
   return result;
 };
 
+const normalizeCustomModels = (raw: unknown): Record<string, string[]> => {
+  const result: Record<string, string[]> = {};
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [providerId, entry] of Object.entries(raw as Record<string, unknown>)) {
+      if (Array.isArray(entry)) {
+        result[providerId] = entry
+          .map((m) => (typeof m === "string" ? m.trim() : ""))
+          .filter(Boolean);
+      }
+    }
+  }
+  return result;
+};
+
 export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefined): TmdSettings => {
   const raw = stored ?? {};
   const anteProvider = normalizeProvider(typeof raw.anteProvider === "string" ? raw.anteProvider : DEFAULT_SETTINGS.anteProvider);
@@ -402,6 +419,8 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
     legacyAnthropicEnvKey
   );
 
+  const customModels = normalizeCustomModels(raw.customModels);
+
   return {
     connectionMode: "stdio",
     wsAddress:
@@ -417,6 +436,7 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
     showFullProcessLogs: raw.showFullProcessLogs === true,
     showChatRuntimeDetails: raw.showChatRuntimeDetails !== false,
     providerKeys,
+    customModels,
     // Keep legacy fields populated from migration result for backward compat
     geminiApiKey: providerKeys["gemini"]?.apiKey ?? legacyGeminiKey,
     geminiApiKeyEnvKey: providerKeys["gemini"]?.envKey ?? legacyGeminiEnvKey,

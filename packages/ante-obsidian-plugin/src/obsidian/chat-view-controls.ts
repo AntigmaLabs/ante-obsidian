@@ -1,4 +1,4 @@
-import { App, Menu, Notice } from "obsidian"
+import { App, Menu, Notice, setIcon } from "obsidian"
 import type TmdPlugin from "./main"
 import {
   normalizeProvider,
@@ -33,6 +33,18 @@ export class ChatViewControls {
     private readonly getLiveContext: () => ContextSnapshot | null,
     private readonly getActiveConversationId: () => string | null,
   ) {}
+
+  private showMenu(menu: Menu, buttonEl: HTMLButtonElement, event: MouseEvent): void {
+    if (event && event.clientX !== 0 && event.clientY !== 0) {
+      menu.showAtMouseEvent(event)
+    } else {
+      const rect = buttonEl.getBoundingClientRect()
+      menu.showAtPosition({
+        x: rect.left,
+        y: rect.bottom,
+      })
+    }
+  }
 
   initializeRuntimeTargetControls(): void {
     const resolvedTarget = this.plugin.getResolvedAnteTarget()
@@ -95,7 +107,7 @@ export class ChatViewControls {
             })
         })
       }
-      menu.showAtMouseEvent(event)
+      this.showMenu(menu, this.providerButtonEl, event)
     })
 
     this.modelButtonEl.addEventListener("click", (event) => {
@@ -131,7 +143,7 @@ export class ChatViewControls {
             .setDisabled(true)
         })
       }
-      menu.showAtMouseEvent(event)
+      this.showMenu(menu, this.modelButtonEl, event)
     })
 
     this.thinkingButtonEl.addEventListener("click", (event) => {
@@ -175,7 +187,7 @@ export class ChatViewControls {
             })
         })
       }
-      menu.showAtMouseEvent(event)
+      this.showMenu(menu, this.thinkingButtonEl, event)
     })
   }
 
@@ -186,14 +198,21 @@ export class ChatViewControls {
   }
 
   populateModelSelect(): void {
-    const label =
+    const rawLabel =
       this.loadingModelProvider === this.selectedProvider
         ? "Loading models..."
         : this.modelLoadFailedProvider === this.selectedProvider
           ? "Models unavailable"
           : this.selectedModel || "Models not loaded"
-    this.modelButtonEl.setText(label)
-    this.modelButtonEl.setAttribute("title", label)
+
+    // Strip provider prefix (e.g. 'google/gemini' -> 'gemini') for display purposes only
+    let displayLabel = rawLabel;
+    if (displayLabel && displayLabel.includes("/") && !displayLabel.startsWith("http")) {
+      displayLabel = displayLabel.split("/").pop() ?? displayLabel;
+    }
+
+    this.modelButtonEl.setText(displayLabel)
+    this.modelButtonEl.setAttribute("title", rawLabel)
   }
 
   getSelectableModel(provider: string, preferredModel: string): string {
@@ -275,8 +294,9 @@ export class ChatViewControls {
   }
 
   populateThinkingSelect(): void {
-    this.thinkingButtonEl.setText(THINKING_LABELS[this.selectedThinking])
-    this.thinkingButtonEl.setAttribute("title", THINKING_LABELS[this.selectedThinking])
+    const label = THINKING_LABELS[this.selectedThinking]
+    this.thinkingButtonEl.setText(label)
+    this.thinkingButtonEl.setAttribute("title", label)
   }
 
   getSelectedRuntimeTarget(): {

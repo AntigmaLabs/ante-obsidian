@@ -51,7 +51,7 @@ export const buildAnteRuntimeConfig = (
     const keyConfig = providerKeys[providerId]
 
     // Determine the environment variable name to use
-    let envKey = keyConfig?.envKey
+    let envKey: string | undefined = keyConfig?.envKey
     if (!envKey) {
       if (providerId === "gemini") {
         envKey = legacySettings.geminiApiKeyEnvKey || provider.defaultEnvKey
@@ -61,7 +61,7 @@ export const buildAnteRuntimeConfig = (
         envKey = provider.defaultEnvKey
       }
     }
-    const normalizedKey = normalizeEnvVarName(envKey)
+    const normalizedKey = envKey ? normalizeEnvVarName(envKey) : ""
     if (!normalizedKey) {
       continue
     }

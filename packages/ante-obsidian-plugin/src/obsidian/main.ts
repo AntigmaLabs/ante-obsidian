@@ -446,16 +446,13 @@ export default class TmdPlugin extends Plugin {
   }
 
   getAvailableModelNamesForProvider(provider: string): string[] {
-    const cached = this.modelNamesByProvider.get(provider.trim());
-    if (cached && cached.length > 0) {
-      return [...cached];
-    }
-    // Fall back to static built-in models configured in AVAILABLE_PROVIDERS
-    const providerMeta = AVAILABLE_PROVIDERS.find((p) => p.id === provider.trim());
-    if (providerMeta?.defaultModels) {
-      return [...providerMeta.defaultModels];
-    }
-    return [];
+    const providerId = provider.trim();
+    const cached = this.modelNamesByProvider.get(providerId) ?? [];
+    const providerMeta = AVAILABLE_PROVIDERS.find((p) => p.id === providerId);
+    const builtIn = providerMeta?.defaultModels ?? [];
+    const custom = this.settings.customModels?.[providerId] ?? [];
+
+    return [...new Set([...cached, ...builtIn, ...custom])];
   }
 
   /**

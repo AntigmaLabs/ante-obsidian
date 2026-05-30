@@ -68,6 +68,9 @@ export class TmdChatView extends ItemView {
   private providerButtonEl!: HTMLButtonElement
   private modelButtonEl!: HTMLButtonElement
   private thinkingButtonEl!: HTMLButtonElement
+  private consoleDrawerEl!: HTMLDivElement
+  private consoleToggleBtnEl!: HTMLButtonElement
+  private drawerCloseBtnEl!: HTMLButtonElement
   private composerEl!: HTMLTextAreaElement
   private composerContainerEl!: HTMLDivElement
   private attachmentListEl!: HTMLDivElement
@@ -190,6 +193,44 @@ export class TmdChatView extends ItemView {
 
     this.timelineEl = layout.timelineEl
     this.composerContainerEl = layout.composerContainerEl
+    this.consoleDrawerEl = layout.consoleDrawerEl
+    this.consoleToggleBtnEl = layout.consoleToggleBtnEl
+    this.drawerCloseBtnEl = layout.drawerCloseBtnEl
+
+    setIcon(this.consoleToggleBtnEl, "sliders")
+    this.consoleToggleBtnEl.setAttribute("aria-label", "Session Console")
+    this.consoleToggleBtnEl.setAttribute("title", "Session Console")
+
+    setIcon(this.drawerCloseBtnEl, "x")
+    this.drawerCloseBtnEl.setAttribute("aria-label", "Close drawer")
+    this.drawerCloseBtnEl.setAttribute("title", "Close drawer")
+
+    this.registerDomEvent(this.consoleToggleBtnEl, "click", (event) => {
+      // Prevent outside-click listener from immediately closing the drawer we are opening
+      event.stopPropagation()
+      this.consoleDrawerEl.classList.toggle("is-open")
+    })
+    this.registerDomEvent(this.drawerCloseBtnEl, "click", () => {
+      this.consoleDrawerEl.classList.remove("is-open")
+    })
+
+    // Outside click collapses drawer
+    this.registerDomEvent(this.containerEl, "click", (event) => {
+      const target = event.target as HTMLElement
+      if (this.consoleDrawerEl.classList.contains("is-open")) {
+        if (!this.composerContainerEl.contains(target)) {
+          this.consoleDrawerEl.classList.remove("is-open")
+        }
+      }
+    })
+
+    // Pressing ESC collapses drawer
+    this.registerDomEvent(this.containerEl, "keydown", (event) => {
+      if (event.key === "Escape") {
+        this.consoleDrawerEl.classList.remove("is-open")
+      }
+    })
+
     this.attachmentListEl = layout.attachmentListEl
     this.attachmentButtonEl = layout.attachmentButtonEl
     setIcon(this.attachmentButtonEl, "plus")
@@ -201,6 +242,9 @@ export class TmdChatView extends ItemView {
     this.composerEl = layout.composerEl
     this.composerEl.placeholder =
       "Ask about the current note, rewrite a selection, or plan the next edit."
+    this.registerDomEvent(this.composerEl, "focus", () => {
+      this.consoleDrawerEl.classList.remove("is-open")
+    })
     this.composerActionButtonEl = layout.composerActionButtonEl
     this.fileInputEl = layout.fileInputEl
     this.fileInputEl.setAttribute("aria-hidden", "true")
