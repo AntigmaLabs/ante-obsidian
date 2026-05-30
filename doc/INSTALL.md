@@ -2,7 +2,7 @@
 
 This guide explains the supported ways to install Ante Obsidian as an Obsidian plugin.
 
-Ante Obsidian is a desktop-only plugin. It depends on a local Ante Runtime, but you can install `ante` directly from the plugin settings after installation.
+Ante Obsidian is a desktop-only plugin. It depends on the local Ante CLI, but you can install `ante` directly from the plugin settings after installation.
 
 ## Option 1: Install From A GitHub Release
 
@@ -43,6 +43,6 @@ Use this option once Ante Obsidian is accepted into the official directory.
 After installation, verify the runtime configuration:
 
 1. Open Ante Obsidian settings.
-2. Check the `Runtime` panel for plugin and local Ante Runtime status.
+2. Check the `Runtime` panel for plugin and local Ante CLI status.
 3. If Ante is not installed locally yet, use `Install` directly from the settings page.
 4. Confirm your provider and model settings.

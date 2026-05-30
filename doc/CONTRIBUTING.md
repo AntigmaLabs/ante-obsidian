@@ -46,7 +46,7 @@ It also copies those three files to `.release/main.js`, `.release/manifest.json`
 After manual installation:
 
 1. Enable `Ante Obsidian` in `Settings -> Community plugins`.
-2. Confirm the local Ante runtime status and provider/model settings if needed.
+2. Confirm the local Ante CLI status and provider/model settings if needed.
 3. By default, Ante Obsidian follows `~/.ante/settings.json` for provider and model.
 4. Review preset visibility and ordering in `Ante Obsidian Settings -> Presets` if you want to customize the editor menu.
 5. If you switch Ante Obsidian to manual provider selection and choose `Gemini API`, you can either keep `GEMINI_API_KEY` in your environment or paste the key into the plugin's Gemini settings. Leaving the field empty reuses Ante's environment.

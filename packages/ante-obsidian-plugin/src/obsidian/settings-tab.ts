@@ -53,7 +53,7 @@ export class TmdSettingTab extends PluginSettingTab {
     const modelSectionEl = this.createSettingsSection(
       panelsEl,
       "Model",
-      "These settings override Ante defaults for this plugin. Actual availability still depends on your local Ante runtime."
+      "These settings override Ante CLI defaults for this plugin. Actual availability still depends on your local Ante CLI."
     );
 
     // Delegate Presets rendering to SettingsPresetsRenderer
@@ -111,8 +111,8 @@ export class TmdSettingTab extends PluginSettingTab {
     const resolvedAnteTarget = this.pluginRef.getResolvedAnteTarget();
 
     new Setting(modelSectionEl)
-      .setName("Follow Ante")
-      .setDesc(`Use provider and model from Ante. Current default: \`${anteDefaultTarget.provider}\` / \`${anteDefaultTarget.model}\``)
+      .setName("Follow Ante CLI")
+      .setDesc(`Use provider and model from Ante CLI. Current default: \`${anteDefaultTarget.provider}\` / \`${anteDefaultTarget.model}\``)
       .addToggle((toggle) =>
         toggle.setValue(this.pluginRef.settings.useAnteDefaults).onChange(async (value) => {
           this.pluginRef.settings.useAnteDefaults = value;
@@ -197,12 +197,12 @@ export class TmdSettingTab extends PluginSettingTab {
 
       // ── API key section (dynamic per provider) ─────────────────────────────
       // Determine the effective provider for credential rendering.
-      // When "Follow Ante" is off, use the override; otherwise the resolved default.
+      // When "Follow Ante CLI" is off, use the override; otherwise the resolved default.
       const effectiveProvider = this.pluginRef.settings.anteProvider;
       this.renderProviderCredentialSetting(modelSectionEl, effectiveProvider);
       this.renderCustomModelsSetting(modelSectionEl, effectiveProvider);
     } else {
-      // "Follow Ante" is on — show credentials for whatever the resolved provider is.
+      // "Follow Ante CLI" is on — show credentials for whatever the resolved provider is.
       const effectiveProvider = resolvedAnteTarget.provider;
       this.renderProviderCredentialSetting(modelSectionEl, effectiveProvider);
       this.renderCustomModelsSetting(modelSectionEl, effectiveProvider);

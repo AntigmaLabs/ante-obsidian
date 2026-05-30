@@ -25,7 +25,7 @@ export const renderMissingAnteState = (
     void options.onOpenSettings()
   })
   const refreshButton = actionsEl.createEl("button", {
-    text: "Refresh runtime",
+    text: "Refresh CLI status",
   })
   refreshButton.addEventListener("click", () => {
     void options.onRefresh()

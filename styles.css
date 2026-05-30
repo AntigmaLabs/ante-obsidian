@@ -525,6 +525,53 @@ button.tmd-diff-file-main {
   color: color-mix(in srgb, var(--text-faint) 76%, var(--text-muted) 24%);
 }
 
+.tmd-update-script-container {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--background-secondary) 80%, transparent);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--tmd-radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tmd-update-script-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.tmd-update-script-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.tmd-update-script-code {
+  flex: 1 1 0;
+  margin: 0;
+  padding: 8px;
+  background: var(--background-primary);
+  border-radius: var(--tmd-radius-xs);
+  border: 1px solid var(--background-modifier-border);
+  font-family: var(--font-monospace);
+  font-size: 0.82rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.tmd-update-script-copy-btn {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  padding: 6px 12px;
+  height: auto;
+  line-height: 1.4;
+  border-radius: var(--tmd-radius-sm);
+}
+
 @media (max-width: 720px) {
   .tmd-update-item {
     grid-template-columns: 20px minmax(0, 1fr);

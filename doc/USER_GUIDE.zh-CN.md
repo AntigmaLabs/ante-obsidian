@@ -1,6 +1,6 @@
 # Ante Obsidian 用户使用文档
 
-Ante Obsidian 是一个面向 Obsidian 桌面版的 Ante 驱动 Markdown 工作流插件。它把本地 Ante 运行时接入到笔记编辑、Diff 审阅、聊天和终端式交互流程中。
+Ante Obsidian 是一个面向 Obsidian 桌面版的 Ante 驱动 Markdown 工作流插件。它把本地 Ante CLI 接入到笔记编辑、Diff 审阅、聊天和终端式交互流程中。
 
 本文档面向普通用户，重点说明 Ante Obsidian 现在能做什么、从哪里触发、结果会出现在哪里。
 
@@ -12,7 +12,7 @@ Ante Obsidian 当前主要提供 6 类用户可见功能：
 2. 通过编辑器右键菜单运行内置或自定义预设。
 3. 在 `Chat with Ante` 中进行连续追问。
 4. 在 `Ante Terminal` 中使用更接近终端的交互方式。
-5. 在插件设置中配置本地 Ante 运行时、provider、model，以及当前支持的凭据项。
+5. 在插件设置中配置本地 Ante CLI、provider、model，以及当前支持的凭据项。
 6. 在插件设置中管理预设显示、排序以及自定义预设。
 
 ## 功能一：笔记内联触发
@@ -140,8 +140,8 @@ Ante Obsidian 注册了这些常用命令，可以从 Obsidian 命令面板直�
 - 手动指定 provider 和 model
 - 支持的 provider 包括 `openai-subscription`、`gemini` 和 `anthropic`
 - Gemini API Key 或其环境变量名
-- 插件版本与本地 Ante Runtime 的更新检查
-- 在设置页中安装或升级 Ante Runtime
+- 插件版本与本地 Ante CLI 的更新检查
+- 在设置页中安装或升级 Ante CLI
 - 是否开启 mention trigger 调试提示
 - 预设显示开关
 - 拖拽排序预设
@@ -166,7 +166,7 @@ Ante Obsidian 注册了这些常用命令，可以从 Obsidian 命令面板直�
 
 ## 使用前提
 
-Ante Obsidian 本身不直接提供模型能力，它依赖你本机可用的 Ante 运行环境。
+Ante Obsidian 本身不直接提供模型能力，它依赖你本机可用的 Ante CLI。
 
 使用前请确认：
 

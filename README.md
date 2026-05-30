@@ -12,12 +12,12 @@
 
 ---
 
-**Ante Obsidian** is a desktop-only Obsidian plugin for Ante-powered Markdown workflows. It bridges note editing, diff review, interactive sidebars, and chat flows with a local agentic runtime, delivering an editorial, note-aware AI second brain.
+**Ante Obsidian** is a desktop-only Obsidian plugin for Ante-powered Markdown workflows. It bridges note editing, diff review, interactive sidebars, and chat flows with a local agentic CLI, delivering an editorial, note-aware AI second brain.
 
 The repository is organized as a monorepo:
 
 - `packages/ante-obsidian-plugin` — The core Obsidian plugin.
-- `packages/ante-sdk` — The reusable TypeScript SDK for programmatically spawning and interacting with the Ante runtime.
+- `packages/ante-sdk` — The reusable TypeScript SDK for programmatically spawning and interacting with the Ante CLI.
 
 ---
 
@@ -51,12 +51,12 @@ Replace `/path/to/your/vault` with your actual Obsidian vault path (same as Step
 > [!NOTE]
 > For manual extraction zip files or detailed developer compilation instructions, please refer to [INSTALL.md](./doc/INSTALL.md).
 
-### 2. Auto-Setup Runtime
+### 2. Auto-Setup CLI
 
-The plugin runs completely locally and relies on the `ante` runtime. Setup is fully automated after enabling the plugin:
+The plugin runs completely locally and relies on the `ante` CLI. Setup is fully automated after enabling the plugin:
 
 1. Open **Obsidian Settings** -> **Ante Obsidian**.
-2. Under the **Runtime** settings panel, click **Install** to set up the local `ante` runtime automatically.
+2. Under the **Runtime** settings panel, click **Install** to set up the local `ante` CLI automatically.
 3. Configure your preferred provider (Gemini, Anthropic, or OpenAI) and verify your key configurations.
 
 ---
@@ -85,13 +85,13 @@ The plugin runs completely locally and relies on the `ante` runtime. Setup is fu
 
 Ante Obsidian leverages a lightweight, local-first agent architecture. It streams protocol messages directly over standard input/output (`stdin/stdout`) without needing PTY or heavy terminal emulation, ensuring maximum performance and complete privacy.
 
-The plugin is desktop-only because it launches the local Ante runtime and reads local Ante defaults from `~/.ante/settings.json`. Vault content is read and written through the Obsidian Vault API; temporary filesystem reads are limited to staged diff previews created by the plugin. Clipboard access is write-only and only happens after the user clicks a copy action.
+The plugin is desktop-only because it launches the local Ante CLI and reads local Ante defaults from `~/.ante/settings.json`. Vault content is read and written through the Obsidian Vault API; temporary filesystem reads are limited to staged diff previews created by the plugin. Clipboard access is write-only and only happens after the user clicks a copy action.
 
 ```mermaid
 graph TD
     Obsidian[Obsidian Editor UI] <-->|Inline Edits / Context Menu / Sidebar Chat| Plugin[Ante Obsidian Plugin]
     Plugin <-->|Protocol Messages / Sessions| SDK["@antigma/ante-sdk"]
-    SDK <-->|Spawn stdio process| Runtime["Local Ante Runtime<br>'ante serve --stdio'"]
+    SDK <-->|Spawn stdio process| Runtime["Local Ante CLI<br>'ante serve --stdio'"]
     Runtime <-->|Agent Tool execution| Notes[".md Files / Vault Context"]
     Notes <-->|Live Workspace sync| Obsidian
 

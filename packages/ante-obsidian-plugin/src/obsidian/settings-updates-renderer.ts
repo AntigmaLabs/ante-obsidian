@@ -1,4 +1,4 @@
-import { Notice, Setting, setIcon } from "obsidian";
+import { Notice, Setting, setIcon, FileSystemAdapter } from "obsidian";
 import type TmdPlugin from "./main";
 import type { AnteVersionCheckResult } from "./ante-updater";
 import type { PluginVersionCheckResult } from "./plugin-updater";
@@ -82,6 +82,36 @@ export class SettingsUpdatesRenderer {
         window.open(this.pluginVersionState?.latestUrl, "_blank", "noopener");
       });
     }
+
+    if (this.pluginVersionState?.updateAvailable) {
+      const adapter = this.pluginRef.app.vault.adapter;
+      const vaultPath = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : "/path/to/your/vault";
+      const installScript = `curl -sS https://raw.githubusercontent.com/AntigmaLabs/ante-obsidian/main/scripts/install.sh | bash -s -- "${vaultPath}"`;
+
+      const scriptContainer = itemEl.createDiv({ cls: "tmd-update-script-container" });
+      scriptContainer.createEl("div", { 
+        text: "Run this command in your terminal to update the plugin:", 
+        cls: "tmd-update-script-label" 
+      });
+
+      const rowEl = scriptContainer.createDiv({ cls: "tmd-update-script-row" });
+      const codeBlock = rowEl.createEl("pre", { cls: "tmd-update-script-code" });
+      codeBlock.createEl("code", { text: installScript });
+
+      const copyBtn = rowEl.createEl("button", { 
+        text: "Copy command", 
+        cls: "tmd-update-script-copy-btn" 
+      });
+      copyBtn.addEventListener("click", () => {
+        navigator.clipboard.writeText(installScript)
+          .then(() => {
+            new Notice("Plugin update command copied to clipboard!");
+          })
+          .catch((error) => {
+            new Notice(error instanceof Error ? error.message : "Failed to copy command");
+          });
+      });
+    }
   }
 
   private renderAnteUpdateItem(containerEl: HTMLElement): void {
@@ -96,7 +126,7 @@ export class SettingsUpdatesRenderer {
     const bodyEl = itemEl.createDiv({ cls: "tmd-update-item-body" });
     const headerEl = bodyEl.createDiv({ cls: "tmd-update-item-header" });
     const titleRowEl = headerEl.createDiv({ cls: "tmd-update-item-title-row" });
-    titleRowEl.createSpan({ cls: "tmd-update-item-title", text: "Ante Runtime" });
+    titleRowEl.createSpan({ cls: "tmd-update-item-title", text: "Ante CLI" });
     titleRowEl.createSpan({ cls: "tmd-update-item-status", text: this.getAnteUpdateStatusLabel() });
 
     bodyEl.createDiv({
@@ -407,21 +437,21 @@ export class SettingsUpdatesRenderer {
       return "Installing or upgrading the local Ante CLI.";
     }
     if (this.checkingAnteVersion) {
-      return "Checking the local Ante CLI against the latest runtime channel.";
+      return "Checking the local Ante CLI against the latest release channel.";
     }
     if (!this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
       return "Ante is not installed locally yet.";
     }
     if (this.anteVersionState?.error) {
-      return "The runtime version could not be checked right now.";
+      return "The CLI version could not be checked right now.";
     }
     if (this.anteVersionState?.updateAvailable) {
-      return "A newer local Ante runtime is available.";
+      return "A newer local Ante CLI is available.";
     }
     if (this.anteVersionState?.localVersion && this.anteVersionState?.latestVersion) {
-      return "The local Ante runtime is already up to date.";
+      return "The local Ante CLI is already up to date.";
     }
-    return "Waiting to check the local Ante runtime.";
+    return "Waiting to check the local Ante CLI.";
   }
 
   private getAnteUpdateMeta(): string {

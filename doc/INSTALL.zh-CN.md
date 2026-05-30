@@ -2,7 +2,7 @@
 
 本文档介绍如何将 Ante Obsidian 安装为 Obsidian 插件。
 
-Ante Obsidian 仅支持 Obsidian 桌面版。插件实际运行依赖本机 Ante Runtime，但你可以在安装插件后，直接从设置页完成 `ante` 的安装。
+Ante Obsidian 仅支持 Obsidian 桌面版。插件实际运行依赖本机 Ante CLI，但你可以在安装插件后，直接从设置页完成 `ante` 的安装。
 
 ## 方式一：从 GitHub Release 安装
 
@@ -44,6 +44,6 @@ curl -sS https://raw.githubusercontent.com/AntigmaLabs/ante-obsidian/main/script
 安装完成后，请检查运行配置：
 
 1. 打开 Ante Obsidian 设置页。
-2. 查看 `Runtime` 面板，确认插件和本地 Ante Runtime 的状态。
+2. 查看 `Runtime` 面板，确认插件和本地 Ante CLI 的状态。
 3. 如果本机还没有安装 Ante，可直接在设置页中点击 `Install` 安装。
 4. 确认并配置你的 provider 和 model 设置。

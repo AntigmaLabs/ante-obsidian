@@ -1,6 +1,6 @@
 # Ante Obsidian User Guide
 
-Ante Obsidian is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante runtime to note editing, diff review, chat, and terminal-style interaction inside Obsidian.
+Ante Obsidian is an Obsidian desktop plugin for Ante-powered Markdown workflows. It connects your local Ante CLI to note editing, diff review, chat, and terminal-style interaction inside Obsidian.
 
 This guide is written for end users. It focuses on what Ante Obsidian can do today, where each feature is triggered, and where the results appear.
 
@@ -12,7 +12,7 @@ Ante Obsidian currently provides 6 main user-facing capabilities:
 2. Run built-in or custom presets from the editor context menu.
 3. Ask follow-up questions in `Chat with Ante`.
 4. Use `Ante Terminal` for a more terminal-style prompt flow.
-5. Configure the local Ante runtime, provider, model, and currently supported credential options from plugin settings.
+5. Configure the local Ante CLI, provider, model, and currently supported credential options from plugin settings.
 6. Manage preset visibility, ordering, and custom preset definitions from plugin settings.
 
 ## Feature 1: Inline Trigger Inside Notes
@@ -95,7 +95,7 @@ Ante Obsidian also registers these commands in the Obsidian command palette:
 - Reuse the current note context automatically
 - Continue follow-up prompts in the same conversation
 - Render Markdown replies
-- Show runtime progress, tool approval cards, and generated change summaries
+- Show CLI progress, tool approval cards, and generated change summaries
 
 ### Good Use Cases
 
@@ -130,7 +130,7 @@ If Ante asks to use tools during a run, the terminal view can show an approval c
 
 ## Feature 6: Settings And Preset Management
 
-Besides runtime configuration, Ante Obsidian now includes dedicated update checks and preset management sections in settings.
+Besides CLI configuration, Ante Obsidian now includes dedicated update checks and preset management sections in settings.
 
 ### Available Settings
 
@@ -140,8 +140,8 @@ Besides runtime configuration, Ante Obsidian now includes dedicated update check
 - Manual provider and model selection
 - Supported providers include `openai-subscription`, `gemini`, and `anthropic`
 - Gemini API key or its environment variable name
-- Plugin update checks and local Ante Runtime update checks
-- Install or upgrade Ante Runtime directly from settings
+- Plugin update checks and local Ante CLI update checks
+- Install or upgrade Ante CLI directly from settings
 - Mention trigger debug notices
 - Preset visibility controls
 - Drag-and-drop preset reordering
@@ -158,15 +158,15 @@ Besides runtime configuration, Ante Obsidian now includes dedicated update check
 ## A Typical Workflow
 
 1. Open a Markdown note.
-2. Select text or place the cursor in the target paragraph.
+2. Select text or place the cursor in the paragraph.
 3. Trigger Ante Obsidian with `@ante` plus `Enter`, a preset from the context menu, or a command palette action.
 4. If the result is inline text, it appears in the note.
 5. If you need follow-up discussion, continue in `Chat with Ante`.
-6. If you want a more runtime-focused flow, use `Ante Terminal`.
+6. If you want a more CLI-focused flow, use `Ante Terminal`.
 
 ## Requirements
 
-Ante Obsidian does not provide model access by itself. It depends on a working local Ante runtime.
+Ante Obsidian does not provide model access by itself. It depends on a working local Ante CLI.
 
 Before using Ante Obsidian, make sure:
 

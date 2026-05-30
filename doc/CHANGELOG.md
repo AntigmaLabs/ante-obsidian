@@ -70,7 +70,7 @@
 ## 0.5.0 - 2026-04-03
 
 - **Smart Note Diffs**: Improve code block diff application and heading anchor matching in your notes
-- **Ante Updates**: Add Ante runtime version check and update controls directly inside the settings tab
+- **Ante Updates**: Add Ante CLI version check and update controls directly inside the settings tab
 - **Session Stability**: Stabilized chat session handoffs and process logs streaming
 
 ## 0.4.2 - 2026-03-29
@@ -103,7 +103,7 @@
 
 - **Note Diff Previews**: Interactive inline diff previews and approval controls for editing notes
 - **Easy Preset Triggering**: Invocation of custom prompts directly via Vault context menus and editor mentions
-- **Auto-Discovery**: Automatic discovery of the local `ante` runtime binary path
+- **Auto-Discovery**: Automatic discovery of the local `ante` CLI binary path
 - **Release Packages**: Automated release ZIP generation for easy manual installations
 
 ## 0.1.2 - 2026-03-22
