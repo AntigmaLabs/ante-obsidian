@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.6 - 2026-05-30
+
+- **Session Control Drawer**: Add a collapsible sliding Session Console drawer to the chat interface to house provider, model, and thinking selector dropdowns, freeing up composer space and resolving keyboard focus positioning
+- **Custom Model Management**: Allow users to configure and manage custom model IDs per provider directly in the settings tab, automatically merged with available model names
+- **Toggleable API Keys**: Support visibility toggles (`eye` / `eye-off`) for provider API keys in the settings tab
+- **Dynamic Provider Keys**: Dynamically render API key settings per provider based on catalog metadata, isolating model lists and avoiding cross-provider leakage
+- **Optimized Environment Load**: Spawns a single login shell process to read environment variables, eliminating UI lag during plugin loading
+
 ## 0.6.5 - 2026-05-29
 
 - **Community Review Readiness**: Clarify desktop-only runtime, filesystem, Vault API, and clipboard behavior for Obsidian plugin review
