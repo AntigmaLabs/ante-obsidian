@@ -236,6 +236,8 @@ export interface TmdSettings extends PresetSettings {
   providerKeys: Record<string, ProviderKeyConfig>;
   /** Per-provider custom models configured by the user (keyed by provider id) */
   customModels: Record<string, string[]>;
+  /** Last model selected in chat for each provider (keyed by provider id) */
+  lastSelectedModelsByProvider: Record<string, string>;
   /** @deprecated Use providerKeys["gemini"] instead. Kept for migration. */
   geminiApiKey: string;
   /** @deprecated Use providerKeys["gemini"].envKey instead. Kept for migration. */
@@ -260,6 +262,7 @@ export const DEFAULT_SETTINGS: TmdSettings = {
   showChatRuntimeDetails: true,
   providerKeys: {},
   customModels: {},
+  lastSelectedModelsByProvider: {},
   geminiApiKey: "",
   geminiApiKeyEnvKey: "GEMINI_API_KEY",
   anthropicApiKey: "",
@@ -395,6 +398,20 @@ const normalizeCustomModels = (raw: unknown): Record<string, string[]> => {
   return result;
 };
 
+const normalizeLastSelectedModelsByProvider = (raw: unknown): Record<string, string> => {
+  const result: Record<string, string> = {};
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [providerId, entry] of Object.entries(raw as Record<string, unknown>)) {
+      const provider = providerId.trim();
+      const model = typeof entry === "string" ? entry.trim() : "";
+      if (provider && model) {
+        result[provider] = model;
+      }
+    }
+  }
+  return result;
+};
+
 export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefined): TmdSettings => {
   const raw = stored ?? {};
   const anteProvider = normalizeProvider(typeof raw.anteProvider === "string" ? raw.anteProvider : DEFAULT_SETTINGS.anteProvider);
@@ -420,6 +437,7 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
   );
 
   const customModels = normalizeCustomModels(raw.customModels);
+  const lastSelectedModelsByProvider = normalizeLastSelectedModelsByProvider(raw.lastSelectedModelsByProvider);
 
   return {
     connectionMode: "stdio",
@@ -437,6 +455,7 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
     showChatRuntimeDetails: raw.showChatRuntimeDetails !== false,
     providerKeys,
     customModels,
+    lastSelectedModelsByProvider,
     // Keep legacy fields populated from migration result for backward compat
     geminiApiKey: providerKeys["gemini"]?.apiKey ?? legacyGeminiKey,
     geminiApiKeyEnvKey: providerKeys["gemini"]?.envKey ?? legacyGeminiEnvKey,

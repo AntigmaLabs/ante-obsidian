@@ -176,8 +176,15 @@ export class TmdChatView extends ItemView {
         this.syncSidebarCollapsedState()
       },
       onCreateChat: () => {
+        const runtimeTarget = this.viewControls.getSelectedRuntimeTarget()
         void this.plugin
           .createChatConversation(this.liveContext)
+          .then((conversation) => {
+            this.plugin.chatManager.setConversationRuntimeTarget(
+              conversation.id,
+              runtimeTarget
+            )
+          })
           .catch((error) => {
             new Notice(error instanceof Error ? error.message : String(error))
           })
@@ -196,17 +203,6 @@ export class TmdChatView extends ItemView {
     this.contextNodes.titleEl.setText("Current context")
 
     this.timelineEl = layout.timelineEl
-    let scrollTimer: number | null = null
-    this.registerDomEvent(this.timelineEl, "scroll", () => {
-      layout.contextRuntimeEl.classList.add("tmd-is-hidden")
-      if (scrollTimer != null) {
-        window.clearTimeout(scrollTimer)
-      }
-      scrollTimer = window.setTimeout(() => {
-        layout.contextRuntimeEl.classList.remove("tmd-is-hidden")
-        scrollTimer = null
-      }, 800)
-    })
     this.composerContainerEl = layout.composerContainerEl
     this.consoleDrawerEl = layout.consoleDrawerEl
     this.consoleToggleBtnEl = layout.consoleToggleBtnEl

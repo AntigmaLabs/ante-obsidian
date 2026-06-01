@@ -85,3 +85,19 @@ test("normalizeSettings provides default credential env keys for Gemini and Anth
   assert.equal(settings.geminiApiKey, "");
   assert.equal(settings.anthropicApiKey, "");
 });
+
+test("normalizeSettings preserves trimmed last selected models by provider", () => {
+  const settings = normalizeSettings({
+    lastSelectedModelsByProvider: {
+      gemini: " gemini-3.5-pro ",
+      anthropic: "",
+      openrouter: "anthropic/claude-sonnet-4-6",
+      invalid: 42 as never,
+    },
+  });
+
+  assert.deepEqual(settings.lastSelectedModelsByProvider, {
+    gemini: "gemini-3.5-pro",
+    openrouter: "anthropic/claude-sonnet-4-6",
+  });
+});

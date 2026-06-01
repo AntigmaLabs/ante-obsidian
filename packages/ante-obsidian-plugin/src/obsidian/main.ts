@@ -455,6 +455,29 @@ export default class TmdPlugin extends Plugin {
     return [...new Set([...cached, ...builtIn, ...custom])];
   }
 
+  getLastSelectedModelForProvider(provider: string): string {
+    const providerId = provider.trim();
+    return providerId ? (this.settings.lastSelectedModelsByProvider[providerId] ?? "") : "";
+  }
+
+  rememberLastSelectedModelForProvider(provider: string, model: string): void {
+    const providerId = provider.trim();
+    const modelId = model.trim();
+    if (!providerId || !modelId) {
+      return;
+    }
+    if (this.settings.lastSelectedModelsByProvider[providerId] === modelId) {
+      return;
+    }
+    this.settings.lastSelectedModelsByProvider = {
+      ...this.settings.lastSelectedModelsByProvider,
+      [providerId]: modelId
+    };
+    void this.saveSettings().catch((error) => {
+      console.error("[tmd] Failed to save last selected model:", error);
+    });
+  }
+
   /**
    * Returns the subset of AVAILABLE_PROVIDERS that the user has actually configured:
    * - OAuth providers: present if the corresponding auth token file exists on disk.

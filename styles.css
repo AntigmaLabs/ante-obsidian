@@ -1960,22 +1960,6 @@ button.tmd-diff-file-main {
   color: var(--text-normal);
 }
 
-.tmd-chat-context-runtime.tmd-is-hidden {
-  opacity: 0;
-  height: 0;
-  margin-bottom: 0;
-  pointer-events: none;
-  transform: translateY(4px);
-}
-
-.tmd-chat-console-drawer.is-open ~ .tmd-chat-context-runtime {
-  opacity: 0;
-  height: 0;
-  margin-bottom: 0;
-  pointer-events: none;
-  transform: translateY(4px);
-}
-
 .tmd-chat-input-shell {
   position: relative;
   pointer-events: auto;
@@ -3317,7 +3301,6 @@ svg.tmd-spin {
   width: 12px !important;
   height: 12px !important;
 }
-
 
 
 

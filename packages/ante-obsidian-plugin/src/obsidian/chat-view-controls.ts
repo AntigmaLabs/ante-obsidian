@@ -120,6 +120,7 @@ export class ChatViewControls {
             .setChecked(model === this.selectedModel)
             .onClick(() => {
               this.selectedModel = model
+              this.plugin.rememberLastSelectedModelForProvider(this.selectedProvider, model)
               this.populateModelSelect()
               const activeConvId = this.getActiveConversationId()
               if (activeConvId) {
@@ -217,7 +218,8 @@ export class ChatViewControls {
 
   getSelectableModel(provider: string, preferredModel: string): string {
     const availableModels = this.plugin.getAvailableModelNamesForProvider(provider)
-    const preferred = preferredModel.trim()
+    const remembered = this.plugin.getLastSelectedModelForProvider(provider).trim()
+    const preferred = preferredModel.trim() || remembered
     if (preferred && availableModels.includes(preferred)) {
       return preferred
     }
@@ -245,32 +247,34 @@ export class ChatViewControls {
 
     try {
       const conversation = await this.plugin.createChatConversation(this.getLiveContext(), { forceNew: true })
+      const preferredModel = this.getSelectableModel(provider, "")
       this.plugin.chatManager.setConversationRuntimeTarget(conversation.id, {
         provider,
-        model: "",
+        model: preferredModel,
         thinking: this.selectedThinking,
       })
       this.selectedProvider = provider
-      this.selectedModel = ""
+      this.selectedModel = preferredModel
       this.populateProviderSelect()
       this.populateModelSelect()
       this.populateThinkingSelect()
       try {
         await this.plugin.warmAnteModelCatalog({
           provider,
-          model: "",
+          model: preferredModel,
           thinking: this.selectedThinking,
         })
         if (this.selectedProvider !== provider) {
           return
         }
         this.loadingModelProvider = null
-        this.selectedModel = this.getSelectableModel(provider, "")
+        this.selectedModel = this.getSelectableModel(provider, preferredModel)
         this.plugin.chatManager.setConversationRuntimeTarget(conversation.id, {
           provider,
           model: this.selectedModel,
           thinking: this.selectedThinking,
         })
+        this.plugin.rememberLastSelectedModelForProvider(provider, this.selectedModel)
         this.populateModelSelect()
       } catch (error) {
         if (this.selectedProvider !== provider) {
