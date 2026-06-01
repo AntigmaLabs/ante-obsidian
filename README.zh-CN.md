@@ -1,7 +1,7 @@
 # Ante Obsidian
 
 <p align="center">
-  <a href="https://github.com/AntigmaLabs/ante-obsidian/releases"><img src="https://img.shields.io/badge/Release-0.6.7-purple" alt="Latest Release" /></a>
+  <a href="https://github.com/AntigmaLabs/ante-obsidian/releases"><img src="https://img.shields.io/badge/Release-0.6.8-purple" alt="Latest Release" /></a>
   <a href="https://obsidian.md"><img src="https://img.shields.io/badge/Obsidian-v1.6.0%2B-blueviolet" alt="Obsidian Minimum Version" /></a>
   <a href="https://github.com/AntigmaLabs/ante-obsidian/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License" /></a>
 </p>

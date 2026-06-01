@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.8 - 2026-06-01
+
+- **Improved Chat Experience**: Keep chat sessions on the intended provider and model, keep runtime target details visible while composing, and make generated note edit previews easier to review and apply
+
 ## 0.6.7 - 2026-05-30
 
 - **Onboarding & Configuration Improvements**: Refine the initial settings setup with unified CLI terminology, smooth inline API key inputs, and quick-copy update helpers
