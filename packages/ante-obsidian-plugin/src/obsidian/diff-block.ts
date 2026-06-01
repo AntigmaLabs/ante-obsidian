@@ -2,7 +2,7 @@ import { Notice, setIcon } from "obsidian";
 import type TmdPlugin from "./main";
 import type { DocumentChangeArtifact, TaskRecord } from "../core/types";
 import { buildPatchRows, type PatchRow } from "../core/diff-service";
-import { getArtifactTargetPath } from "../core/artifacts";
+import { getArtifactTargetKey, getArtifactTargetPath } from "../core/artifacts";
 
 export type DiffStats = {
   additions: number;
@@ -25,7 +25,10 @@ type RenderableDiffRow = Extract<PatchRow, { kind: "context" | "add" | "remove" 
 
 const formatDiffCount = (value: number, marker: "+" | "-"): string => `${marker}${value}`;
 
-const formatFileCountLabel = (value: number): string => `${value} file${value === 1 ? "" : "s"} changed`;
+const formatFileCountLabel = (fileCount: number, changeCount: number): string => {
+  const fileLabel = `${fileCount} file${fileCount === 1 ? "" : "s"} changed`;
+  return changeCount > fileCount ? `${fileLabel} · ${changeCount} changes` : fileLabel;
+};
 
 const assertNever = (value: never): never => {
   throw new Error(`Unexpected value: ${String(value)}`);
@@ -203,6 +206,9 @@ export const collectAggregateDiffStats = (artifacts: ResolvedArtifactDiff[]): Di
     { additions: 0, removals: 0 }
   );
 
+export const countChangedFiles = (artifacts: ResolvedArtifactDiff[]): number =>
+  new Set(artifacts.map(({ artifact }) => getArtifactTargetKey(artifact))).size;
+
 export interface RenderDiffSummaryOptions {
   actionLabel?: string;
   onAction?: () => void;
@@ -217,7 +223,10 @@ export const renderDiffSummary = (
   const card = container.createDiv({ cls: "tmd-diff-card" });
   const summary = card.createDiv({ cls: "tmd-diff-summary" });
   const title = summary.createDiv({ cls: "tmd-diff-summary-title" });
-  title.createSpan({ cls: "tmd-diff-summary-count", text: formatFileCountLabel(artifacts.length) });
+  title.createSpan({
+    cls: "tmd-diff-summary-count",
+    text: formatFileCountLabel(countChangedFiles(artifacts), artifacts.length)
+  });
   renderStatPills(title, collectAggregateDiffStats(artifacts));
 
   if (options?.onAction) {

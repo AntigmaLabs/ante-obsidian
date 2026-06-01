@@ -4,6 +4,23 @@ export const getArtifactTargetPath = (artifact: DocumentChangeArtifact): string 
 
 export const getArtifactLocationLabel = (artifact: DocumentChangeArtifact): string => artifact.target.path;
 
+export const getArtifactTargetKey = (artifact: DocumentChangeArtifact): string =>
+  getArtifactTargetPath(artifact)
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/\/+/g, "/")
+    .normalize("NFC");
+
+export const mergeDocumentChangeArtifacts = (
+  earlier: DocumentChangeArtifact,
+  later: DocumentChangeArtifact
+): DocumentChangeArtifact => ({
+  ...later,
+  id: earlier.id,
+  operation: earlier.operation === "create-file" ? "create-file" : later.operation,
+  beforeText: earlier.beforeText
+});
+
 const parseApprovalToolArgs = (tool: RuntimeApprovalTool): Record<string, unknown> | null => {
   if (!tool.argsText?.trim()) {
     return null;

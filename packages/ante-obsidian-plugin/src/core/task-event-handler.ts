@@ -2,6 +2,8 @@ import type { HostAdapter } from "./host-adapter";
 import type { AnteRuntime } from "../runtime/ante-runtime";
 import {
   createRuntimeFileArtifact,
+  getArtifactTargetKey,
+  mergeDocumentChangeArtifacts,
   toDocumentChangeArtifactFromApprovalTool
 } from "./artifacts";
 import type {
@@ -33,6 +35,9 @@ const logDebug = (...args: unknown[]): void => {
     console.info("[tmd task event]", ...args);
   }
 };
+
+const shouldCoalesceArtifact = (artifact: DocumentChangeArtifact): boolean =>
+  artifact.applyState === "pending" || artifact.applyState === "applying";
 
 export class TaskEventHandler {
   private readonly runtimeToolCalls = new Map<
@@ -217,6 +222,7 @@ export class TaskEventHandler {
     const task = this.callbacks.getTask(request.taskId);
     const existingToolIds = new Set(task.artifacts.map((artifact) => artifact.runtimeToolId).filter(Boolean));
     const nextArtifacts = task.artifacts.slice();
+    let changed = false;
 
     for (const tool of approval.tools) {
       if (existingToolIds.has(tool.id)) {
@@ -241,17 +247,30 @@ export class TaskEventHandler {
 
       const nextArtifact =
         runtimeMode === "staged-preview" ? await this.artifactManager.materializeStagedPreviewArtifact(artifact) : artifact;
-      nextArtifacts.push({
+      const artifactToAdd = {
         ...nextArtifact,
         runtimeMode
-      });
+      };
+      const existingIndex = nextArtifacts.findIndex(
+        (existing) =>
+          shouldCoalesceArtifact(existing) &&
+          getArtifactTargetKey(existing) === getArtifactTargetKey(artifactToAdd)
+      );
+      if (existingIndex >= 0) {
+        const existing = nextArtifacts[existingIndex]!;
+        this.artifactManager.cleanupStagedPreview(existing);
+        nextArtifacts[existingIndex] = mergeDocumentChangeArtifacts(existing, artifactToAdd);
+      } else {
+        nextArtifacts.push(artifactToAdd);
+      }
+      changed = true;
       existingToolIds.add(tool.id);
       logDebug(
         `approval artifact created tool=${tool.name} id=${tool.id} target=${targetPath} operation=${nextArtifact.operation} mode=${runtimeMode}`,
       );
     }
 
-    if (nextArtifacts.length === task.artifacts.length) {
+    if (!changed) {
       return;
     }
 
@@ -327,9 +346,22 @@ export class TaskEventHandler {
           afterText,
           runtimeMode: "observed"
         });
-        this.callbacks.patchTask(request.taskId, {
-          artifacts: [...task.artifacts, artifact]
-        });
+        const existingIndex = task.artifacts.findIndex(
+          (existing) =>
+            shouldCoalesceArtifact(existing) &&
+            getArtifactTargetKey(existing) === getArtifactTargetKey(artifact)
+        );
+        const nextArtifacts = task.artifacts.slice();
+        if (existingIndex >= 0) {
+          this.artifactManager.cleanupStagedPreview(nextArtifacts[existingIndex]!);
+          nextArtifacts[existingIndex] = mergeDocumentChangeArtifacts(
+            nextArtifacts[existingIndex]!,
+            artifact
+          );
+        } else {
+          nextArtifacts.push(artifact);
+        }
+        this.callbacks.patchTask(request.taskId, { artifacts: nextArtifacts });
         logDebug(`tool artifact created name=${effectiveTool.name} id=${effectiveTool.id} target=${cached.targetPath}`);
       }
     }

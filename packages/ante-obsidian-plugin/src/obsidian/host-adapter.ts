@@ -12,6 +12,10 @@ import { readFile as readFsFile } from "node:fs/promises";
 import type { HostAdapter } from "../core/host-adapter";
 import type { ContextSnapshot, DocumentChangeArtifact } from "../core/types";
 import { getArtifactTargetPath } from "../core/artifacts";
+import {
+  normalizeVaultRelativePath,
+  toVaultRelativePath
+} from "./vault-path";
 
 export class ObsidianHostAdapter implements HostAdapter {
   private lastKnownContext: ContextSnapshot | null = null;
@@ -219,7 +223,7 @@ export class ObsidianHostAdapter implements HostAdapter {
 
   private getFile(path: string): TFile | null {
     const relativePath = this.toVaultRelativePath(path);
-    if (relativePath) {
+    if (relativePath !== null) {
       const direct = this.app.vault.getAbstractFileByPath(relativePath);
       if (direct instanceof TFile) {
         return direct;
@@ -256,28 +260,7 @@ export class ObsidianHostAdapter implements HostAdapter {
   }
 
   private toVaultRelativePath(path: string): string | null {
-    const normalizedPath = this.normalizeLookupPath(path);
-    if (!normalizedPath) {
-      return null;
-    }
-    if (!normalizedPath.startsWith("/")) {
-      return normalizedPath;
-    }
-
-    const vaultPath = this.getVaultPath();
-    if (!vaultPath) {
-      return null;
-    }
-
-    const normalizedVaultPath = this.normalizeLookupPath(vaultPath);
-    if (normalizedPath === normalizedVaultPath) {
-      return "";
-    }
-    if (!normalizedPath.startsWith(`${normalizedVaultPath}/`)) {
-      return null;
-    }
-
-    return normalizedPath.slice(normalizedVaultPath.length + 1);
+    return toVaultRelativePath(path, this.getVaultPath());
   }
 
   private async ensureFolderForPath(path: string): Promise<void> {
@@ -298,6 +281,6 @@ export class ObsidianHostAdapter implements HostAdapter {
   }
 
   private normalizeLookupPath(path: string): string {
-    return normalizePath(path.trim()).normalize("NFC");
+    return normalizeVaultRelativePath(path);
   }
 }

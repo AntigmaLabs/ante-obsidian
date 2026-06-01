@@ -511,6 +511,58 @@ test("chat file-edit approvals are staged locally and auto-skipped in Ante", asy
   assert.equal(await readFsFile(task!.artifacts[0]!.stagedPath!, "utf8"), "alpha\nbeta\n");
 });
 
+test("chat file-edit approvals coalesce repeated writes to the same file", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-chat-1",
+        message: "approve writes",
+        tools: [
+          {
+            id: "tool-write-chat-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          },
+          {
+            id: "tool-write-chat-2",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\ngamma\n"
+            })
+          },
+          {
+            id: "tool-write-chat-3",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\ngamma\ndelta\n"
+            })
+          }
+        ]
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  await engine.startChatTask("Preview repeated writes");
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.artifacts.length, 1);
+  assert.equal(task?.artifacts[0]?.beforeText, "alpha\n");
+  assert.equal(task?.artifacts[0]?.afterText, "alpha\nbeta\ngamma\ndelta\n");
+  assert.equal(task?.artifacts[0]?.runtimeToolId, "tool-write-chat-3");
+  assert.equal(task?.artifacts[0]?.runtimeMode, "staged-preview");
+  assert.equal(await readFsFile(task!.artifacts[0]!.baselinePath!, "utf8"), "alpha\n");
+  assert.equal(await readFsFile(task!.artifacts[0]!.stagedPath!, "utf8"), "alpha\nbeta\ngamma\ndelta\n");
+});
+
 test("applying a staged chat preview cleans up its temp directory", async () => {
   const host = new HostStub();
   const runtime = new RuntimeStub((_request, onEvent) => {
@@ -933,6 +985,87 @@ test("skipped-by-user ToolEnd does not overwrite a staged chat preview artifact 
   assert.ok(task);
   assert.equal(task?.artifacts[0]?.applyState, "pending");
   assert.equal(task?.artifacts[0]?.applyError, undefined);
+});
+
+test("observed same-file tool artifacts replace staged previews and clean temp files", async () => {
+  let observerRef:
+    | {
+        onEvent: (event: RuntimeEvent) => void;
+        onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+      }
+    | null = null;
+  const host = new MutableHostStub({ "Note.md": "alpha\n" });
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-chat-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-chat-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+  });
+
+  runtime.run = (
+    request: TaskRequest,
+    observer: {
+      onEvent: (event: RuntimeEvent) => void;
+      onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+    }
+  ): void => {
+    observerRef = observer;
+    runtime["emit"](request, observer.onEvent);
+  };
+
+  const engine = new TaskEngine(runtime as never, host as never, resolvePresetById);
+  await engine.startChatTask("Preview beta");
+
+  const stagedRoot = engine.getState().tasks[0]?.artifacts[0]?.stagedRoot;
+  assert.ok(stagedRoot);
+  assert.equal(existsSync(stagedRoot), true);
+
+  observerRef?.onEvent({
+    type: "session.tool",
+    phase: "start",
+    tool: {
+      id: "tool-edit-observed-1",
+      name: "Edit",
+      argsText: JSON.stringify({
+        file_path: "Note.md",
+        old_string: "alpha\n",
+        new_string: "alpha\nbeta\ngamma\n"
+      })
+    }
+  });
+  host.setFile("Note.md", "alpha\nbeta\ngamma\n");
+  observerRef?.onEvent({
+    type: "session.tool",
+    phase: "end",
+    tool: {
+      id: "tool-edit-observed-1",
+      name: "Tool",
+      status: "Completed",
+      isError: false
+    }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const task = engine.getState().tasks[0];
+  assert.equal(task?.artifacts.length, 1);
+  assert.equal(task?.artifacts[0]?.runtimeToolId, "tool-edit-observed-1");
+  assert.equal(task?.artifacts[0]?.beforeText, "alpha\n");
+  assert.equal(task?.artifacts[0]?.afterText, "alpha\nbeta\ngamma\n");
+  assert.equal(task?.artifacts[0]?.stagedRoot, undefined);
+  assert.equal(existsSync(stagedRoot), false);
 });
 
 test("skipped-by-user ToolEnd does not overwrite a discarded native artifact as failed", async () => {
