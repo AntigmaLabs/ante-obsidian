@@ -36,8 +36,24 @@ const logDebug = (...args: unknown[]): void => {
   }
 };
 
-const shouldCoalesceArtifact = (artifact: DocumentChangeArtifact): boolean =>
-  artifact.applyState === "pending" || artifact.applyState === "applying";
+const shouldCoalesceArtifact = (
+  existing: DocumentChangeArtifact,
+  incoming: DocumentChangeArtifact
+): boolean => {
+  if (existing.applyState === "discarded" || existing.applyState === "failed") {
+    return false;
+  }
+  if (
+    existing.runtimeMode === "staged-preview" ||
+    incoming.runtimeMode === "staged-preview"
+  ) {
+    return true;
+  }
+  if (existing.runtimeMode === "observed" || incoming.runtimeMode === "observed") {
+    return false;
+  }
+  return existing.applyState === "pending" || existing.applyState === "applying";
+};
 
 export class TaskEventHandler {
   private readonly runtimeToolCalls = new Map<
@@ -237,7 +253,7 @@ export class TaskEventHandler {
       const beforeText = matchesContextFilePath(targetPath, request.context)
         ? request.context.documentText ?? ""
         : (await this.host.readFile(targetPath)) ?? "";
-      const artifact = toDocumentChangeArtifactFromApprovalTool(tool, beforeText);
+      const artifact = toDocumentChangeArtifactFromApprovalTool(tool, beforeText, targetPath);
       if (!artifact) {
         if (["write", "edit"].includes(tool.name.trim().toLowerCase())) {
           logDebug(`approval artifact skipped tool=${tool.name} id=${tool.id} target=${targetPath}`);
@@ -253,7 +269,7 @@ export class TaskEventHandler {
       };
       const existingIndex = nextArtifacts.findIndex(
         (existing) =>
-          shouldCoalesceArtifact(existing) &&
+          shouldCoalesceArtifact(existing, artifactToAdd) &&
           getArtifactTargetKey(existing) === getArtifactTargetKey(artifactToAdd)
       );
       if (existingIndex >= 0) {
@@ -337,7 +353,7 @@ export class TaskEventHandler {
     ) {
       const task = this.callbacks.getTask(request.taskId);
       const afterText = (await this.host.readFile(cached.targetPath)) ?? "";
-      if (!task.artifacts.some((artifact) => artifact.runtimeToolId === effectiveTool.id)) {
+      if (afterText !== cached.beforeText && !task.artifacts.some((artifact) => artifact.runtimeToolId === effectiveTool.id)) {
         const artifact = createRuntimeFileArtifact({
           toolId: effectiveTool.id,
           title: "Edit file",
@@ -348,7 +364,7 @@ export class TaskEventHandler {
         });
         const existingIndex = task.artifacts.findIndex(
           (existing) =>
-            shouldCoalesceArtifact(existing) &&
+            shouldCoalesceArtifact(existing, artifact) &&
             getArtifactTargetKey(existing) === getArtifactTargetKey(artifact)
         );
         const nextArtifacts = task.artifacts.slice();

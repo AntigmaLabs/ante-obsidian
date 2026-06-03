@@ -9,13 +9,14 @@ import { populateEditorMenu } from "./editor-menu";
 import { TmdSettingTab } from "./settings-tab";
 import { DEFAULT_SETTINGS, normalizeSettings, AVAILABLE_PROVIDERS, type TmdSettings } from "./settings";
 import type { AnteRuntime } from "../runtime/ante-runtime";
-import { DEFAULT_ANTE_ARGS_JSON, createAnteRuntime } from "../runtime/create-ante-runtime";
+import { createAnteRuntime } from "../runtime/create-ante-runtime";
+import { resolveCommandPath } from "../runtime/transport/ante-stdio-transport";
 import { TMD_CHAT_VIEW_TYPE, TmdChatView } from "./chat-view";
 import { TMD_TERMINAL_VIEW_TYPE, TmdTerminalView } from "./terminal-view";
 import type { TaskRecord } from "../core/types";
 import type { ChatConversationRecord } from "../core/chat-types";
 import { readAnteDefaults, type AnteDefaults } from "./ante-defaults";
-import { normalizeEnvVarName, readCommandPathFromLoginShell, readFullEnvFromLoginShell } from "./shell-env";
+import { normalizeEnvVarName, readCommandPathFromLoginShell, readFullEnvFromLoginShell, selectResolvedCommandPath } from "./shell-env";
 import { ChatSessionManager } from "../core/chat-session-manager";
 import type { ChatPersistenceState } from "../core/chat-types";
 import { getResolvedPreset, listResolvedPresets } from "../core/presets";
@@ -23,6 +24,8 @@ import { AnteUpdater } from "./ante-updater";
 import { PluginUpdater } from "./plugin-updater";
 import { buildAnteRuntimeConfig } from "./main-runtime-config";
 import { ObsidianCliService, type ObsidianCliStatus } from "./obsidian-cli-service";
+
+const ANTE_COMMAND = "ante";
 
 interface TmdPluginData {
   settings?: Partial<TmdSettings>;
@@ -271,7 +274,15 @@ export default class TmdPlugin extends Plugin {
   }
 
   async loadShellEnv(): Promise<void> {
-    this.resolvedAnteCommand = await readCommandPathFromLoginShell("ante");
+    const [shellAnteCommand, fullEnv] = await Promise.all([
+      readCommandPathFromLoginShell("ante"),
+      readFullEnvFromLoginShell()
+    ]);
+    this.resolvedAnteCommand = selectResolvedCommandPath(
+      shellAnteCommand,
+      resolveCommandPath(ANTE_COMMAND, fullEnv),
+      ANTE_COMMAND
+    );
     const envMap: Record<string, string> = {};
 
     // Collect all env keys to load:
@@ -289,7 +300,6 @@ export default class TmdPlugin extends Plugin {
       if (key) keysToLoad.add(key);
     }
 
-    const fullEnv = await readFullEnvFromLoginShell();
     for (const envKey of keysToLoad) {
       const value = fullEnv[envKey];
       if (value) {

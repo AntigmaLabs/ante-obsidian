@@ -70,6 +70,7 @@ export class ChatMessageRenderer extends Component {
     string,
     { signature: string; diffs: ResolvedArtifactDiff[] }
   >()
+  private readonly pendingArtifactResolutions = new Map<string, string>()
   private readonly messageEls = new Map<string, ChatMessageElements>()
   private readonly messageOrder = new Set<string>()
   private readonly messageStatusById = new Map<
@@ -109,37 +110,52 @@ export class ChatMessageRenderer extends Component {
     taskLookup: Map<string, TaskRecord>,
   ): Promise<Map<string, ResolvedArtifactDiff[]>> {
     const diffsByTask = new Map<string, ResolvedArtifactDiff[]>()
-    await Promise.all(
-      visibleMessages.map(async (message) => {
-        const taskId = message.turn?.taskId
-        if (!taskId) {
-          return
+    for (const message of visibleMessages) {
+      const taskId = message.turn?.taskId
+      if (!taskId) {
+        continue
+      }
+      const task = taskLookup.get(taskId)
+      const artifacts = task?.artifacts.length
+        ? task.artifacts
+        : (message.runtime?.artifacts ?? []).filter(
+            (artifact) => artifact.applyState !== "discarded",
+          )
+      if (artifacts.length === 0) {
+        continue
+      }
+      const signature = this.buildArtifactResolutionSignature(
+        artifacts,
+        taskId,
+      )
+      const cached = this.resolvedArtifactsCache.get(taskId)
+      if (cached?.signature === signature) {
+        diffsByTask.set(taskId, cached.diffs)
+        continue
+      }
+      if (this.pendingArtifactResolutions.get(taskId) === signature) {
+        continue
+      }
+      this.pendingArtifactResolutions.set(taskId, signature)
+      void (async () => {
+        try {
+          const diffs = task
+            ? await resolveArtifactDiffs(task)
+            : await resolveArtifactsToDiffs(artifacts)
+          if (this.pendingArtifactResolutions.get(taskId) !== signature) {
+            return
+          }
+          this.resolvedArtifactsCache.set(taskId, { signature, diffs })
+        } catch (error) {
+          console.error("[tmd] Failed to prepare artifact diffs", error)
+        } finally {
+          if (this.pendingArtifactResolutions.get(taskId) === signature) {
+            this.pendingArtifactResolutions.delete(taskId)
+            this.triggerRender()
+          }
         }
-        const task = taskLookup.get(taskId)
-        const artifacts = task?.artifacts.length
-          ? task.artifacts
-          : (message.runtime?.artifacts ?? []).filter(
-              (artifact) => artifact.applyState !== "discarded",
-            )
-        if (artifacts.length === 0) {
-          return
-        }
-        const signature = this.buildArtifactResolutionSignature(
-          artifacts,
-          taskId,
-        )
-        const cached = this.resolvedArtifactsCache.get(taskId)
-        if (cached?.signature === signature) {
-          diffsByTask.set(taskId, cached.diffs)
-          return
-        }
-        const diffs = task
-          ? await resolveArtifactDiffs(task)
-          : await resolveArtifactsToDiffs(artifacts)
-        this.resolvedArtifactsCache.set(taskId, { signature, diffs })
-        diffsByTask.set(taskId, diffs)
-      }),
-    )
+      })()
+    }
     return diffsByTask
   }
 
@@ -267,8 +283,15 @@ export class ChatMessageRenderer extends Component {
       resolvedArtifacts.length > 0
         ? resolvedArtifacts
         : fallbackResolvedArtifacts
+    const hasPendingArtifacts =
+      (task?.artifacts.length ?? 0) > 0 ||
+      ((message.runtime?.artifacts ?? []).filter(
+        (artifact) => artifact.applyState !== "discarded",
+      ).length > 0)
     if (artifactDiffs.length > 0) {
       this.syncArtifacts(elements, task ?? null, artifactDiffs)
+    } else if (hasPendingArtifacts) {
+      this.syncArtifactsLoading(elements, task?.id ?? message.turn?.taskId ?? "persisted")
     } else {
       this.removeArtifacts(elements)
     }
@@ -570,6 +593,33 @@ export class ChatMessageRenderer extends Component {
     elements.artifactsHostEl?.remove()
     elements.artifactsHostEl = null
     elements.artifactsValue = null
+  }
+
+  private syncArtifactsLoading(
+    elements: ChatMessageElements,
+    taskId: string,
+  ): void {
+    const signature = `${taskId}:loading`
+    if (elements.artifactsHostEl && elements.artifactsValue === signature) {
+      return
+    }
+    const host =
+      elements.artifactsHostEl ??
+      elements.bubbleEl.createDiv({ cls: "tmd-chat-artifacts-host" })
+    host.empty()
+    const card = host.createDiv({ cls: "tmd-diff-card tmd-diff-loading-card" })
+    const summary = card.createDiv({ cls: "tmd-diff-summary" })
+    const title = summary.createDiv({ cls: "tmd-diff-summary-title" })
+    title.createSpan({
+      cls: "tmd-diff-summary-count",
+      text: "Preparing changes",
+    })
+    const body = card.createDiv({ cls: "tmd-diff-loading-body" })
+    body.createDiv({ cls: "tmd-diff-loading-line is-wide" })
+    body.createDiv({ cls: "tmd-diff-loading-line" })
+    body.createDiv({ cls: "tmd-diff-loading-line is-short" })
+    elements.artifactsHostEl = host
+    elements.artifactsValue = signature
   }
 
   private ensureDefaultExpandedArtifact(
@@ -879,6 +929,11 @@ export class ChatMessageRenderer extends Component {
     for (const taskId of [...this.resolvedArtifactsCache.keys()]) {
       if (!active.has(taskId)) {
         this.resolvedArtifactsCache.delete(taskId)
+      }
+    }
+    for (const taskId of [...this.pendingArtifactResolutions.keys()]) {
+      if (!active.has(taskId)) {
+        this.pendingArtifactResolutions.delete(taskId)
       }
     }
   }

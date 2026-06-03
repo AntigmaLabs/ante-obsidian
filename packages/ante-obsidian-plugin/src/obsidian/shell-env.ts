@@ -201,10 +201,31 @@ export const readCommandPathFromLoginShell = async (commandName: string): Promis
   return "";
 };
 
+export const selectResolvedCommandPath = (
+  shellLookupResult: string,
+  fallbackLookupResult: string,
+  commandName: string
+): string => {
+  const normalized = normalizeCommandName(commandName);
+  if (!normalized) {
+    return "";
+  }
+  const shellResult = shellLookupResult.trim();
+  if (isValidCommandLookupResult(shellResult, normalized)) {
+    return shellResult;
+  }
+  const fallbackResult = fallbackLookupResult.trim();
+  if (fallbackResult !== normalized && isValidCommandLookupResult(fallbackResult, normalized)) {
+    return fallbackResult;
+  }
+  return "";
+};
+
 export const __test__ = {
   normalizeEnvVarName,
   normalizeCommandName,
   getCommandLookupShellArgs,
   extractCommandLookupResult,
-  isValidCommandLookupResult
+  isValidCommandLookupResult,
+  selectResolvedCommandPath
 };

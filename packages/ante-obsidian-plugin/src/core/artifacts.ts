@@ -112,7 +112,8 @@ export const createRuntimeFileArtifact = ({
 
 export const toDocumentChangeArtifactFromApprovalTool = (
   tool: RuntimeApprovalTool,
-  beforeText: string
+  beforeText: string,
+  resolvedTargetPath?: string | null
 ): DocumentChangeArtifact | null => {
   const args = parseApprovalToolArgs(tool);
   if (!args) {
@@ -120,14 +121,14 @@ export const toDocumentChangeArtifactFromApprovalTool = (
   }
 
   const normalizedName = tool.name.trim().toLowerCase();
-  const targetPath = getStringArg(args, ["file_path", "path", "targetPath"]);
+  const targetPath = resolvedTargetPath?.trim() || getStringArg(args, ["file_path", "path", "targetPath"]);
   if (!targetPath) {
     return null;
   }
 
   if (normalizedName === "write") {
     const afterText = getStringArg(args, ["content", "text", "afterText"]);
-    if (afterText == null) {
+    if (afterText == null || afterText === beforeText) {
       return null;
     }
     return createRuntimeFileArtifact({

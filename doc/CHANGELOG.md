@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.9 - 2026-06-03
+
+- **More Reliable Chat Edits**: Fix duplicate same-file previews, hide no-op changes, and show loading while diffs are prepared
+- **Runtime & Update Fixes**: Improve Ante CLI detection, support the latest serve command, and add direct plugin install from settings
+
 ## 0.6.8 - 2026-06-01
 
 - **Improved Chat Experience**: Keep chat sessions on the intended provider and model, keep runtime target details visible while composing, and make generated note edit previews easier to review and apply

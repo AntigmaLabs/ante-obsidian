@@ -287,13 +287,11 @@ export const buildProcessStatusLines = (
     process.steps.find((step) => step.status === "in_progress") ??
     process.steps.find((step) => step.status === "pending")
 
-  lines.push(
-    `out ${activeStep?.activeLabel ?? activeStep?.label ?? process.label}`,
-  )
+  lines.push(activeStep?.activeLabel ?? activeStep?.label ?? process.label)
 
   for (const step of process.steps) {
     lines.push(
-      `out ${step.status === "completed" ? "■" : step.status === "in_progress" ? "▪" : "□"} ${
+      `${step.status === "completed" ? "■" : step.status === "in_progress" ? "▪" : "□"} ${
         step.status === "in_progress"
           ? (step.activeLabel ?? step.label)
           : step.label
@@ -303,9 +301,9 @@ export const buildProcessStatusLines = (
 
   if (
     process.steps.length === 0 &&
-    process.label !== lines[0]?.replace(/^out /, "")
+    process.label !== lines[0]
   ) {
-    lines.push(`out ${process.phase} · ${process.label}`)
+    lines.push(`${process.phase} · ${process.label}`)
   }
 
   return lines

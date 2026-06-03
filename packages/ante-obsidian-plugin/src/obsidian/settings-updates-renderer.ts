@@ -1,13 +1,47 @@
-import { Notice, Setting, setIcon, FileSystemAdapter } from "obsidian";
+import { Notice, setIcon, FileSystemAdapter } from "obsidian";
+import { spawn } from "node:child_process";
 import type TmdPlugin from "./main";
 import type { AnteVersionCheckResult } from "./ante-updater";
 import type { PluginVersionCheckResult } from "./plugin-updater";
+
+const DEFAULT_SHELL = "/bin/zsh";
+
+const quoteShellArg = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+
+const runShellCommand = (command: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const shellPath = (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
+    const child = spawn(shellPath, ["-lc", command], {
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.once("error", (error) => {
+      reject(error);
+    });
+    child.once("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `Shell exited with code ${code ?? "unknown"}`));
+        return;
+      }
+      resolve(stdout.trim());
+    });
+  });
 
 export class SettingsUpdatesRenderer {
   private anteVersionState: AnteVersionCheckResult | null = null;
   private pluginVersionState: PluginVersionCheckResult | null = null;
   private checkingAnteVersion = false;
   private checkingPluginVersion = false;
+  private installingPlugin = false;
   private upgradingAnte = false;
 
   constructor(
@@ -39,7 +73,7 @@ export class SettingsUpdatesRenderer {
     const itemEl = containerEl.createDiv({ cls: `tmd-update-item ${this.getPluginStatusTone()}` });
     const iconEl = itemEl.createDiv({ cls: "tmd-update-item-icon" });
     const iconName = this.getPluginStatusIcon();
-    if (this.checkingPluginVersion) {
+    if (this.checkingPluginVersion || this.installingPlugin) {
       iconEl.addClass("tmd-spin");
     }
     setIcon(iconEl, iconName);
@@ -64,10 +98,10 @@ export class SettingsUpdatesRenderer {
     checkButton.addClass("tmd-update-item-button");
     this.decorateAnteActionButton(
       checkButton,
-      this.checkingPluginVersion ? "loader-circle" : "refresh-cw",
+      this.checkingPluginVersion || this.installingPlugin ? "loader-circle" : "refresh-cw",
       this.checkingPluginVersion ? "Checking" : "Check"
     );
-    checkButton.disabled = this.checkingPluginVersion;
+    checkButton.disabled = this.checkingPluginVersion || this.installingPlugin;
     checkButton.addEventListener("click", () => {
       void this.refreshPluginVersionState();
     });
@@ -86,11 +120,11 @@ export class SettingsUpdatesRenderer {
     if (this.pluginVersionState?.updateAvailable) {
       const adapter = this.pluginRef.app.vault.adapter;
       const vaultPath = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : "/path/to/your/vault";
-      const installScript = `curl -sS https://raw.githubusercontent.com/AntigmaLabs/ante-obsidian/main/scripts/install.sh | bash -s -- "${vaultPath}"`;
+      const installScript = this.buildPluginInstallCommand(vaultPath);
 
       const scriptContainer = itemEl.createDiv({ cls: "tmd-update-script-container" });
       scriptContainer.createEl("div", { 
-        text: "Run this command in your terminal to update the plugin:", 
+        text: "Install the update directly, or run this command in your terminal:", 
         cls: "tmd-update-script-label" 
       });
 
@@ -110,6 +144,15 @@ export class SettingsUpdatesRenderer {
           .catch((error) => {
             new Notice(error instanceof Error ? error.message : "Failed to copy command");
           });
+      });
+
+      const installBtn = rowEl.createEl("button", {
+        text: this.installingPlugin ? "Installing" : "Install",
+        cls: "tmd-update-script-copy-btn tmd-update-script-install-btn mod-cta"
+      });
+      installBtn.disabled = this.installingPlugin || this.checkingPluginVersion;
+      installBtn.addEventListener("click", () => {
+        void this.handlePluginInstall(installScript);
       });
     }
   }
@@ -305,6 +348,9 @@ export class SettingsUpdatesRenderer {
   }
 
   private getPluginUpdateStatusLabel(): string {
+    if (this.installingPlugin) {
+      return "Installing";
+    }
     if (this.checkingPluginVersion) {
       return "Checking";
     }
@@ -324,6 +370,9 @@ export class SettingsUpdatesRenderer {
   }
 
   private getPluginStatusTone(): string {
+    if (this.installingPlugin) {
+      return "is-progress";
+    }
     if (this.checkingPluginVersion) {
       return "is-progress";
     }
@@ -343,6 +392,9 @@ export class SettingsUpdatesRenderer {
   }
 
   private getPluginStatusIcon(): string {
+    if (this.installingPlugin) {
+      return "loader-circle";
+    }
     if (this.checkingPluginVersion) {
       return "refresh-cw";
     }
@@ -406,6 +458,9 @@ export class SettingsUpdatesRenderer {
   }
 
   private getPluginUpdateSummary(): string {
+    if (this.installingPlugin) {
+      return "Installing the latest plugin release into this vault.";
+    }
     if (this.checkingPluginVersion) {
       return "Checking the latest available plugin release.";
     }
@@ -478,7 +533,7 @@ export class SettingsUpdatesRenderer {
   }
 
   private async refreshPluginVersionState(): Promise<void> {
-    if (this.checkingPluginVersion) {
+    if (this.checkingPluginVersion || this.installingPlugin) {
       return;
     }
 
@@ -488,6 +543,36 @@ export class SettingsUpdatesRenderer {
       this.pluginVersionState = await this.pluginRef.pluginUpdater.checkForUpdate();
     } finally {
       this.checkingPluginVersion = false;
+      this.onStateChanged();
+    }
+  }
+
+  private buildPluginInstallCommand(vaultPath: string): string {
+    return `curl -fsSL https://raw.githubusercontent.com/AntigmaLabs/ante-obsidian/main/scripts/install.sh | bash -s -- ${quoteShellArg(vaultPath)}`;
+  }
+
+  private async handlePluginInstall(installCommand: string): Promise<void> {
+    if (this.installingPlugin) {
+      return;
+    }
+    if (
+      !confirm(
+        `This will run the Ante Obsidian installer and update this vault's plugin files.\n\n${installCommand}\n\nContinue?`
+      )
+    ) {
+      return;
+    }
+
+    this.installingPlugin = true;
+    this.onStateChanged();
+    try {
+      await runShellCommand(installCommand);
+      this.pluginVersionState = await this.pluginRef.pluginUpdater.checkForUpdate();
+      new Notice("Ante Obsidian update installed. Reload community plugins or restart Obsidian to use it.", 12000);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Plugin update install failed", 12000);
+    } finally {
+      this.installingPlugin = false;
       this.onStateChanged();
     }
   }

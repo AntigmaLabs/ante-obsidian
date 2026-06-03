@@ -3,9 +3,10 @@ import type { AnteRuntime } from "./ante-runtime";
 import { AnteStdioTransport } from "./transport/ante-stdio-transport";
 import { AnteWebSocketTransport, normalizeWsListenAddress } from "./transport/ante-websocket-transport";
 
-export const DEFAULT_ANTE_ARGS_JSON = JSON.stringify(["serve", "--stdio", "--yolo"]);
+export const DEFAULT_ANTE_ARGS_JSON = JSON.stringify(["serve", "--stdio"]);
 
 const ensureServeArgs = (args: string[]): string[] => {
+  args = args.filter((arg) => arg !== "--yolo");
   if (!args.includes("serve")) {
     args.unshift("serve");
   }
@@ -19,7 +20,7 @@ const stripTransportArgs = (args: string[]): string[] => {
   const sanitized: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const current = args[index];
-    if (current === "--stdio") {
+    if (current === "--stdio" || current === "--yolo") {
       continue;
     }
     if (current === "--ws") {

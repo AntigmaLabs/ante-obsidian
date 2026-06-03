@@ -563,6 +563,125 @@ test("chat file-edit approvals coalesce repeated writes to the same file", async
   assert.equal(await readFsFile(task!.artifacts[0]!.stagedPath!, "utf8"), "alpha\nbeta\ngamma\ndelta\n");
 });
 
+test("chat file previews ignore no-op write records for the same file", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.tool",
+      phase: "start",
+      tool: {
+        id: "tool-write-noop",
+        name: "Write",
+        argsText: JSON.stringify({
+          file_path: "Note.md",
+          content: "alpha\n"
+        })
+      }
+    });
+    onEvent({
+      type: "session.tool",
+      phase: "end",
+      tool: {
+        id: "tool-write-noop",
+        name: "Write",
+        resultText: JSON.stringify({ lines_written: 1 }),
+        status: "Completed",
+        isError: false
+      }
+    });
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-chat-1",
+        message: "approve write",
+        tools: [
+          {
+            id: "tool-write-chat-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  await engine.startChatTask("Preview beta");
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.artifacts.length, 1);
+  assert.equal(task?.artifacts[0]?.beforeText, "alpha\n");
+  assert.equal(task?.artifacts[0]?.afterText, "alpha\nbeta\n");
+  assert.equal(task?.artifacts[0]?.runtimeToolId, "tool-write-chat-1");
+  assert.equal(task?.artifacts[0]?.runtimeMode, "staged-preview");
+});
+
+test("chat file previews coalesce later same-file changes after a completed tool artifact", async () => {
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-chat-1",
+        message: "approve first write",
+        tools: [
+          {
+            id: "tool-write-chat-1",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\n"
+            })
+          }
+        ]
+      }
+    });
+    onEvent({
+      type: "session.tool",
+      phase: "end",
+      tool: {
+        id: "tool-write-chat-1",
+        name: "Write",
+        resultText: JSON.stringify({ lines_written: 2 }),
+        status: "Completed",
+        isError: false
+      }
+    });
+    onEvent({
+      type: "session.approval",
+      approval: {
+        turnId: "turn-chat-2",
+        message: "approve second write",
+        tools: [
+          {
+            id: "tool-write-chat-2",
+            name: "Write",
+            argsText: JSON.stringify({
+              file_path: "Note.md",
+              content: "alpha\nbeta\ngamma\n"
+            })
+          }
+        ]
+      }
+    });
+    onEvent({ type: "session.completed", summary: "done" });
+  });
+
+  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
+  await engine.startChatTask("Preview beta");
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task.artifacts.length, 1);
+  assert.equal(task.artifacts[0]?.beforeText, "alpha\n");
+  assert.equal(task.artifacts[0]?.afterText, "alpha\nbeta\ngamma\n");
+  assert.equal(task.artifacts[0]?.runtimeToolId, "tool-write-chat-2");
+  assert.equal(task.artifacts[0]?.runtimeMode, "staged-preview");
+});
+
 test("applying a staged chat preview cleans up its temp directory", async () => {
   const host = new HostStub();
   const runtime = new RuntimeStub((_request, onEvent) => {
@@ -730,6 +849,87 @@ test("native Edit tools create artifacts from file snapshots on tool end", async
   assert.equal(task?.artifacts[0]?.afterText, "alpha\nbeta\n");
   assert.equal(task?.artifacts[0]?.runtimeToolId, "tool-edit-1");
   assert.equal(task?.artifacts[0]?.applyState, "applied");
+});
+
+test("completed observed same-file edits remain separate artifacts", async () => {
+  const path = "Note.md";
+  const host = new MutableHostStub({ [path]: "alpha\n" });
+  const runtime = new RuntimeStub((_request, onEvent) => {
+    void (async () => {
+      onEvent({
+        type: "session.tool",
+        phase: "start",
+        tool: {
+          id: "tool-edit-1",
+          name: "Edit",
+          argsText: JSON.stringify({
+            file_path: path,
+            old_string: "alpha\n",
+            new_string: "alpha\nbeta\n"
+          })
+        }
+      });
+      await Promise.resolve();
+      host.setFile(path, "alpha\nbeta\n");
+      onEvent({
+        type: "session.tool",
+        phase: "end",
+        tool: {
+          id: "tool-edit-1",
+          name: "Tool",
+          resultText: JSON.stringify({ patch: { lines: ["+beta"] } }),
+          status: "Completed",
+          isError: false
+        }
+      });
+      await Promise.resolve();
+      onEvent({
+        type: "session.tool",
+        phase: "start",
+        tool: {
+          id: "tool-edit-2",
+          name: "Edit",
+          argsText: JSON.stringify({
+            file_path: path,
+            old_string: "alpha\nbeta\n",
+            new_string: "alpha\nbeta\ngamma\n"
+          })
+        }
+      });
+      await Promise.resolve();
+      host.setFile(path, "alpha\nbeta\ngamma\n");
+      onEvent({
+        type: "session.tool",
+        phase: "end",
+        tool: {
+          id: "tool-edit-2",
+          name: "Tool",
+          resultText: JSON.stringify({ patch: { lines: ["+gamma"] } }),
+          status: "Completed",
+          isError: false
+        }
+      });
+      await Promise.resolve();
+      onEvent({ type: "session.completed", summary: "done" });
+    })();
+  });
+
+  const engine = new TaskEngine(runtime as never, host as never, resolvePresetById);
+  await engine.startDocumentTask({
+    presetId: "default",
+    triggerSource: "mention",
+    context,
+    inlineInstruction: "Add beta and gamma with edits"
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  const task = engine.getState().tasks[0];
+  assert.ok(task);
+  assert.equal(task?.artifacts.length, 2);
+  assert.equal(task?.artifacts[0]?.runtimeToolId, "tool-edit-1");
+  assert.equal(task?.artifacts[1]?.runtimeToolId, "tool-edit-2");
+  assert.equal(task?.artifacts[0]?.afterText, "alpha\nbeta\n");
+  assert.equal(task?.artifacts[1]?.afterText, "alpha\nbeta\ngamma\n");
 });
 
 test("failed Edit followed by successful Write only keeps the successful diff artifact", async () => {

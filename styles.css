@@ -549,12 +549,14 @@ button.tmd-diff-file-main {
 .tmd-update-script-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   width: 100%;
 }
 
 .tmd-update-script-code {
   flex: 1 1 0;
+  min-width: min(100%, 260px);
   margin: 0;
   padding: 8px;
   background: var(--background-primary);
@@ -1852,6 +1854,54 @@ button.tmd-diff-file-main {
   color: var(--text-muted);
   font-size: 16px;
   font-style: italic;
+}
+
+.tmd-diff-loading-card {
+  overflow: hidden;
+}
+
+.tmd-diff-loading-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px 18px;
+}
+
+.tmd-diff-loading-line {
+  position: relative;
+  height: 12px;
+  width: 72%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+}
+
+.tmd-diff-loading-line.is-wide {
+  width: 90%;
+}
+
+.tmd-diff-loading-line.is-short {
+  width: 48%;
+}
+
+.tmd-diff-loading-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--text-muted) 20%, transparent),
+    transparent
+  );
+  animation: tmd-diff-loading-sweep 1.25s ease-in-out infinite;
+}
+
+@keyframes tmd-diff-loading-sweep {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .tmd-chat-process {
@@ -3301,8 +3351,6 @@ svg.tmd-spin {
   width: 12px !important;
   height: 12px !important;
 }
-
-
 
 
 

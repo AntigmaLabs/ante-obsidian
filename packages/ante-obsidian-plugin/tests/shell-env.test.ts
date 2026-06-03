@@ -53,3 +53,16 @@ test("command lookup result validation accepts only safe path-like outputs", () 
   assert.equal(__test__.isValidCommandLookupResult("Welcome to zsh", "ante"), false);
   assert.equal(__test__.isValidCommandLookupResult("other-command", "ante"), false);
 });
+
+test("selectResolvedCommandPath falls back to SDK-resolved executable paths", () => {
+  assert.equal(
+    __test__.selectResolvedCommandPath("", "/Users/test/.ante/bin/ante", "ante"),
+    "/Users/test/.ante/bin/ante",
+  );
+  assert.equal(
+    __test__.selectResolvedCommandPath("/opt/homebrew/bin/ante", "/Users/test/.ante/bin/ante", "ante"),
+    "/opt/homebrew/bin/ante",
+  );
+  assert.equal(__test__.selectResolvedCommandPath("", "ante", "ante"), "");
+  assert.equal(__test__.selectResolvedCommandPath("", "", "ante"), "");
+});
