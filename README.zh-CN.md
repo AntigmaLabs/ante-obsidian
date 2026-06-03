@@ -20,6 +20,17 @@
 
 ---
 
+## 关于 Ante
+
+**Ante** 是一款轻量级、本地优先的 AI 智能体运行时，使用 Rust 编写（~15MB 单一二进制，零依赖）。支持 12+ AI 服务商（Anthropic、OpenAI、Gemini 等），并可完全离线运行本地 GGUF 模型。
+
+**了解更多：**
+- 📖 [Ante 官方文档](https://docs.antigma.ai)
+- 🔗 [Ante GitHub 仓库](https://github.com/AntigmaLabs/ante-preview)
+- 📋 [Ante 更新日志与功能](https://github.com/AntigmaLabs/ante-preview/releases)
+
+---
+
 ## 🚀 快速上手
 
 ### 0. 面向 AI Agent 的自动化安装

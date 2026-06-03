@@ -21,6 +21,17 @@ The repository is organized as a monorepo:
 
 ---
 
+## About Ante
+
+**Ante** is a lightweight, local-first AI agent runtime built in Rust (~15MB binary, zero dependencies). It supports 12+ providers (Anthropic, OpenAI, Gemini, etc.) and runs completely offline with local GGUF models.
+
+**Learn more:**
+- 📖 [Ante Documentation](https://docs.antigma.ai)
+- 🔗 [Ante GitHub Repository](https://github.com/AntigmaLabs/ante-preview)
+- 📋 [Ante Changelog & Features](https://github.com/AntigmaLabs/ante-preview/releases)
+
+---
+
 ## 🚀 Quick Start
 
 ### 0. For AI Agents (Automated Installation)
