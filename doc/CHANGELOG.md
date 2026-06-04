@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.10 - 2026-06-04
+
+- **Dynamic Models & Providers**: Automatically source active LLM models and providers from the local Ante CLI catalog
+- **Setup Reliability**: Prevent initialization failures and add CLI upgrade warnings
+
 ## 0.6.9 - 2026-06-03
 
 - **More Reliable Chat Edits**: Fix duplicate same-file previews, hide no-op changes, and show loading while diffs are prepared
