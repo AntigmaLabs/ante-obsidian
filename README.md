@@ -82,13 +82,13 @@ The plugin runs completely locally and relies on the `ante` CLI. Setup is fully 
 ### Feature Demonstrations
 
 **Inline Triggers**
-![Inline triggers demo](./doc/demo/assets/clip1.gif)
+<video src="./doc/demo/assets/clip1.mp4" autoplay loop muted playsinline width="100%"></video>
 
 **Context Menu**
-![Context Menu demo](./doc/demo/assets/clip2.gif)
+<video src="./doc/demo/assets/clip2.mp4" autoplay loop muted playsinline width="100%"></video>
 
 **Chat with Ante**
-![Chat with Ante demo](./doc/demo/assets/clip3.gif)
+<video src="./doc/demo/assets/clip3.mp4" autoplay loop muted playsinline width="100%"></video>
 
 ---
 

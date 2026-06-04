@@ -74,6 +74,17 @@ curl -sS https://raw.githubusercontent.com/AntigmaLabs/ante-obsidian/main/script
 *   **💻 Ante 终端**: 控制台风格的交互流，流式输出详细执行日志并展示自研的工具调用安全审批卡片。
 *   **🛠️ 自由定制预设**: 支持在设置面板中通过鼠标拖拽，灵活自定义、重排序或隐藏所有的快捷预设动作。
 
+### 功能演示
+
+**行内触发**
+<video src="./doc/demo/assets/clip1.mp4" autoplay loop muted playsinline width="100%"></video>
+
+**上下文菜单**
+<video src="./doc/demo/assets/clip2.mp4" autoplay loop muted playsinline width="100%"></video>
+
+**智能体对话**
+<video src="./doc/demo/assets/clip3.mp4" autoplay loop muted playsinline width="100%"></video>
+
 ---
 
 ## ⚙️ 工作原理 (架构图)
