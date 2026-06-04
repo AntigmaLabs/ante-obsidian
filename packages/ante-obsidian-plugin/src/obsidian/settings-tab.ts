@@ -8,6 +8,7 @@ import type TmdPlugin from "./main";
 import {
   normalizeProvider,
   type ProviderKeyConfig,
+  MISSING_CATALOG_WARNING_TEXT,
 } from "./settings";
 import { renderSettingsSection } from "./settings-section-renderer";
 import { applyProviderOverrideSelection } from "./settings-tab-helpers";
@@ -106,7 +107,21 @@ export class TmdSettingTab extends PluginSettingTab {
     const anteDefaultTarget = this.pluginRef.anteDefaults;
     const resolvedAnteTarget = this.pluginRef.getResolvedAnteTarget();
 
-    if (this.pluginRef.isAnteInstalled() && this.isProviderCredentialMissing(resolvedAnteTarget.provider)) {
+    const isInstalled = this.pluginRef.isAnteInstalled();
+    const hasCatalog = this.pluginRef.anteCatalog !== null;
+
+    // 1. If local Ante CLI is installed but provider catalog is missing (e.g. CLI too old/unsupported subcommand),
+    // prioritize showing the upgrade warning at the top and suppress subsequent credential errors.
+    if (isInstalled && !hasCatalog) {
+      const catalogWarningEl = modelSectionEl.createDiv({ cls: "tmd-settings-warning-banner" });
+      catalogWarningEl.createDiv({
+        text: MISSING_CATALOG_WARNING_TEXT,
+        cls: "tmd-settings-warning-title"
+      });
+    }
+
+    // 2. Only show missing credential warning if the CLI catalog was successfully loaded (otherwise we lack provider/env metadata)
+    if (isInstalled && hasCatalog && this.isProviderCredentialMissing(resolvedAnteTarget.provider)) {
       const warningEl = modelSectionEl.createDiv({ cls: "tmd-settings-warning-banner" });
       const targetProvider = resolvedAnteTarget.provider;
       const meta = this.pluginRef.getProviderMeta(targetProvider);
@@ -158,11 +173,7 @@ export class TmdSettingTab extends PluginSettingTab {
       // Only shows API-key providers (no OAuth/subscription providers).
       const overrideProviders = this.pluginRef.getOverrideProviders();
       if (overrideProviders.length === 0) {
-        const hintEl = modelSectionEl.createDiv({ cls: "tmd-settings-warning-banner" });
-        hintEl.createDiv({
-          text: `⚠️ No provider catalog: run the 'ante' command once, or update Ante (the 'ante catalog' command requires a newer version), then reopen settings.`,
-          cls: "tmd-settings-warning-title"
-        });
+        // Suppress rendering duplicate catalog warning banner as it's already shown at the top of the tab
       } else {
         new Setting(modelSectionEl)
           .setName("Provider override")

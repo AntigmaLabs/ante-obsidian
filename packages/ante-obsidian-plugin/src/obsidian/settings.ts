@@ -23,6 +23,11 @@ export const DEFAULT_ANTE_MODEL = "gemini-3.5-flash";
 /** Default provider id used when stored settings have no usable value. */
 export const DEFAULT_ANTE_PROVIDER = "gemini";
 
+export const MISSING_CATALOG_WARNING_TEXT = "⚠️ No provider catalog: run the 'ante' command once, or update Ante (the 'ante catalog' command requires a newer version), then reopen settings.";
+
+export const getMissingCatalogNoticeText = (sourceLabel: string): string =>
+  `${sourceLabel} requires a newer Ante CLI version. Please update Ante in Settings > Runtime to populate the provider catalog.`;
+
 /**
  * Normalize a raw provider string. Provider *validity* is now checked against
  * the live catalog at the call sites that have it (the chat picker and settings

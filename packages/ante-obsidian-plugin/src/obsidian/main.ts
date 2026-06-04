@@ -7,7 +7,7 @@ import type { HostAdapter } from "../core/host-adapter";
 import { ObsidianHostAdapter } from "./host-adapter";
 import { populateEditorMenu } from "./editor-menu";
 import { TmdSettingTab } from "./settings-tab";
-import { DEFAULT_SETTINGS, normalizeSettings, type TmdSettings } from "./settings";
+import { DEFAULT_SETTINGS, getMissingCatalogNoticeText, normalizeSettings, type TmdSettings } from "./settings";
 import { readAnteCatalog, type AnteCatalog, type AnteCatalogProvider } from "./ante-catalog";
 import type { AnteRuntime } from "../runtime/ante-runtime";
 import { createAnteRuntime } from "../runtime/create-ante-runtime";
@@ -116,10 +116,11 @@ export default class TmdPlugin extends Plugin {
       await this.loadAnteDefaults();
       await this.loadShellEnv();
       await this.loadAnteCatalog();
-      this.delayedInitializationComplete = true;
-      console.info("[tmd] Plugin fully initialized");
     } catch (error) {
       console.error("[tmd] Failed to complete delayed initialization:", error);
+    } finally {
+      this.delayedInitializationComplete = true;
+      console.info("[tmd] Plugin fully initialized");
     }
   }
 
@@ -192,11 +193,19 @@ export default class TmdPlugin extends Plugin {
   }
 
   ensureAnteInstalled(sourceLabel: string): boolean {
-    if (this.isAnteInstalled()) {
-      return true;
+    if (!this.isAnteInstalled()) {
+      this.notifyAnteMissing(sourceLabel);
+      return false;
     }
-    this.notifyAnteMissing(sourceLabel);
-    return false;
+    if (!this.delayedInitializationComplete) {
+      new Notice(`${sourceLabel} is still initializing. Please wait a moment.`, 3000);
+      return false;
+    }
+    if (this.anteCatalog === null) {
+      new Notice(getMissingCatalogNoticeText(sourceLabel), 9000);
+      return false;
+    }
+    return true;
   }
 
   private async handoffAnteSession(action: () => void | Promise<void>, reason: string): Promise<void> {
