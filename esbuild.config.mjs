@@ -1,6 +1,46 @@
 import esbuild from "esbuild";
+import { readFileSync, writeFileSync, watchFile } from "fs";
+import { join } from "path";
 
 const production = process.argv.includes("production");
+
+// ─── CSS Bundler ─────────────────────────────────────────────────────────────
+
+const STYLES_DIR = "packages/ante-obsidian-plugin/src/styles";
+const STYLES_ORDER = [
+  "base.css",
+  "diff.css",
+  "settings.css",
+  "chat.css",
+  "terminal.css",
+  "settings-api.css",
+];
+const STYLES_OUTPUT = "styles.css";
+
+function bundleStyles() {
+  try {
+    const content = STYLES_ORDER
+      .map((f) => readFileSync(join(STYLES_DIR, f), "utf8"))
+      .join("\n");
+    writeFileSync(STYLES_OUTPUT, content, "utf8");
+    console.log(`[styles] bundled ${STYLES_ORDER.length} modules → ${STYLES_OUTPUT}`);
+  } catch (err) {
+    console.error(`[styles] bundle failed: ${err.message || err}`);
+  }
+}
+
+let debounceTimeout = null;
+function debouncedBundleStyles() {
+  if (debounceTimeout) {
+    clearTimeout(debounceTimeout);
+  }
+  debounceTimeout = setTimeout(() => {
+    bundleStyles();
+    debounceTimeout = null;
+  }, 100);
+}
+
+// ─── JS Build ────────────────────────────────────────────────────────────────
 
 const context = await esbuild.context({
   entryPoints: ["packages/ante-obsidian-plugin/src/obsidian/main.ts"],
@@ -18,9 +58,20 @@ const context = await esbuild.context({
   }
 });
 
+// ─── Run ─────────────────────────────────────────────────────────────────────
+
+bundleStyles();
+
 if (production) {
   await context.rebuild();
   await context.dispose();
 } else {
+  // Watch CSS modules for changes and re-bundle
+  for (const f of STYLES_ORDER) {
+    watchFile(join(STYLES_DIR, f), { interval: 300 }, () => {
+      console.log(`[styles] change detected in ${f}`);
+      debouncedBundleStyles();
+    });
+  }
   await context.watch();
 }

@@ -1,0 +1,152 @@
+.tmd-diff-card {
+  overflow: hidden;
+  margin: 2px 0 8px;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 48%, transparent);
+  border-radius: var(--tmd-radius-md);
+  background: color-mix(in srgb, var(--background-secondary) 28%, var(--background-primary) 72%);
+  box-shadow: none;
+}
+
+.tmd-diff-card-list {
+  background: transparent;
+}
+
+.tmd-diff-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: transparent;
+}
+
+.tmd-diff-summary-title {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: color-mix(in srgb, var(--text-muted) 82%, var(--text-normal) 18%);
+  font-weight: 600;
+}
+
+.tmd-diff-summary-count {
+  font-size: 0.88rem;
+  letter-spacing: -0.01em;
+}
+
+.tmd-diff-summary-action {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--tmd-radius-pill);
+  background: color-mix(in srgb, var(--background-modifier-hover) 32%, transparent);
+  color: var(--text-muted);
+  box-shadow: none;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.tmd-diff-summary-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--background-modifier-hover) 52%, transparent);
+  color: var(--text-normal);
+}
+
+.tmd-diff-stat {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tmd-diff-stat.is-add {
+  color: color-mix(in srgb, var(--color-green) 88%, white 12%);
+}
+
+.tmd-diff-stat.is-remove {
+  color: color-mix(in srgb, var(--color-red) 88%, white 12%);
+}
+
+.tmd-diff-stat.is-neutral {
+  color: var(--text-muted);
+}
+
+.tmd-diff-file {
+  overflow: hidden;
+  background: transparent;
+}
+
+.tmd-diff-file + .tmd-diff-file {
+  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 42%, transparent);
+}
+
+.tmd-diff-file-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 12px 0 14px;
+  background: transparent;
+}
+
+.tmd-diff-file-main {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: 54px;
+}
+
+button.tmd-diff-file-main {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.tmd-diff-file-main:hover .tmd-diff-file-name {
+  color: var(--text-accent);
+}
+
+.tmd-diff-file-main:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--interactive-accent) 42%, transparent);
+  outline-offset: -2px;
+  border-radius: var(--tmd-radius-sm);
+}
+
+.tmd-diff-file-name {
+  display: block;
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tmd-diff-file-aside {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 10px;
+  min-height: 54px;
+}
+

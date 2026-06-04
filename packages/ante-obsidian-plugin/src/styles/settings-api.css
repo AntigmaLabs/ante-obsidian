@@ -1,0 +1,422 @@
+/* API Key toggle and Custom models styles */
+.tmd-api-key-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.tmd-api-key-container .setting-item {
+  flex: 1;
+  width: 100%;
+}
+
+.tmd-api-key-toggle-btn {
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--tmd-radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  box-shadow: none;
+  font-size: 14px;
+}
+
+.tmd-api-key-toggle-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.tmd-custom-models-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.tmd-custom-models-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tmd-custom-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--tmd-radius-sm);
+  padding: 6px 10px;
+  font-family: var(--font-monospace);
+  font-size: 13px;
+}
+
+.tmd-custom-model-delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-error);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 14px;
+  box-shadow: none;
+}
+
+.tmd-custom-model-delete-btn:hover {
+  background: transparent;
+  color: var(--color-red);
+}
+
+.tmd-custom-model-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.tmd-custom-model-add-row .setting-item {
+  flex: 1;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tmd-custom-model-add-row .setting-item-info {
+  display: none;
+}
+
+.tmd-custom-model-add-row .setting-item-control {
+  width: 100%;
+}
+
+.tmd-custom-model-add-row .setting-item-control input[type="text"] {
+  width: 100%;
+}
+
+.tmd-vertical-setting {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 8px;
+}
+
+.tmd-vertical-setting .setting-item-info {
+  margin-bottom: 4px;
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.tmd-vertical-setting .setting-item-control {
+  width: 100% !important;
+  justify-content: flex-start !important;
+}
+
+/* Compact and left-aligned custom model cards */
+.tmd-custom-model-preset-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: var(--background-secondary);
+  transition: background-color 120ms ease;
+}
+
+.tmd-custom-model-preset-row + .tmd-custom-model-preset-row {
+  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 58%, transparent);
+}
+
+.tmd-custom-model-preset-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+  padding: 6px 12px;
+  min-height: 32px;
+}
+
+.tmd-custom-model-preset-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start !important;
+  text-align: left !important;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tmd-custom-model-preset-name {
+  font-family: var(--font-monospace);
+  font-size: 0.82rem;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left !important;
+  width: 100%;
+}
+
+/* Session Console Control Drawer Styles */
+.tmd-chat-console-drawer {
+  background: color-mix(in srgb, var(--background-primary) 92%, var(--tmd-chat-paper) 8%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--tmd-radius-md);
+  margin-bottom: 8px;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  border-color: transparent;
+  width: 100%;
+}
+
+.tmd-chat-console-drawer.is-open {
+  margin-top: 12px;
+  padding: 14px 16px;
+  max-height: 380px;
+  opacity: 1;
+  border-color: var(--background-modifier-border);
+  overflow-y: auto;
+}
+
+.tmd-console-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 44%, transparent);
+  padding-bottom: 8px;
+  margin-bottom: 2px;
+}
+
+.tmd-console-drawer-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-normal);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tmd-console-drawer-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--tmd-radius-sm);
+  padding: 0;
+  box-shadow: none;
+}
+
+.tmd-console-drawer-close-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.tmd-console-field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.tmd-console-field-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+}
+
+/* Adjust dropdown button style inside drawer to be full width */
+.tmd-chat-console-drawer .tmd-chat-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100% !important;
+  max-width: none !important;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--tmd-radius-sm);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 30px;
+  text-align: left;
+}
+
+.tmd-chat-console-drawer .tmd-chat-picker:hover {
+  background: var(--background-modifier-hover);
+  border-color: color-mix(in srgb, var(--interactive-accent) 40%, var(--background-modifier-border));
+}
+
+.tmd-chat-console-drawer .tmd-chat-picker::after {
+  right: 12px;
+}
+
+.tmd-chat-console-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--tmd-radius-sm);
+  background: transparent;
+  color: color-mix(in srgb, var(--text-muted) 90%, white 10%);
+  box-shadow: none;
+  opacity: 0.9;
+  cursor: pointer;
+}
+
+.tmd-chat-console-toggle-button:hover {
+  color: var(--text-normal);
+  opacity: 1;
+}
+
+.tmd-chat-console-toggle-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Settings Onboarding Visual Helpers */
+.tmd-tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.tmd-tab-dot.is-warning {
+  background-color: var(--color-orange);
+}
+
+.tmd-tab-dot.is-danger {
+  background-color: var(--color-red);
+}
+
+.tmd-tab-dot.tmd-pulse {
+  animation: tmd-blink-animation 1.4s infinite ease-in-out;
+}
+
+@keyframes tmd-blink-animation {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.25;
+    transform: scale(0.75);
+  }
+}
+
+.tmd-settings-warning-banner {
+  background: color-mix(in srgb, var(--color-red) 8%, var(--background-primary) 92%);
+  border: 1px solid color-mix(in srgb, var(--color-red) 24%, transparent);
+  border-radius: var(--tmd-radius-sm);
+  padding: 12px 14px;
+  margin: 12px 0 16px 0;
+}
+
+.tmd-settings-warning-title {
+  color: var(--text-error);
+  font-weight: 600;
+  font-size: 0.88rem;
+  margin-bottom: 6px;
+}
+
+.tmd-settings-warning-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-error);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.tmd-settings-warning-list li {
+  margin-bottom: 4px;
+}
+
+.tmd-settings-warning-list li::marker {
+  color: var(--text-error);
+  font-weight: 600;
+}
+
+.tmd-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.tmd-env-detected-badge {
+  font-size: 0.72rem;
+  color: var(--text-success);
+  background-color: color-mix(in srgb, var(--color-green) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-green) 24%, transparent);
+  border-radius: var(--tmd-radius-pill);
+  padding: 1px 8px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tmd-api-key-hint-override {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: -2px;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+/* Compact Settings Panel Buttons */
+.tmd-update-item-button,
+.tmd-ante-update-button {
+  min-width: auto !important;
+  padding: 4px 10px !important;
+  height: 26px !important;
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  border-radius: var(--tmd-radius-sm) !important;
+}
+
+.tmd-update-item-button-icon,
+.tmd-ante-update-button-icon {
+  margin-right: 5px !important;
+}
+
+.tmd-update-item-button-icon svg,
+.tmd-ante-update-button-icon svg {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+
+
+

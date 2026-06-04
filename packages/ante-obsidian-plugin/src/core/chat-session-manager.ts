@@ -275,10 +275,6 @@ const extractStructuredStreamingText = (text: string): string | null => {
   return null;
 };
 
-const shouldHideStructuredStreamingText = (text: string): boolean => {
-  return false;
-};
-
 const isRecoverableConversationSession = (task: TaskRecord): boolean => Boolean(task.runtimeSession?.sessionId && task.endedAt);
 
 const isRecoverableConversationMessage = (
@@ -685,7 +681,7 @@ export class ChatSessionManager {
 
     const hasStructuredResult = Boolean(task.textResult?.text.trim()) || task.artifacts.length > 0;
     const extractedStreamingText = extractStructuredStreamingText(task.stdoutText);
-    const hideStructuredStreamingText = extractedStreamingText == null && shouldHideStructuredStreamingText(task.stdoutText);
+    const hideStructuredStreamingText = extractedStreamingText == null && task.stdoutText.trimStart().startsWith("{");
     const streamingText = extractedStreamingText ?? (hideStructuredStreamingText ? "" : task.stdoutText);
     const nextText =
       task.status === "running"
