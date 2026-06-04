@@ -6,208 +6,32 @@ import {
 } from "../core/ante-thinking";
 
 // ─── Provider metadata ─────────────────────────────────────────────────────
-
-export interface ProviderMeta {
-  id: string;
-  label: string;
-  /** "api-key" = requires API key env var; "oauth" = interactive OAuth; "none" = no auth (local) */
-  authType: "api-key" | "oauth" | "none";
-  /** Default environment variable name ante reads for this provider's key */
-  defaultEnvKey?: string;
-  /** Placeholder hint shown in the API key input */
-  keyPlaceholder?: string;
-  /** Fallback static model list when ante warming hasn't completed or is unavailable */
-  defaultModels?: readonly string[];
-}
-
-/**
- * Full list of built-in providers from the Ante catalog reference.
- * Includes OAuth providers so the chat picker can still reference them.
- * https://docs.antigma.ai/reference/catalog-reference#built-in-providers
- */
-export const AVAILABLE_PROVIDERS: readonly ProviderMeta[] = [
-  // ── OAuth / subscription (chat picker only, excluded from settings override) ──
-  {
-    id: "openai-subscription",
-    label: "OpenAI Subscription",
-    authType: "oauth",
-    defaultModels: ["gpt-5.4", "gpt-5.4-pro", "gpt-5.5"]
-  },
-  {
-    id: "anthropic-subscription",
-    label: "Anthropic Subscription",
-    authType: "oauth",
-    defaultModels: ["claude-sonnet-4-6", "claude-opus-4.6", "claude-haiku-4-5"]
-  },
-  {
-    id: "antix",
-    label: "Antix",
-    authType: "oauth",
-    defaultModels: [
-      "deepseek-v4-pro",
-      "deepseek-v4-flash",
-      "claude-sonnet-4-6",
-      "claude-opus-4.6",
-      "claude-haiku-4-5",
-      "gpt-5.4",
-      "gpt-5.4-pro",
-      "gpt-5.5",
-      "gemini-3.5-flash",
-      "gemini-3.5-pro",
-      "qwen3.5-flash"
-    ]
-  },
-
-  // ── API-key providers ──
-  {
-    id: "openai",
-    label: "OpenAI",
-    authType: "api-key",
-    defaultEnvKey: "OPENAI_API_KEY",
-    keyPlaceholder: "sk-...",
-    defaultModels: ["gpt-5.4", "gpt-5.4-pro", "gpt-5.5"]
-  },
-  {
-    id: "openai-compatible",
-    label: "OpenAI Compatible",
-    authType: "api-key",
-    defaultEnvKey: "OPENAI_COMPATIBLE_API_KEY",
-    keyPlaceholder: "sk-...",
-    defaultModels: ["custom-model-1", "custom-model-2"]
-  },
-  {
-    id: "gemini",
-    label: "Gemini",
-    authType: "api-key",
-    defaultEnvKey: "GEMINI_API_KEY",
-    keyPlaceholder: "AIza...",
-    defaultModels: ["gemini-3.5-flash", "gemini-3.5-pro", "gemini-3-flash-preview"]
-  },
-  {
-    id: "vertex-gemini",
-    label: "Vertex Gemini",
-    authType: "api-key",
-    defaultEnvKey: "VERTEX_GEMINI_API_KEY",
-    keyPlaceholder: "",
-    defaultModels: ["gemini-3.5-pro", "gemini-3.5-flash"]
-  },
-  {
-    id: "anthropic",
-    label: "Anthropic",
-    authType: "api-key",
-    defaultEnvKey: "ANTHROPIC_API_KEY",
-    keyPlaceholder: "sk-ant-...",
-    defaultModels: ["claude-sonnet-4-6", "claude-opus-4.6", "claude-haiku-4-5"]
-  },
-  {
-    id: "antix-api-key",
-    label: "Antix API Key",
-    authType: "api-key",
-    defaultEnvKey: "ANTIX_API_KEY",
-    keyPlaceholder: "",
-    defaultModels: [
-      "deepseek-v4-pro",
-      "deepseek-v4-flash",
-      "claude-sonnet-4-6",
-      "claude-opus-4.6",
-      "claude-haiku-4-5",
-      "gpt-5.4",
-      "gpt-5.4-pro",
-      "gpt-5.5",
-      "gemini-3.5-flash",
-      "gemini-3.5-pro",
-      "qwen3.5-flash"
-    ]
-  },
-  {
-    id: "deepseek",
-    label: "DeepSeek",
-    authType: "api-key",
-    defaultEnvKey: "DEEPSEEK_API_KEY",
-    keyPlaceholder: "sk-...",
-    defaultModels: ["deepseek-v4-pro", "deepseek-v4-flash"]
-  },
-  {
-    id: "openrouter",
-    label: "OpenRouter",
-    authType: "api-key",
-    defaultEnvKey: "OPENROUTER_API_KEY",
-    keyPlaceholder: "sk-or-...",
-    defaultModels: [
-      "anthropic/claude-sonnet-4-6",
-      "anthropic/claude-opus-4.6",
-      "google/gemini-3.1-pro-preview",
-      "openai/gpt-5.4-pro",
-      "deepseek/deepseek-v4-pro",
-      "deepseek/deepseek-v4-flash"
-    ]
-  },
-  {
-    id: "xai",
-    label: "xAI (Grok)",
-    authType: "api-key",
-    defaultEnvKey: "XAI_API_KEY",
-    keyPlaceholder: "xai-...",
-    defaultModels: ["grok-3-preview", "grok-3-pro"]
-  },
-  {
-    id: "zai",
-    label: "Zai",
-    authType: "api-key",
-    defaultEnvKey: "Z_AI_API_KEY",
-    keyPlaceholder: "",
-    defaultModels: ["z1-flash", "z1-pro"]
-  },
-  {
-    id: "ali-coding-plan",
-    label: "Ali Coding Plan",
-    authType: "api-key",
-    defaultEnvKey: "ALI_CODING_PLAN_API_KEY",
-    keyPlaceholder: "sk-sp-...",
-    defaultModels: ["qwen3.5-flash", "qwen3.5-pro"]
-  },
-
-  // ── No auth (local inference) ──
-  {
-    id: "local",
-    label: "Local (llama.cpp)",
-    authType: "none",
-    defaultModels: ["local-model"]
-  },
-] as const;
-
-/**
- * Subset used by the settings "Provider override" dropdown.
- * Excludes OAuth providers since they authenticate interactively via the Ante TUI,
- * not via an API key that the plugin can inject.
- */
-export const OVERRIDE_PROVIDERS: readonly ProviderMeta[] = AVAILABLE_PROVIDERS.filter(
-  (p) => p.authType !== "oauth"
-);
+//
+// The provider/model catalog is no longer hand-maintained here. It is read at
+// runtime from the Ante CLI via `ante catalog` (see `ante-catalog.ts`), which
+// is the authoritative source for providers, their auth config, and the models
+// each one serves. The plugin keeps only loose types and defaults below.
 
 /** Loose provider type — any valid provider id string. */
 export type AnteProvider = string;
 
-/** Legacy named constants kept for backward compatibility. */
-export const OPENAI_PROVIDER = "openai-subscription";
-export const GEMINI_PROVIDER = "gemini";
-export const ANTHROPIC_PROVIDER = "anthropic";
-export const ANTIX_PROVIDER = "antix";
-
 export type AnteConnectionMode = "stdio" | "websocket";
 
-export const DEFAULT_ANTE_MODEL = "gpt-5.4";
+/** Fallback model used only when no catalog model is resolvable. */
+export const DEFAULT_ANTE_MODEL = "gemini-3.5-flash";
+
+/** Default provider id used when stored settings have no usable value. */
+export const DEFAULT_ANTE_PROVIDER = "gemini";
 
 /**
- * Normalize a raw provider string to a known provider id.
- * Falls back to "openai-subscription" so legacy data stays valid.
+ * Normalize a raw provider string. Provider *validity* is now checked against
+ * the live catalog at the call sites that have it (the chat picker and settings
+ * dropdown only offer catalog providers); here we just trim and fall back to a
+ * sane default so legacy/empty stored data stays usable.
  */
 export const normalizeProvider = (provider: string): AnteProvider => {
   const trimmed = provider?.trim();
-  if (AVAILABLE_PROVIDERS.some((p) => p.id === trimmed)) {
-    return trimmed;
-  }
-  return OPENAI_PROVIDER;
+  return trimmed || DEFAULT_ANTE_PROVIDER;
 };
 
 // ─── Per-provider key configuration ───────────────────────────────────────

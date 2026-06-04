@@ -8,17 +8,9 @@ import type {
 } from "../core/types"
 import { formatLoadingLabel } from "../core/loading-label"
 import {
-  type AnteProvider,
-  AVAILABLE_PROVIDERS,
-} from "./settings"
-import {
   ANTE_DEFAULT_THINKING,
   type AnteThinkingPreference,
 } from "../core/ante-thinking"
-
-export const PROVIDER_LABELS: Record<AnteProvider, string> = Object.fromEntries(
-  AVAILABLE_PROVIDERS.map(p => [p.id, p.label])
-) as Record<AnteProvider, string>
 
 export const THINKING_LABELS: Record<AnteThinkingPreference, string> = {
   [ANTE_DEFAULT_THINKING]: "Default",

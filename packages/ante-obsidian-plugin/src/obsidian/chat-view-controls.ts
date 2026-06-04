@@ -12,7 +12,6 @@ import {
 } from "../core/ante-thinking"
 import { ChatProviderSwitchModal } from "./chat-provider-switch-modal"
 import {
-  PROVIDER_LABELS,
   THINKING_LABELS,
 } from "./chat-view-helpers"
 import type { ContextSnapshot } from "../core/types"
@@ -21,8 +20,6 @@ export class ChatViewControls {
   private selectedProvider: AnteProvider = "openai-subscription"
   private selectedModel = ""
   private selectedThinking: AnteThinkingPreference = ANTE_DEFAULT_THINKING
-  private loadingModelProvider: string | null = null
-  private modelLoadFailedProvider: string | null = null
 
   constructor(
     private readonly app: App,
@@ -56,37 +53,21 @@ export class ChatViewControls {
     this.populateModelSelect()
     this.populateThinkingSelect()
 
-    // Warm the model catalog for the initial provider so the model list
-    // is populated before the user opens the model picker.
-    if (!this.plugin.getAvailableModelNamesForProvider(this.selectedProvider).length) {
-      this.loadingModelProvider = this.selectedProvider
-      this.populateModelSelect()
-      this.plugin.warmAnteModelCatalog({
-        provider: this.selectedProvider,
-        model: this.selectedModel,
-        thinking: this.selectedThinking,
-      }).then(() => {
-        if (this.loadingModelProvider !== this.selectedProvider) return
-        this.loadingModelProvider = null
-        const best = this.getSelectableModel(this.selectedProvider, this.selectedModel)
-        if (best && best !== this.selectedModel) {
-          this.selectedModel = best
-        }
-        this.populateModelSelect()
-      }).catch(() => {
-        if (this.loadingModelProvider !== this.selectedProvider) return
-        this.loadingModelProvider = null
-        this.modelLoadFailedProvider = this.selectedProvider
-        this.populateModelSelect()
-      })
-    }
+    // The provider/model catalog is loaded up front (chat-view onOpen calls
+    // plugin.loadAnteCatalog and re-syncs these controls once it resolves), so
+    // there is no per-provider warming to do here.
 
     this.providerButtonEl.addEventListener("click", (event) => {
       const menu = new Menu()
       const configuredProviders = this.plugin.getConfiguredProviders()
+      if (configuredProviders.length === 0) {
+        menu.addItem((item) => {
+          item.setTitle("No providers — run `ante` or update Ante").setDisabled(true)
+        })
+      }
       for (const providerMeta of configuredProviders) {
         const providerId = providerMeta.id
-        const label = PROVIDER_LABELS[providerId] ?? providerMeta.label
+        const label = providerMeta.label
         menu.addItem((item) => {
           item
             .setTitle(label)
@@ -135,13 +116,7 @@ export class ChatViewControls {
       }
       if (models.length === 0) {
         menu.addItem((item) => {
-          item
-            .setTitle(
-              this.modelLoadFailedProvider === this.selectedProvider
-                ? "Failed to load models from Ante"
-                : "Loading models from Ante"
-            )
-            .setDisabled(true)
+          item.setTitle("No models — run `ante` or update Ante").setDisabled(true)
         })
       }
       this.showMenu(menu, this.modelButtonEl, event)
@@ -193,18 +168,13 @@ export class ChatViewControls {
   }
 
   populateProviderSelect(): void {
-    const label = PROVIDER_LABELS[this.selectedProvider] ?? this.selectedProvider
+    const label = this.plugin.getProviderLabel(this.selectedProvider)
     this.providerButtonEl.setText(label)
     this.providerButtonEl.setAttribute("title", label)
   }
 
   populateModelSelect(): void {
-    const rawLabel =
-      this.loadingModelProvider === this.selectedProvider
-        ? "Loading models..."
-        : this.modelLoadFailedProvider === this.selectedProvider
-          ? "Models unavailable"
-          : this.selectedModel || "Models not loaded"
+    const rawLabel = this.selectedModel || "No model"
 
     // Strip provider prefix (e.g. 'google/gemini' -> 'gemini') for display purposes only
     let displayLabel = rawLabel;
@@ -241,11 +211,9 @@ export class ChatViewControls {
     const previousModel = this.selectedModel
     const previousThinking = this.selectedThinking
 
-    this.loadingModelProvider = provider
-    this.modelLoadFailedProvider = null
-    this.populateModelSelect()
-
     try {
+      // Models come from the already-loaded catalog, so the target provider's
+      // model can be picked synchronously — no session warming required.
       const conversation = await this.plugin.createChatConversation(this.getLiveContext(), { forceNew: true })
       const preferredModel = this.getSelectableModel(provider, "")
       this.plugin.chatManager.setConversationRuntimeTarget(conversation.id, {
@@ -255,38 +223,13 @@ export class ChatViewControls {
       })
       this.selectedProvider = provider
       this.selectedModel = preferredModel
+      if (preferredModel) {
+        this.plugin.rememberLastSelectedModelForProvider(provider, preferredModel)
+      }
       this.populateProviderSelect()
       this.populateModelSelect()
       this.populateThinkingSelect()
-      try {
-        await this.plugin.warmAnteModelCatalog({
-          provider,
-          model: preferredModel,
-          thinking: this.selectedThinking,
-        })
-        if (this.selectedProvider !== provider) {
-          return
-        }
-        this.loadingModelProvider = null
-        this.selectedModel = this.getSelectableModel(provider, preferredModel)
-        this.plugin.chatManager.setConversationRuntimeTarget(conversation.id, {
-          provider,
-          model: this.selectedModel,
-          thinking: this.selectedThinking,
-        })
-        this.plugin.rememberLastSelectedModelForProvider(provider, this.selectedModel)
-        this.populateModelSelect()
-      } catch (error) {
-        if (this.selectedProvider !== provider) {
-          return
-        }
-        this.loadingModelProvider = null
-        this.modelLoadFailedProvider = provider
-        this.populateModelSelect()
-        new Notice(error instanceof Error ? error.message : "Failed to load Ante models")
-      }
     } catch (error) {
-      this.loadingModelProvider = null
       this.selectedProvider = previousProvider
       this.selectedModel = previousModel
       this.selectedThinking = previousThinking

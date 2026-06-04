@@ -1,6 +1,20 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { buildAnteRuntimeConfig } from "../src/obsidian/main-runtime-config"
+import type { AnteCatalogProvider } from "../src/obsidian/ante-catalog"
+
+const apiKeyProvider = (id: string, envKey: string): AnteCatalogProvider => ({
+  id,
+  label: id,
+  authType: "api-key",
+  envKey,
+  models: [],
+})
+
+const GEMINI_AND_ANTHROPIC: AnteCatalogProvider[] = [
+  apiKeyProvider("gemini", "GEMINI_API_KEY"),
+  apiKeyProvider("anthropic", "ANTHROPIC_API_KEY"),
+]
 
 test("buildAnteRuntimeConfig prefers explicit gemini key and emits only selected provider env", () => {
   const config = buildAnteRuntimeConfig({
@@ -18,6 +32,7 @@ test("buildAnteRuntimeConfig prefers explicit gemini key and emits only selected
       provider: "gemini",
       model: "gemini-3-flash-preview",
     },
+    apiKeyProviders: GEMINI_AND_ANTHROPIC,
     shellEnv: {
       GEMINI_API_KEY: "gemini-shell",
       ANTHROPIC_API_KEY: "anthropic-shell",
@@ -54,6 +69,7 @@ test("buildAnteRuntimeConfig falls back from shell env to process env for anthro
       provider: "anthropic",
       model: "claude-sonnet-4-5",
     },
+    apiKeyProviders: GEMINI_AND_ANTHROPIC,
     shellEnv: {},
     processEnv: {
       ANTHROPIC_API_KEY: "anthropic-process",
