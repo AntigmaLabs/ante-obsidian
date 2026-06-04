@@ -1,5 +1,5 @@
 import { App, MarkdownView, Notice, Plugin, type WorkspaceLeaf } from "obsidian";
-import { resolveAnteThinkingPreference, type AnteThinkingLevel, type AnteThinkingPreference } from "../core/ante-thinking";
+import { resolveAnteThinkingPreference, type AnteThinkingLevel } from "../core/ante-thinking";
 import { TaskEngine } from "../core/task-engine";
 import type { ContextSnapshot, PresetId } from "../core/types";
 import { MentionTriggerService } from "./mention-trigger";
@@ -7,7 +7,8 @@ import type { HostAdapter } from "../core/host-adapter";
 import { ObsidianHostAdapter } from "./host-adapter";
 import { populateEditorMenu } from "./editor-menu";
 import { TmdSettingTab } from "./settings-tab";
-import { DEFAULT_SETTINGS, normalizeSettings, AVAILABLE_PROVIDERS, type TmdSettings } from "./settings";
+import { DEFAULT_SETTINGS, normalizeSettings, type TmdSettings } from "./settings";
+import { readAnteCatalog, type AnteCatalog, type AnteCatalogProvider } from "./ante-catalog";
 import type { AnteRuntime } from "../runtime/ante-runtime";
 import { createAnteRuntime } from "../runtime/create-ante-runtime";
 import { resolveCommandPath } from "../runtime/transport/ante-stdio-transport";
@@ -42,6 +43,8 @@ export default class TmdPlugin extends Plugin {
     model: DEFAULT_SETTINGS.anteModel
   };
   shellEnv: Record<string, string> = {};
+  /** Provider/model catalog read from `ante catalog`; null until loaded (or if Ante is too old/missing). */
+  anteCatalog: AnteCatalog | null = null;
   resolvedAnteCommand = "";
   hostAdapter!: HostAdapter;
   taskEngine!: TaskEngine;
@@ -51,7 +54,10 @@ export default class TmdPlugin extends Plugin {
   pluginUpdater!: PluginUpdater;
   obsidianCliStatus: ObsidianCliStatus = { available: false };
   private readonly obsidianCli = new ObsidianCliService();
-  private readonly modelNamesByProvider = new Map<string, string[]>();
+  /** Full login-shell env captured by loadShellEnv, used to rebuild provider env once the catalog is known. */
+  private fullShellEnv: Record<string, string> = {};
+  /** In-flight `ante catalog` load, shared so concurrent callers don't spawn duplicates. */
+  private catalogLoadInFlight: Promise<void> | null = null;
   private runtime!: AnteRuntime;
   private pluginData: TmdPluginData = {};
   private pluginUpdateState: { lastNotifiedVersion: string | null } = {
@@ -76,6 +82,7 @@ export default class TmdPlugin extends Plugin {
         settings: this.settings,
         resolvedTarget: this.getResolvedAnteTarget(),
         shellEnv: this.shellEnv,
+        apiKeyProviders: this.getAllProviders().filter((p) => p.authType === "api-key"),
       });
     });
     this.taskEngine = new TaskEngine(
@@ -87,9 +94,6 @@ export default class TmdPlugin extends Plugin {
     );
     this.chatManager = new ChatSessionManager({ saveChatState: (chatState) => this.saveChatState(chatState) }, this.pluginData.chatState);
     this.unsubscribeTaskEngine = this.taskEngine.subscribe((state) => {
-      for (const task of state.tasks) {
-        this.captureRuntimeModelList(task.runtimeSession);
-      }
       this.chatManager.syncFromTaskState(state);
     });
     this.mentionTrigger = new MentionTriggerService(this.app, this, () => this.settings.mentionTriggerDebug);
@@ -106,11 +110,12 @@ export default class TmdPlugin extends Plugin {
     void this.delayedInitialization();
   }
 
-  // Runs slow I/O (shell env, ante defaults) in the background so onload stays fast.
+  // Runs slow I/O (shell env, ante defaults, provider catalog) in the background so onload stays fast.
   private async delayedInitialization(): Promise<void> {
     try {
       await this.loadAnteDefaults();
       await this.loadShellEnv();
+      await this.loadAnteCatalog();
       this.delayedInitializationComplete = true;
       console.info("[tmd] Plugin fully initialized");
     } catch (error) {
@@ -283,15 +288,22 @@ export default class TmdPlugin extends Plugin {
       resolveCommandPath(ANTE_COMMAND, fullEnv),
       ANTE_COMMAND
     );
-    const envMap: Record<string, string> = {};
+    this.fullShellEnv = fullEnv;
+    this.shellEnv = this.buildProviderEnv(fullEnv);
+  }
 
-    // Collect all env keys to load:
-    //   1. Default env keys for every API-key provider in the built-in list
-    //   2. Any custom env key names the user has configured per-provider
+  /**
+   * Harvest just the provider API-key env vars from the full login-shell env:
+   *   1. The env key each api-key provider in the catalog declares (once loaded)
+   *   2. Any custom env key names the user has configured per-provider
+   * Before the catalog loads, only (2) applies; loadAnteCatalog rebuilds this
+   * once the catalog's env keys are known.
+   */
+  private buildProviderEnv(fullEnv: Record<string, string>): Record<string, string> {
     const keysToLoad = new Set<string>();
-    for (const provider of AVAILABLE_PROVIDERS) {
-      if (provider.defaultEnvKey) {
-        const key = normalizeEnvVarName(provider.defaultEnvKey);
+    for (const provider of this.anteCatalog?.providers ?? []) {
+      if (provider.authType === "api-key" && provider.envKey) {
+        const key = normalizeEnvVarName(provider.envKey);
         if (key) keysToLoad.add(key);
       }
     }
@@ -300,18 +312,52 @@ export default class TmdPlugin extends Plugin {
       if (key) keysToLoad.add(key);
     }
 
+    const envMap: Record<string, string> = {};
     for (const envKey of keysToLoad) {
       const value = fullEnv[envKey];
       if (value) {
         envMap[envKey] = value;
       }
     }
-    this.shellEnv = envMap;
+    return envMap;
+  }
+
+  /**
+   * Load the provider/model catalog from `ante catalog`. Idempotent: a no-op
+   * once loaded unless `force` is set. Concurrent callers share one spawn.
+   * Stays null (and the picker stays empty) if Ante is missing or too old to
+   * support the subcommand.
+   */
+  async loadAnteCatalog(force = false): Promise<void> {
+    if (this.anteCatalog && !force) {
+      return;
+    }
+    if (this.catalogLoadInFlight) {
+      return this.catalogLoadInFlight;
+    }
+    if (!this.isAnteInstalled()) {
+      return;
+    }
+    const run = (async () => {
+      const catalog = await readAnteCatalog(this.resolvedAnteCommand, this.shellEnv);
+      if (catalog) {
+        this.anteCatalog = catalog;
+        // Now that catalog env keys are known, re-harvest provider credentials.
+        this.shellEnv = this.buildProviderEnv(this.fullShellEnv);
+      } else {
+        console.warn("[tmd] `ante catalog` unavailable — update Ante to populate the provider list");
+      }
+    })();
+    this.catalogLoadInFlight = run.finally(() => {
+      this.catalogLoadInFlight = null;
+    });
+    return this.catalogLoadInFlight;
   }
 
   async refreshAnteEnvironment(): Promise<void> {
     await this.loadShellEnv();
     await this.loadAnteDefaults();
+    await this.loadAnteCatalog(true);
   }
 
   shouldShowFullProcessLogs(): boolean {
@@ -457,12 +503,9 @@ export default class TmdPlugin extends Plugin {
 
   getAvailableModelNamesForProvider(provider: string): string[] {
     const providerId = provider.trim();
-    const cached = this.modelNamesByProvider.get(providerId) ?? [];
-    const providerMeta = AVAILABLE_PROVIDERS.find((p) => p.id === providerId);
-    const builtIn = providerMeta?.defaultModels ?? [];
+    const catalogModels = this.getProviderMeta(providerId)?.models ?? [];
     const custom = this.settings.customModels?.[providerId] ?? [];
-
-    return [...new Set([...cached, ...builtIn, ...custom])];
+    return [...new Set([...catalogModels, ...custom])];
   }
 
   getLastSelectedModelForProvider(provider: string): string {
@@ -488,67 +531,60 @@ export default class TmdPlugin extends Plugin {
     });
   }
 
+  /** All providers Ante knows about (catalog order); empty until the catalog loads. */
+  getAllProviders(): AnteCatalogProvider[] {
+    return this.anteCatalog?.providers ?? [];
+  }
+
+  /** Catalog metadata for a provider id, or undefined if unknown / catalog not loaded. */
+  getProviderMeta(providerId: string): AnteCatalogProvider | undefined {
+    const id = providerId.trim();
+    return this.anteCatalog?.providers.find((p) => p.id === id);
+  }
+
+  /** Display label for a provider id, falling back to the id itself. */
+  getProviderLabel(providerId: string): string {
+    return this.getProviderMeta(providerId)?.label ?? providerId;
+  }
+
   /**
-   * Returns the subset of AVAILABLE_PROVIDERS that the user has actually configured:
-   * - OAuth providers: present if the corresponding auth token file exists on disk.
+   * Providers eligible for the settings "Provider override" dropdown: every
+   * catalog provider except OAuth ones, which authenticate interactively via the
+   * Ante TUI rather than an API key the plugin can inject.
+   */
+  getOverrideProviders(): AnteCatalogProvider[] {
+    return this.getAllProviders().filter((p) => p.authType !== "oauth");
+  }
+
+  /**
+   * Returns the subset of catalog providers the user has actually configured:
+   * - OAuth providers: present if the matching `~/.ante/auth/<oauthPreset>.json` exists.
    * - API-key providers: present if a key is available via shellEnv or providerKeys.
    * - local (no-auth): always included.
-   * Falls back to the full list if we cannot determine status (e.g. before delayed init).
+   * Empty when the catalog hasn't loaded (Ante missing or too old).
    */
-  getConfiguredProviders(): import("./settings").ProviderMeta[] {
+  getConfiguredProviders(): AnteCatalogProvider[] {
     const { homedir } = require("node:os") as typeof import("node:os");
     const { join } = require("node:path") as typeof import("node:path");
     const { existsSync } = require("node:fs") as typeof import("node:fs");
     const anteHome = (typeof process !== "undefined" && process.env?.ANTE_HOME) || join(homedir(), ".ante");
 
-    // OAuth preset name → auth file base name mapping (based on ~/.ante/auth/ observations)
-    const oauthAuthFile: Record<string, string> = {
-      "openai-subscription": "openai",
-      "anthropic-subscription": "anthropic",
-      "antix": "antix",
-    };
-
-    return AVAILABLE_PROVIDERS.filter((p) => {
+    return this.getAllProviders().filter((p) => {
       if (p.authType === "none") {
         // local — always show
         return true;
       }
       if (p.authType === "oauth") {
-        const fileName = oauthAuthFile[p.id];
-        if (!fileName) return false;
-        return existsSync(join(anteHome, "auth", `${fileName}.json`));
+        // The OAuth preset id doubles as the auth-file basename Ante writes.
+        if (!p.oauthPreset) return false;
+        return existsSync(join(anteHome, "auth", `${p.oauthPreset}.json`));
       }
       // api-key: show if any key source is non-empty
-      const envKey = this.settings.providerKeys[p.id]?.envKey || p.defaultEnvKey || "";
+      const envKey = this.settings.providerKeys[p.id]?.envKey || p.envKey || "";
       const hasShellKey = envKey ? Boolean(this.shellEnv[envKey]?.trim()) : false;
       const hasDirectKey = Boolean(this.settings.providerKeys[p.id]?.apiKey?.trim());
       return hasShellKey || hasDirectKey;
     });
-  }
-
-
-  async warmAnteModelCatalog(target?: { provider: string; model: string; thinking: AnteThinkingPreference }): Promise<void> {
-    if (!this.isAnteInstalled()) {
-      return;
-    }
-    console.info(`[tmd session] Warming model catalog for provider: ${target?.provider ?? "default"}`);
-    await this.runtime.ensureWarmSession(target);
-    const session = this.runtime.getActiveSessionInfo();
-    console.info(`[tmd session] Warming complete. Session info:`, session);
-    this.captureRuntimeModelList(session);
-  }
-
-  private captureRuntimeModelList(session: TaskRecord["runtimeSession"] | null | undefined): void {
-    const provider = session?.activeProvider?.trim();
-    const models = session?.availableModels?.map((model) => model.trim()).filter(Boolean) ?? [];
-    if (provider) {
-      console.info(`[tmd session] Active provider: ${provider}, Active model: ${session?.activeModel ?? "default"}, Available models:`, models);
-    }
-    if (!provider || models.length === 0) {
-      return;
-    }
-    const uniqueModels = [...new Set(models)];
-    this.modelNamesByProvider.set(provider, uniqueModels);
   }
 
   getResolvedAnteThinking(): AnteThinkingLevel | null {

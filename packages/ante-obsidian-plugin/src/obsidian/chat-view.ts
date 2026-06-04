@@ -27,7 +27,6 @@ import {
 import {
   MESSAGE_WINDOW_SIZE,
   summarizeContext,
-  PROVIDER_LABELS,
   THINKING_LABELS,
 } from "./chat-view-helpers"
 import { ChatViewControls } from "./chat-view-controls"
@@ -134,7 +133,7 @@ export class TmdChatView extends ItemView {
       this.syncLoadingTimer()
       void this.render()
     })
-    void this.plugin.warmAnteModelCatalog().then(() => {
+    void this.plugin.loadAnteCatalog().then(() => {
       this.viewControls.syncRuntimeTargetControls(this.latestChatState?.activeConversationId ?? null)
       this.viewControls.populateModelSelect()
     }).catch(() => {
@@ -584,7 +583,7 @@ export class TmdChatView extends ItemView {
     }
 
     const target = this.viewControls.getSelectedRuntimeTarget()
-    const providerLabel = PROVIDER_LABELS[target.provider as any] ?? target.provider
+    const providerLabel = this.plugin.getProviderLabel(target.provider)
     const thinkingLabel = THINKING_LABELS[target.thinking] ?? target.thinking
     let displayModel = target.model || "default"
     if (displayModel.includes("/") && !displayModel.startsWith("http")) {

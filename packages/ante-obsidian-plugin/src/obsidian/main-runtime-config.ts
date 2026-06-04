@@ -4,7 +4,8 @@ import {
 } from "../core/ante-thinking"
 import { DEFAULT_ANTE_ARGS_JSON } from "../runtime/create-ante-runtime"
 import { normalizeEnvVarName } from "./shell-env"
-import { AVAILABLE_PROVIDERS, type TmdSettings } from "./settings"
+import type { TmdSettings } from "./settings"
+import type { AnteCatalogProvider } from "./ante-catalog"
 import type { AnteDefaults } from "./ante-defaults"
 
 export interface AnteRuntimeConfigInput {
@@ -18,6 +19,8 @@ export interface AnteRuntimeConfigInput {
   >
   resolvedTarget: AnteDefaults
   shellEnv: Record<string, string>
+  /** API-key providers from the Ante catalog whose credentials should be forwarded. */
+  apiKeyProviders: AnteCatalogProvider[]
   processEnv?: NodeJS.ProcessEnv
 }
 
@@ -42,7 +45,7 @@ export const buildAnteRuntimeConfig = (
   const providerKeys = input.settings.providerKeys ?? {}
   const legacySettings = input.settings as any
 
-  for (const provider of AVAILABLE_PROVIDERS) {
+  for (const provider of input.apiKeyProviders) {
     if (provider.authType !== "api-key") {
       continue
     }
@@ -54,11 +57,11 @@ export const buildAnteRuntimeConfig = (
     let envKey: string | undefined = keyConfig?.envKey
     if (!envKey) {
       if (providerId === "gemini") {
-        envKey = legacySettings.geminiApiKeyEnvKey || provider.defaultEnvKey
+        envKey = legacySettings.geminiApiKeyEnvKey || provider.envKey
       } else if (providerId === "anthropic") {
-        envKey = legacySettings.anthropicApiKeyEnvKey || provider.defaultEnvKey
+        envKey = legacySettings.anthropicApiKeyEnvKey || provider.envKey
       } else {
-        envKey = provider.defaultEnvKey
+        envKey = provider.envKey
       }
     }
     const normalizedKey = envKey ? normalizeEnvVarName(envKey) : ""

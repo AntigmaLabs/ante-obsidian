@@ -6,8 +6,6 @@ import {
 } from "../core/ante-thinking";
 import type TmdPlugin from "./main";
 import {
-  AVAILABLE_PROVIDERS,
-  OVERRIDE_PROVIDERS,
   normalizeProvider,
   type ProviderKeyConfig,
 } from "./settings";
@@ -29,8 +27,6 @@ const THINKING_LABELS: Record<AnteThinkingPreference, string> = {
 export class TmdSettingTab extends PluginSettingTab {
   private activeTab: SettingsTabId = "runtime";
   private updatesRenderer: SettingsUpdatesRenderer | null = null;
-  private isWarmingProvider = false;
-  private warmingSessionId = 0;
 
   constructor(private readonly pluginRef: TmdPlugin) {
     super(pluginRef.app, pluginRef);
@@ -113,9 +109,9 @@ export class TmdSettingTab extends PluginSettingTab {
     if (this.pluginRef.isAnteInstalled() && this.isProviderCredentialMissing(resolvedAnteTarget.provider)) {
       const warningEl = modelSectionEl.createDiv({ cls: "tmd-settings-warning-banner" });
       const targetProvider = resolvedAnteTarget.provider;
-      const meta = AVAILABLE_PROVIDERS.find(p => p.id === targetProvider);
-      const providerLabel = meta?.label ?? targetProvider;
-      
+      const meta = this.pluginRef.getProviderMeta(targetProvider);
+      const providerLabel = this.pluginRef.getProviderLabel(targetProvider);
+
       if (this.pluginRef.settings.useAnteDefaults) {
         warningEl.createDiv({
           text: `⚠️ Credential missing: No active session found for '${providerLabel}'. Please choose one of the following to resolve:`,
@@ -135,7 +131,7 @@ export class TmdSettingTab extends PluginSettingTab {
         });
         const listEl = warningEl.createEl("ol", { cls: "tmd-settings-warning-list" });
         listEl.createEl("li", {
-          text: `Enter your ${providerLabel} API key directly below, or ensure the environment variable '${meta?.defaultEnvKey || ""}' is set in your system shell.`
+          text: `Enter your ${providerLabel} API key directly below, or ensure the environment variable '${meta?.envKey || ""}' is set in your system shell.`
         });
         listEl.createEl("li", {
           text: `Or, choose another provider from the 'Provider override' dropdown below and configure its API key.`
@@ -160,64 +156,47 @@ export class TmdSettingTab extends PluginSettingTab {
     if (!this.pluginRef.settings.useAnteDefaults) {
       // ── Provider override ──────────────────────────────────────────────────
       // Only shows API-key providers (no OAuth/subscription providers).
-      new Setting(modelSectionEl)
-        .setName("Provider override")
-        .setDesc(
-          this.isWarmingProvider
-            ? "Ask Ante to use this provider. Subscription providers (OAuth) are managed via the Ante TUI and excluded here. (🔄 Fetching model list from Ante...)"
-            : "Ask Ante to use this provider. Subscription providers (OAuth) are managed via the Ante TUI and excluded here."
-        )
-        .addDropdown((dropdown) => {
-          for (const provider of OVERRIDE_PROVIDERS) {
-            dropdown.addOption(provider.id, provider.label);
-          }
-          // Ensure current value is in the override list; fall back to first entry
-          const currentProvider = this.pluginRef.settings.anteProvider;
-          const validId = OVERRIDE_PROVIDERS.some((p) => p.id === currentProvider)
-            ? currentProvider
-            : (OVERRIDE_PROVIDERS[0]?.id ?? currentProvider);
-          return dropdown
-            .setValue(validId)
-            .onChange(async (value) => {
-              const provider = normalizeProvider(value);
-
-              // Update provider first
-              this.pluginRef.settings.anteProvider = provider;
-
-              // Select valid model from loaded list (consistent with chat behavior)
-              applyProviderOverrideSelection(
-                this.pluginRef.settings,
-                value,
-                this.pluginRef.getAvailableModelNamesForProvider(provider)
-              );
-
-              await this.pluginRef.saveSettings();
-
-              // Set warming loading state and re-render instantly to display updated key fields
-              const currentSessionId = ++this.warmingSessionId;
-              this.isWarmingProvider = true;
-              this.display();
-
-              // Warm the model catalog from Ante runtime to get fresh list
-              setTimeout(async () => {
-                try {
-                  await this.pluginRef.warmAnteModelCatalog({
-                    provider,
-                    model: "",
-                    thinking: this.pluginRef.settings.anteThinking,
-                  });
-                } catch (e) {
-                  console.warn("Failed to warm model catalog for provider:", provider, e);
-                  // Continue with fallback to cached or default models
-                } finally {
-                  if (currentSessionId === this.warmingSessionId) {
-                    this.isWarmingProvider = false;
-                    this.display();
-                  }
-                }
-              }, 50);
-            });
+      const overrideProviders = this.pluginRef.getOverrideProviders();
+      if (overrideProviders.length === 0) {
+        const hintEl = modelSectionEl.createDiv({ cls: "tmd-settings-warning-banner" });
+        hintEl.createDiv({
+          text: `⚠️ No provider catalog: run the 'ante' command once, or update Ante (the 'ante catalog' command requires a newer version), then reopen settings.`,
+          cls: "tmd-settings-warning-title"
         });
+      } else {
+        new Setting(modelSectionEl)
+          .setName("Provider override")
+          .setDesc("Ask Ante to use this provider. Subscription providers (OAuth) are managed via the Ante TUI and excluded here.")
+          .addDropdown((dropdown) => {
+            for (const provider of overrideProviders) {
+              dropdown.addOption(provider.id, provider.label);
+            }
+            // Ensure current value is in the override list; fall back to first entry
+            const currentProvider = this.pluginRef.settings.anteProvider;
+            const validId = overrideProviders.some((p) => p.id === currentProvider)
+              ? currentProvider
+              : (overrideProviders[0]?.id ?? currentProvider);
+            return dropdown
+              .setValue(validId)
+              .onChange(async (value) => {
+                const provider = normalizeProvider(value);
+
+                // Update provider first
+                this.pluginRef.settings.anteProvider = provider;
+
+                // Select a valid model from the catalog list (consistent with chat behavior)
+                applyProviderOverrideSelection(
+                  this.pluginRef.settings,
+                  value,
+                  this.pluginRef.getAvailableModelNamesForProvider(provider)
+                );
+
+                await this.pluginRef.saveSettings();
+                // Re-render to show the new provider's credential + model fields.
+                this.display();
+              });
+          });
+      }
 
       // ── API key section (dynamic per provider) ─────────────────────────────
       // Determine the effective provider for credential rendering.
@@ -285,18 +264,19 @@ export class TmdSettingTab extends PluginSettingTab {
    * and placeholder. OAuth providers and local provider show nothing.
    */
   private renderProviderCredentialSetting(containerEl: HTMLElement, providerId: string): void {
-    const meta = AVAILABLE_PROVIDERS.find((p) => p.id === providerId);
-    if (!meta || meta.authType !== "api-key" || !meta.defaultEnvKey) {
+    const meta = this.pluginRef.getProviderMeta(providerId);
+    if (!meta || meta.authType !== "api-key" || !meta.envKey) {
       // local (authType "none") and OAuth providers need no credential UI
       return;
     }
+    const defaultEnvKey = meta.envKey;
 
     const existing: ProviderKeyConfig = this.pluginRef.settings.providerKeys[providerId] ?? {
-      envKey: meta.defaultEnvKey,
+      envKey: defaultEnvKey,
       apiKey: "",
     };
 
-    let envValue = existing.envKey || meta.defaultEnvKey;
+    let envValue = existing.envKey || defaultEnvKey;
     let keyValue = existing.apiKey;
 
     const checkDetected = (env: string, key: string): boolean => {
@@ -313,10 +293,8 @@ export class TmdSettingTab extends PluginSettingTab {
     this.renderCredentialSetting(
       containerEl,
       `${meta.label} API key`,
-      this.isWarmingProvider
-        ? `Set the env var name Ante reads for ${meta.label}, and optionally enter the key directly here. (🔄 Fetching model list from Ante...)`
-        : `Set the env var name Ante reads for ${meta.label}, and optionally enter the key directly here.`,
-      meta.defaultEnvKey,
+      `Set the env var name Ante reads for ${meta.label}, and optionally enter the key directly here.`,
+      defaultEnvKey,
       meta.keyPlaceholder ?? "",
       envValue,
       keyValue,
@@ -329,7 +307,7 @@ export class TmdSettingTab extends PluginSettingTab {
         };
       },
       async (value) => {
-        envValue = value.trim() || meta.defaultEnvKey!;
+        envValue = value.trim() || defaultEnvKey;
         this.pluginRef.settings.providerKeys[providerId] = {
           ...existing,
           envKey: envValue,
@@ -452,7 +430,7 @@ export class TmdSettingTab extends PluginSettingTab {
   }
 
   private renderCustomModelsSetting(containerEl: HTMLElement, providerId: string): void {
-    const meta = AVAILABLE_PROVIDERS.find((p) => p.id === providerId);
+    const meta = this.pluginRef.getProviderMeta(providerId);
     if (!meta) return;
 
     // We only support custom models for non-oauth providers
@@ -553,7 +531,7 @@ export class TmdSettingTab extends PluginSettingTab {
   }
 
   private isProviderCredentialMissing(providerId: string): boolean {
-    const meta = AVAILABLE_PROVIDERS.find((p) => p.id === providerId);
+    const meta = this.pluginRef.getProviderMeta(providerId);
     if (!meta) return true;
     if (meta.authType === "none") {
       return false; // local - no auth needed
@@ -564,21 +542,16 @@ export class TmdSettingTab extends PluginSettingTab {
         const { join } = require("node:path");
         const { existsSync } = require("node:fs");
         const anteHome = (typeof process !== "undefined" && process.env?.ANTE_HOME) || join(homedir(), ".ante");
-        const oauthAuthFile: Record<string, string> = {
-          "openai-subscription": "openai",
-          "anthropic-subscription": "anthropic",
-          "antix": "antix",
-        };
-        const fileName = oauthAuthFile[providerId];
-        if (!fileName) return true;
-        return !existsSync(join(anteHome, "auth", `${fileName}.json`));
+        // The OAuth preset id doubles as the auth-file basename Ante writes.
+        if (!meta.oauthPreset) return true;
+        return !existsSync(join(anteHome, "auth", `${meta.oauthPreset}.json`));
       } catch {
         return true;
       }
     }
     // api-key
     const keyConfig = this.pluginRef.settings.providerKeys[providerId];
-    const envKey = keyConfig?.envKey || meta.defaultEnvKey || "";
+    const envKey = keyConfig?.envKey || meta.envKey || "";
     const hasDirectKey = Boolean(keyConfig?.apiKey?.trim());
     const hasShellKey = envKey ? Boolean(this.pluginRef.shellEnv[envKey]?.trim()) : false;
     const hasProcessKey = (envKey && typeof process !== "undefined" && process.env) ? Boolean(process.env[envKey]?.trim()) : false;
