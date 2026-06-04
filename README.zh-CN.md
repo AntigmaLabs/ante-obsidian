@@ -77,13 +77,13 @@ curl -sS https://raw.githubusercontent.com/AntigmaLabs/ante-obsidian/main/script
 ### 功能演示
 
 **行内触发**
-<video src="./doc/demo/assets/clip1.mp4" autoplay loop muted playsinline width="100%"></video>
+![行内触发](./doc/demo/assets/clip1.gif)
 
 **上下文菜单**
-<video src="./doc/demo/assets/clip2.mp4" autoplay loop muted playsinline width="100%"></video>
+![上下文菜单](./doc/demo/assets/clip2.gif)
 
 **智能体对话**
-<video src="./doc/demo/assets/clip3.mp4" autoplay loop muted playsinline width="100%"></video>
+![智能体对话](./doc/demo/assets/clip3.gif)
 
 ---
 
