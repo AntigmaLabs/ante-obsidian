@@ -38,7 +38,9 @@ export const buildAnteRuntimeConfig = (
   autoApproveTools: boolean
   env: Record<string, string>
 } => {
-  const env: Record<string, string> = {}
+  const env: Record<string, string> = {
+    ANTE_ENV: "obsidian",
+  }
   const processEnv = input.processEnv ?? process.env
 
   // Populate credentials for all known API-key providers

@@ -434,7 +434,7 @@ export class TmdTerminalView extends ItemView {
 
     if (shouldAnimate && this.loadingTimer == null) {
       this.loadingTimer = window.setInterval(() => {
-        this.loadingFrame = (this.loadingFrame + 1) % 4
+        this.loadingFrame += 1
         if (this.latestState) {
           this.render(this.latestState)
         }

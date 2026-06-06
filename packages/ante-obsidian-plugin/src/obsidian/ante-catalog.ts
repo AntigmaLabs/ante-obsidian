@@ -161,7 +161,7 @@ export const readAnteCatalog = (
 
     const child = spawn(command, ["catalog"], {
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, ...env },
+      env: { ...process.env, ANTE_ENV: "obsidian", ...env },
     });
 
     let stdout = "";

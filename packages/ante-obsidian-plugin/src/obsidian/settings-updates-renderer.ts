@@ -197,10 +197,11 @@ export class SettingsUpdatesRenderer {
     if (this.anteVersionState?.updateAvailable || (!this.anteVersionState?.localVersion && !!this.anteVersionState?.latestVersion)) {
       const upgradeButton = actionsEl.createEl("button", { cls: "mod-cta" });
       upgradeButton.addClass("tmd-update-item-button");
+      const isUpdate = !!this.anteVersionState?.localVersion;
       this.decorateAnteActionButton(
         upgradeButton,
-        this.upgradingAnte ? "loader-circle" : this.anteVersionState?.localVersion ? "arrow-up-circle" : "download",
-        this.upgradingAnte ? "Upgrading" : this.anteVersionState?.localVersion ? "Upgrade" : "Install"
+        this.upgradingAnte ? "loader-circle" : isUpdate ? "arrow-up-circle" : "download",
+        this.upgradingAnte ? (isUpdate ? "Updating" : "Installing") : isUpdate ? "Update" : "Install"
       );
       upgradeButton.disabled = this.checkingAnteVersion || this.upgradingAnte;
       upgradeButton.addEventListener("click", () => {
@@ -327,7 +328,7 @@ export class SettingsUpdatesRenderer {
 
   private getAnteUpdateStatusLabel(): string {
     if (this.upgradingAnte) {
-      return "Upgrading";
+      return this.anteVersionState?.localVersion ? "Updating" : "Installing";
     }
     if (this.checkingAnteVersion) {
       return "Checking";
@@ -489,7 +490,9 @@ export class SettingsUpdatesRenderer {
 
   private getAnteUpdateSummary(): string {
     if (this.upgradingAnte) {
-      return "Installing or upgrading the local Ante CLI.";
+      return this.anteVersionState?.localVersion
+        ? "Updating the local Ante CLI."
+        : "Installing the local Ante CLI.";
     }
     if (this.checkingAnteVersion) {
       return "Checking the local Ante CLI against the latest release channel.";
@@ -581,21 +584,33 @@ export class SettingsUpdatesRenderer {
     if (this.upgradingAnte) {
       return;
     }
-    if (!confirm("This will run the official Ante installer script for channel 'latest'. Continue?")) {
+    const isUpdate = !!this.anteVersionState?.localVersion;
+    const confirmMessage = isUpdate
+      ? "This will update the local Ante CLI via the 'ante update' command. Continue?"
+      : "This will run the official Ante installer script for channel 'latest'. Continue?";
+
+    if (!confirm(confirmMessage)) {
       return;
     }
 
     this.upgradingAnte = true;
     this.onStateChanged();
     try {
-      await this.pluginRef.anteUpdater.upgrade();
+      if (isUpdate) {
+        await this.pluginRef.anteUpdater.update();
+      } else {
+        await this.pluginRef.anteUpdater.install();
+      }
       await this.pluginRef.refreshAnteEnvironment();
       this.anteVersionState = await this.pluginRef.anteUpdater.checkForUpdate();
       new Notice(
-        this.anteVersionState.localVersion ? `Ante upgraded to ${this.anteVersionState.localVersion}` : "Ante upgrade completed"
+        this.anteVersionState.localVersion
+          ? `Ante ${isUpdate ? "updated" : "installed"} to ${this.anteVersionState.localVersion}`
+          : `Ante ${isUpdate ? "update" : "install"} completed`
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Ante upgrade failed";
+      const actionName = isUpdate ? "update" : "install";
+      const message = error instanceof Error ? error.message : `Ante ${actionName} failed`;
       this.anteVersionState = {
         localVersion: this.anteVersionState?.localVersion ?? null,
         latestVersion: this.anteVersionState?.latestVersion ?? null,

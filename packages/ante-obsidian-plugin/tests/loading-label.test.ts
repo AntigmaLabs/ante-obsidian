@@ -17,8 +17,23 @@ test("getLoadingFrame cycles across the shared star frames", () => {
 });
 
 test("formatLoadingLabel combines word and frame", () => {
-  const label = formatLoadingLabel("task-abc", 2);
-  const word = getLoadingWord("task-abc");
+  const t = 1717660800000;
+  const label = formatLoadingLabel("task-abc", 2, t);
+  const word = getLoadingWord("task-abc", t);
   assert.equal(label, `${word} ***`);
   assert.ok(__test__.LOADING_WORDS.includes(word as (typeof __test__.LOADING_WORDS)[number]));
+});
+
+test("getLoadingWord cycles every 4 seconds and avoids consecutive repeats", () => {
+  const seed = "test-task-123";
+  let t = 1717660800000;
+  let lastWord = getLoadingWord(seed, t);
+
+  for (let i = 0; i < 20; i++) {
+    t += 4000; // increment by exactly 4 seconds
+    const newWord = getLoadingWord(seed, t);
+    assert.notEqual(newWord, lastWord, `Word should change at t = ${t}`);
+    assert.ok(__test__.LOADING_WORDS.includes(newWord as (typeof __test__.LOADING_WORDS)[number]));
+    lastWord = newWord;
+  }
 });

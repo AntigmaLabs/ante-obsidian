@@ -48,6 +48,7 @@ test("buildAnteRuntimeConfig prefers explicit gemini key and emits only selected
   assert.equal(config.model, "gemini-3-flash-preview")
   assert.equal(config.thinking, "Deep")
   assert.deepEqual(config.env, {
+    ANTE_ENV: "obsidian",
     GEMINI_API_KEY: "gemini-inline",
     ANTHROPIC_API_KEY: "anthropic-inline",
   })
@@ -79,5 +80,5 @@ test("buildAnteRuntimeConfig falls back from shell env to process env for anthro
   assert.equal(config.connectionMode, "stdio")
   assert.equal(config.autoApproveTools, false)
   assert.equal(config.thinking, null)
-  assert.deepEqual(config.env, { ANTHROPIC_API_KEY: "anthropic-process" })
+  assert.deepEqual(config.env, { ANTE_ENV: "obsidian", ANTHROPIC_API_KEY: "anthropic-process" })
 })

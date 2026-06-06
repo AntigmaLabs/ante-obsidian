@@ -248,15 +248,16 @@ export class ChatMessageRenderer extends Component {
     const attachmentPaths = message.attachmentPaths ?? []
     if (previewText) {
       this.syncMessageText(elements, message, previewText)
-      this.removeLoading(elements)
-    } else if (message.status === "streaming") {
+    } else {
       this.removeText(elements)
+    }
+
+    if (message.status === "streaming" && !message.runtime?.approval) {
       this.syncLoading(
         elements,
         loadingLabelForMessage(message, this.getLoadingFrame()),
       )
     } else {
-      this.removeText(elements)
       this.removeLoading(elements)
     }
     this.syncMessageAttachments(elements, attachmentPaths)
@@ -308,8 +309,30 @@ export class ChatMessageRenderer extends Component {
       this.removeError(elements)
     }
 
+    this.enforceBubbleLayoutOrder(elements)
+
     return elements.rootEl
   }
+
+  private enforceBubbleLayoutOrder(elements: ChatMessageElements): void {
+    const order = [
+      elements.metaEl,
+      elements.attachmentsEl,
+      elements.textEl,
+      elements.runtimeDetailsHostEl,
+      elements.processEl,
+      elements.loadingEl,
+      elements.artifactsHostEl,
+      elements.approvalHostEl,
+      elements.errorEl,
+    ]
+    for (const el of order) {
+      if (el && el.parentElement === elements.bubbleEl) {
+        elements.bubbleEl.appendChild(el)
+      }
+    }
+  }
+
 
   pruneMessageEls(visibleIds: string[]): void {
     const visible = new Set(visibleIds)
@@ -905,7 +928,7 @@ export class ChatMessageRenderer extends Component {
       if (!elements) {
         continue
       }
-      if (message.text.trim() || message.runtime?.approval) {
+      if (message.runtime?.approval) {
         this.removeLoading(elements)
         continue
       }

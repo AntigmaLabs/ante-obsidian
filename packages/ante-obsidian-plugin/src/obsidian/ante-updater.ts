@@ -103,8 +103,35 @@ export class AnteUpdater {
   }
 
   async upgrade(channel = DEFAULT_UPDATE_CONFIG.anteChannel): Promise<void> {
+    let hasLocal = false;
+    try {
+      const localVersion = await this.getLocalVersion();
+      if (localVersion) {
+        hasLocal = true;
+      }
+    } catch {
+      // not installed or error
+    }
+
+    if (hasLocal) {
+      await this.update();
+    } else {
+      await this.install(channel);
+    }
+  }
+
+  async install(channel = DEFAULT_UPDATE_CONFIG.anteChannel): Promise<void> {
     const installCommand = `curl -fsSL ${this.quoteShellArg(DEFAULT_UPDATE_CONFIG.anteInstallUrl)} | bash -s -- ${this.quoteShellArg(channel)}`;
     await runShellCommand(installCommand);
+  }
+
+  async update(): Promise<void> {
+    const resolved = resolveCommandPath("ante", {});
+    if (!resolved) {
+      throw new Error("Ante command is not configured");
+    }
+    const updateCommand = `${this.quoteShellArg(resolved)} update`;
+    await runShellCommand(updateCommand);
   }
 
   private quoteShellArg(value: string): string {

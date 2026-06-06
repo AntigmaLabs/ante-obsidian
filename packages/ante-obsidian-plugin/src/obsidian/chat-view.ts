@@ -51,7 +51,7 @@ export class TmdChatView extends ItemView {
   private latestTaskState: TmdState | null = null
   private latestChatState: ChatStateSnapshot | null = null
   private liveContext: ContextSnapshot | null = null
-  private visibleMessageCount = MESSAGE_WINDOW_SIZE
+  private visibleMessageCount = 20
   private readonly sidebarRowEls = new Map<string, HTMLDivElement>()
 
   private sidebarEl!: HTMLDivElement
@@ -81,6 +81,7 @@ export class TmdChatView extends ItemView {
   private loadMoreButtonEl: HTMLButtonElement | null = null
   private lastRenderedConversationId: string | null = null
   private shouldAutoScrollToBottom = true
+  private isLoadingEarlierMessages = false
   private isComposing = false
   private isSidebarCollapsed = true
 
@@ -128,7 +129,7 @@ export class TmdChatView extends ItemView {
       const previousActiveId = this.latestChatState?.activeConversationId
       this.latestChatState = state
       if (previousActiveId !== state.activeConversationId) {
-        this.visibleMessageCount = MESSAGE_WINDOW_SIZE
+        this.visibleMessageCount = 20
       }
       this.syncLoadingTimer()
       void this.render()
@@ -347,6 +348,9 @@ export class TmdChatView extends ItemView {
     this.composerResizeObserver.observe(this.composerContainerEl)
     this.syncComposerOffset()
     this.syncSidebarCollapsedState()
+    this.registerDomEvent(this.timelineEl, "scroll", () => {
+      this.handleTimelineScroll()
+    })
   }
 
   private syncSidebarCollapsedState(): void {
@@ -410,11 +414,12 @@ export class TmdChatView extends ItemView {
     }
     const activeConversation = this.getActiveConversation(chatState)
     const activeConversationId = activeConversation?.id ?? null
+    const switchedConversation =
+      activeConversationId !== null &&
+      activeConversationId !== this.lastRenderedConversationId
     const shouldStickToBottom = this.shouldStickToBottom()
     const shouldForceScrollToBottom =
-      this.shouldAutoScrollToBottom ||
-      (activeConversationId !== null &&
-        activeConversationId !== this.lastRenderedConversationId)
+      this.shouldAutoScrollToBottom || switchedConversation
     const messages = activeConversation
       ? (chatState.messagesByConversation[activeConversation.id] ?? [])
       : []
@@ -699,7 +704,7 @@ export class TmdChatView extends ItemView {
 
     if (shouldAnimate && this.loadingTimer == null) {
       this.loadingTimer = window.setInterval(() => {
-        this.loadingFrame = (this.loadingFrame + 1) % 4
+        this.loadingFrame += 1
         this.refreshLoadingIndicators()
       }, 500)
       return
@@ -745,6 +750,48 @@ export class TmdChatView extends ItemView {
 
   private scrollToBottom(): void {
     this.timelineEl.scrollTop = this.timelineEl.scrollHeight
+  }
+
+  private handleTimelineScroll(): void {
+    if (this.isLoadingEarlierMessages || !this.latestChatState) {
+      return
+    }
+    const activeConversation = this.getActiveConversation(this.latestChatState)
+    if (!activeConversation) {
+      return
+    }
+    const messages = this.latestChatState.messagesByConversation[activeConversation.id] ?? []
+    const totalCount = messages.length
+    if (this.visibleMessageCount >= totalCount) {
+      return
+    }
+
+    const threshold = 100
+    if (this.timelineEl.scrollTop <= threshold) {
+      const prevScrollHeight = this.timelineEl.scrollHeight
+      const prevScrollTop = this.timelineEl.scrollTop
+
+      this.isLoadingEarlierMessages = true
+      this.visibleMessageCount = Math.min(totalCount, this.visibleMessageCount + 20)
+      this.shouldAutoScrollToBottom = false
+
+      void this.render()
+        .then(() => {
+          const newScrollHeight = this.timelineEl.scrollHeight
+          this.timelineEl.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight)
+          
+          window.requestAnimationFrame(() => {
+            const finalScrollHeight = this.timelineEl.scrollHeight
+            if (finalScrollHeight !== newScrollHeight) {
+              this.timelineEl.scrollTop = prevScrollTop + (finalScrollHeight - prevScrollHeight)
+            }
+            this.isLoadingEarlierMessages = false
+          })
+        })
+        .catch(() => {
+          this.isLoadingEarlierMessages = false
+        })
+    }
   }
 
   private getActiveConversation(
