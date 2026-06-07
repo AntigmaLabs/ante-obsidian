@@ -889,3 +889,33 @@
   border-top: 1px solid var(--background-modifier-border);
 }
 
+.tmd-settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 32px;
+  padding: 16px var(--size-4-4) 0;
+  border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 60%, transparent);
+}
+
+.tmd-settings-footer-text {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  max-width: 56ch;
+}
+
+.tmd-settings-footer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tmd-settings-footer-btn svg {
+  width: 14px;
+  height: 14px;
+}
+

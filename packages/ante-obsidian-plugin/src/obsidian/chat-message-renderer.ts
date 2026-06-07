@@ -33,6 +33,7 @@ import {
   shouldAutoExpandRuntimeDetails,
 } from "./runtime-details-renderer"
 import { renderArtifactDiffList } from "./artifact-diff-renderer"
+import { appendErrorReportLink } from "./utils"
 
 export interface ChatMessageElements {
   rootEl: HTMLDivElement
@@ -770,10 +771,19 @@ export class ChatMessageRenderer extends Component {
   }
 
   private syncError(elements: ChatMessageElements, error: string): void {
-    const errorEl =
-      elements.errorEl ?? elements.bubbleEl.createDiv({ cls: "tmd-error" })
-    this.setText(errorEl, error, "errorValue", elements)
-    elements.errorEl = errorEl
+    let errorEl = elements.errorEl
+    if (!errorEl) {
+      errorEl = elements.bubbleEl.createDiv({ cls: "tmd-error" })
+      elements.errorEl = errorEl
+    }
+
+    let textSpan = errorEl.querySelector(".tmd-error-text") as HTMLElement
+    if (!textSpan) {
+      textSpan = errorEl.createSpan({ cls: "tmd-error-text" })
+    }
+    this.setText(textSpan, error, "errorValue", elements)
+
+    appendErrorReportLink(errorEl, error, this.plugin)
   }
 
   private removeError(elements: ChatMessageElements): void {

@@ -125,7 +125,39 @@ export const extractErrorMessage = (value: unknown): string => {
     return value.trim();
   }
   const direct = findNestedStringField(value, ["message", "error", "description", "details"]);
-  return direct ?? "Ante returned an unknown error";
+  if (direct) {
+    return direct;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    // Check status.Failed pattern
+    if (record.status && typeof record.status === "object" && !Array.isArray(record.status)) {
+      const statusRecord = record.status as Record<string, unknown>;
+      if (statusRecord.Failed) {
+        if (typeof statusRecord.Failed === "string") {
+          return statusRecord.Failed;
+        }
+        if (statusRecord.Failed && typeof statusRecord.Failed === "object") {
+          const nested = findNestedStringField(statusRecord.Failed, ["message", "error", "description", "details"]);
+          if (nested) {
+            return nested;
+          }
+          try {
+            return JSON.stringify(statusRecord.Failed);
+          } catch {
+            return String(statusRecord.Failed);
+          }
+        }
+      }
+    }
+    // General fallback: serialize the payload
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return "Ante returned an unknown error";
 };
 
 export const extractUsage = (value: unknown): Usage => {

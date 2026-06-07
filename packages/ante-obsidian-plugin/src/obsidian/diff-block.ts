@@ -3,6 +3,7 @@ import type TmdPlugin from "./main";
 import type { DocumentChangeArtifact, TaskRecord } from "../core/types";
 import { buildPatchRows, type PatchRow } from "../core/diff-service";
 import { getArtifactTargetKey, getArtifactTargetPath } from "../core/artifacts";
+import { appendErrorReportLink } from "./utils";
 
 export type DiffStats = {
   additions: number;
@@ -313,7 +314,9 @@ export const renderArtifactDiff = (
   }
 
   if (artifact.applyError) {
-    body.createDiv({ cls: "tmd-error", text: artifact.applyError });
+    const errorEl = body.createDiv({ cls: "tmd-error" });
+    errorEl.createSpan({ cls: "tmd-error-text", text: artifact.applyError });
+    appendErrorReportLink(errorEl, artifact.applyError, plugin);
   }
 
   const patch = body.createDiv({ cls: "tmd-diff-patch" });

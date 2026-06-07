@@ -14,6 +14,7 @@ import { renderSettingsSection } from "./settings-section-renderer";
 import { applyProviderOverrideSelection } from "./settings-tab-helpers";
 import { SettingsUpdatesRenderer } from "./settings-updates-renderer";
 import { SettingsPresetsRenderer } from "./settings-presets-renderer";
+import { DEFAULT_UPDATE_CONFIG } from "./update-config";
 
 type SettingsTabId = "runtime" | "model" | "presets" | "more";
 
@@ -243,6 +244,21 @@ export class TmdSettingTab extends PluginSettingTab {
           await this.pluginRef.saveSettings();
         })
       );
+
+    // Persistent Feedback & Support Footer
+    const footerEl = containerEl.createDiv({ cls: "tmd-settings-footer" });
+    footerEl.createSpan({
+      text: "Have feedback or found a bug? Help us improve Ante Obsidian by reporting it on GitHub.",
+      cls: "tmd-settings-footer-text"
+    });
+    const footerBtn = footerEl.createEl("button", {
+      cls: "mod-cta tmd-settings-footer-btn",
+      text: "Report issue"
+    });
+    setIcon(footerBtn, "bug");
+    footerBtn.addEventListener("click", () => {
+      window.open(`${DEFAULT_UPDATE_CONFIG.pluginRepositoryUrl}/issues/new`, "_blank");
+    });
   }
 
   private createTabButton(containerEl: HTMLElement, tabId: SettingsTabId, label: string, panelEl: HTMLElement): void {
