@@ -1,4 +1,4 @@
-import { Modal, type App } from "obsidian"
+import { Modal, Setting, type App } from "obsidian"
 
 export class ChatProviderSwitchModal extends Modal {
   constructor(
@@ -13,7 +13,7 @@ export class ChatProviderSwitchModal extends Modal {
     this.modalEl.addClass("tmd-provider-switch-modal")
     const { contentEl } = this
     contentEl.empty()
-    contentEl.createEl("h3", { text: "Start a new chat?" })
+    new Setting(contentEl).setName("Start a new chat?").setHeading()
     contentEl.createEl("p", {
       text: `Switching to ${this.providerLabel} starts a new Ante session in a new chat. The current chat will stay unchanged.`,
     })

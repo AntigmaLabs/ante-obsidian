@@ -1,4 +1,7 @@
 import { PluginSettingTab, Setting, DropdownComponent, Notice, setIcon } from "obsidian";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import {
   ANTE_DEFAULT_THINKING,
   ANTE_THINKING_LEVELS,
@@ -38,7 +41,7 @@ export class TmdSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass("tmd-settings");
-    containerEl.createEl("h2", { text: "Ante Obsidian Settings" });
+    new Setting(containerEl).setName("Ante Obsidian Settings").setHeading();
 
     const tabsEl = containerEl.createDiv({ cls: "tmd-settings-tabs" });
     const panelsEl = containerEl.createDiv({ cls: "tmd-settings-panels" });
@@ -356,8 +359,8 @@ export class TmdSettingTab extends PluginSettingTab {
       (badgeEl, hintEl) => {
         updateElements = (env, key) => {
           const detected = checkDetected(env, key);
-          badgeEl.style.display = detected ? "inline-flex" : "none";
-          hintEl.style.display = detected ? "block" : "none";
+          badgeEl.toggleClass("tmd-is-hidden", !detected);
+          hintEl.toggleClass("tmd-is-hidden", !detected);
         };
       },
       async (value) => {
@@ -429,7 +432,7 @@ export class TmdSettingTab extends PluginSettingTab {
       cls: "tmd-env-detected-badge"
     });
     if (!isEnvKeyDetected) {
-      badgeEl.style.display = "none";
+      badgeEl.addClass("tmd-is-hidden");
     }
 
     new Setting(envFieldEl).addText((text) => {
@@ -448,7 +451,7 @@ export class TmdSettingTab extends PluginSettingTab {
       cls: "tmd-api-key-hint-override"
     });
     if (!isEnvKeyDetected) {
-      hintEl.style.display = "none";
+      hintEl.addClass("tmd-is-hidden");
     }
     
     registerElements(badgeEl, hintEl);
@@ -525,8 +528,7 @@ export class TmdSettingTab extends PluginSettingTab {
         copyEl.createDiv({ cls: "tmd-custom-model-preset-name", text: model });
         
         const controlsEl = contentEl.createDiv({ cls: "tmd-preset-controls" });
-        controlsEl.style.minWidth = "auto";
-        controlsEl.style.flex = "0 0 auto";
+        controlsEl.addClass("tmd-preset-controls-compact");
         
         const deleteBtn = controlsEl.createEl("button", { cls: "clickable-icon tmd-preset-icon-button" });
         deleteBtn.setAttribute("aria-label", `Remove ${model}`);
@@ -592,9 +594,6 @@ export class TmdSettingTab extends PluginSettingTab {
     }
     if (meta.authType === "oauth") {
       try {
-        const { homedir } = require("node:os");
-        const { join } = require("node:path");
-        const { existsSync } = require("node:fs");
         const anteHome = (typeof process !== "undefined" && process.env?.ANTE_HOME) || join(homedir(), ".ante");
         // The OAuth preset id doubles as the auth-file basename Ante writes.
         if (!meta.oauthPreset) return true;

@@ -52,22 +52,11 @@ export type ElectronWebUtilsModule = {
 export const getElectronRequire = ():
   | ((moduleName: string) => unknown)
   | null => {
+  const electronWindow = window as Window & {
+    require?: (moduleName: string) => unknown
+  }
   return (
-    (
-      globalThis as typeof globalThis & {
-        require?: (moduleName: string) => unknown
-        window?: Window & {
-          require?: (moduleName: string) => unknown
-        }
-      }
-    ).require ??
-    (
-      globalThis as typeof globalThis & {
-        window?: Window & {
-          require?: (moduleName: string) => unknown
-        }
-      }
-    ).window?.require ??
+    electronWindow.require ??
     null
   )
 }

@@ -239,7 +239,7 @@ export class TmdTerminalView extends ItemView {
     if (!selection) {
       return
     }
-    const range = document.createRange()
+    const range = window.activeDocument.createRange()
     range.selectNodeContents(this.editorEl)
     range.collapse(false)
     selection.removeAllRanges()

@@ -3,6 +3,7 @@ import type TmdPlugin from "./main";
 import { listResolvedPresets } from "../core/presets";
 import { CustomPresetModal } from "./settings-custom-preset-modal";
 import { renderSettingsSection } from "./settings-section-renderer";
+import { showConfirmDialog } from "./dialogs";
 
 export class SettingsPresetsRenderer {
   private draggingPresetId: string | null = null;
@@ -177,7 +178,15 @@ export class SettingsPresetsRenderer {
       return;
     }
 
-    if (!preset.instruction.trim() || window.confirm(`Delete custom preset "${preset.name}"?`)) {
+    const confirmed =
+      !preset.instruction.trim() ||
+      (await showConfirmDialog(this.pluginRef.app, {
+        title: "Delete preset",
+        message: `Delete custom preset "${preset.name}"?`,
+        confirmText: "Delete"
+      }));
+
+    if (confirmed) {
       this.pluginRef.settings.customPresets = this.pluginRef.settings.customPresets.filter((entry) => entry.id !== presetId);
       this.applyPresetOrder();
       await this.pluginRef.saveSettings();

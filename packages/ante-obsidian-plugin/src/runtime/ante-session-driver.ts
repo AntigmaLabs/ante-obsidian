@@ -13,6 +13,7 @@ import {
   getVariant
 } from "./ante-event-parser";
 import { buildApprovalResponseOperation } from "./ante-approval";
+import { cancelTimeout, scheduleTimeout, type TimerHandle } from "../core/timers";
 import { reduceRunVariant, type ActiveRun } from "./ante-run-event-reducer";
 import type { AnteRuntime, RuntimeObserver } from "./ante-runtime";
 import type { AnteRuntimeConfig } from "./ante-runtime-config";
@@ -24,7 +25,7 @@ import type { AnteTransport } from "./transport/ante-transport";
 const INTERRUPT_FALLBACK_MS = 750;
 
 const logDebug = (...args: unknown[]): void => {
-  if (globalThis.localStorage?.getItem("tmd-debug") === "true") {
+  if (typeof window !== "undefined" && window.localStorage?.getItem("tmd-debug") === "true") {
     console.info("[tmd]", ...args);
   }
 };
@@ -50,7 +51,7 @@ const normalizeProtocolErrorMessage = (message: string): string => {
 };
 
 type InterruptState = {
-  timer: ReturnType<typeof setTimeout> | null;
+  timer: TimerHandle | null;
 };
 
 export type { AnteRuntimeConfig } from "./ante-runtime-config";
@@ -109,7 +110,7 @@ export class AnteSessionDriver implements AnteRuntime {
     }
 
     this.interruptState = {
-      timer: setTimeout(() => {
+      timer: scheduleTimeout(() => {
         if (!this.interruptState) {
           return;
         }
@@ -560,7 +561,7 @@ export class AnteSessionDriver implements AnteRuntime {
 
   private clearInterruptTimer(): void {
     if (this.interruptState?.timer != null) {
-      clearTimeout(this.interruptState.timer);
+      cancelTimeout(this.interruptState.timer);
       this.interruptState.timer = null;
     }
     this.interruptState = null;

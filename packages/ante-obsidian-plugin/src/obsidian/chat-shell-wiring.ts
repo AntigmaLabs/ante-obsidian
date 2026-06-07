@@ -45,7 +45,6 @@ export const wireChatComposer = (
       !shouldHandlePromptEnter({
         isComposing: options.getIsComposing(),
         eventIsComposing: event.isComposing,
-        keyCode: event.keyCode,
       })
     ) {
       return

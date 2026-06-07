@@ -28,7 +28,8 @@ import type { TaskStdoutBuffer } from "./task-stdout-buffer";
 
 const MAX_RUNTIME_TIMELINE_ENTRIES = 12;
 
-const isDebugEnabled = (): boolean => globalThis.localStorage?.getItem("tmd-debug") === "true";
+const isDebugEnabled = (): boolean =>
+  typeof window !== "undefined" && window.localStorage?.getItem("tmd-debug") === "true";
 
 const logDebug = (...args: unknown[]): void => {
   if (isDebugEnabled()) {

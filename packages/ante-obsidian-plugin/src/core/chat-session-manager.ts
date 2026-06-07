@@ -12,7 +12,8 @@ type ChatListener = (state: ChatStateSnapshot) => void;
 
 const MAX_CONVERSATION_TITLE_CHARS = 60;
 
-const isDebugEnabled = (): boolean => globalThis.localStorage?.getItem("tmd-debug") === "true";
+const isDebugEnabled = (): boolean =>
+  typeof window !== "undefined" && window.localStorage?.getItem("tmd-debug") === "true";
 
 const logDebug = (...args: unknown[]): void => {
   if (isDebugEnabled()) {

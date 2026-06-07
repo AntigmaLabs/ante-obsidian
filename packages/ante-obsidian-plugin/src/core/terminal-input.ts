@@ -8,7 +8,6 @@ export interface PromptHistoryState {
 export interface PromptKeydownState {
   isComposing: boolean;
   eventIsComposing?: boolean;
-  keyCode?: number;
 }
 
 export interface PromptStopShortcutState {
@@ -23,8 +22,7 @@ export const shouldHandlePromptEnter = (
   state: PromptKeydownState,
 ): boolean =>
   !state.isComposing &&
-  !Boolean(state.eventIsComposing) &&
-  state.keyCode !== 229
+  !Boolean(state.eventIsComposing)
 
 export const shouldStopFromPromptShortcut = (
   state: PromptStopShortcutState,

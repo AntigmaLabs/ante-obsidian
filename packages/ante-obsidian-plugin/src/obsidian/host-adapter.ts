@@ -138,7 +138,7 @@ export class ObsidianHostAdapter implements HostAdapter {
       const file = this.getFile(targetPath);
       if (file instanceof TFile) {
         try {
-          await this.app.vault.delete(file);
+          await this.app.fileManager.trashFile(file);
           new Notice(`Deleted ${targetPath}`);
         } catch (error) {
           throw new Error(

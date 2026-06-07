@@ -10,7 +10,7 @@ const INVISIBLE_ONE = "\u200C";
 const INVISIBLE_SEPARATOR = "\u2063";
 
 function logTmdDebug(message: string): void {
-  if (globalThis.localStorage?.getItem("tmd-debug") === "true") {
+  if (typeof window !== "undefined" && window.localStorage?.getItem("tmd-debug") === "true") {
     console.debug(`[tmd-debug] ${message}`);
   }
 }

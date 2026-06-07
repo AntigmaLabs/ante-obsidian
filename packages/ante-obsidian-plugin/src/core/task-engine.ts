@@ -19,7 +19,8 @@ import { TaskEventHandler } from "./task-event-handler";
 
 type StateListener = (state: TmdState) => void;
 
-const isDebugEnabled = (): boolean => globalThis.localStorage?.getItem("tmd-debug") === "true";
+const isDebugEnabled = (): boolean =>
+  typeof window !== "undefined" && window.localStorage?.getItem("tmd-debug") === "true";
 
 const logDebug = (...args: unknown[]): void => {
   if (isDebugEnabled()) {

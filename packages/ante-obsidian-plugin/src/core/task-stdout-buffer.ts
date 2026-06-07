@@ -1,10 +1,12 @@
+import { cancelTimeout, scheduleTimeout, type TimerHandle } from "./timers";
+
 const MAX_STDOUT_BUFFER_CHARS = 16000;
 const STDOUT_FLUSH_INTERVAL_MS = 100;
 
 export class TaskStdoutBuffer {
   private readonly pendingStdout = new Map<
     string,
-    { chunks: string[]; timer: ReturnType<typeof setTimeout> | null }
+    { chunks: string[]; timer: TimerHandle | null }
   >();
 
   constructor(
@@ -16,7 +18,7 @@ export class TaskStdoutBuffer {
     const pending = this.pendingStdout.get(taskId) ?? { chunks: [], timer: null };
     pending.chunks.push(text);
     if (pending.timer == null) {
-      pending.timer = setTimeout(() => {
+      pending.timer = scheduleTimeout(() => {
         this.flush(taskId);
       }, STDOUT_FLUSH_INTERVAL_MS);
     }
@@ -27,14 +29,14 @@ export class TaskStdoutBuffer {
     const pending = this.pendingStdout.get(taskId);
     if (!pending || pending.chunks.length === 0) {
       if (pending?.timer != null) {
-        clearTimeout(pending.timer);
+        cancelTimeout(pending.timer);
         this.pendingStdout.delete(taskId);
       }
       return;
     }
 
     if (pending.timer != null) {
-      clearTimeout(pending.timer);
+      cancelTimeout(pending.timer);
     }
 
     this.pendingStdout.delete(taskId);
@@ -44,7 +46,7 @@ export class TaskStdoutBuffer {
   clear(taskId: string): void {
     const pending = this.pendingStdout.get(taskId);
     if (pending?.timer != null) {
-      clearTimeout(pending.timer);
+      cancelTimeout(pending.timer);
     }
     this.pendingStdout.delete(taskId);
   }
