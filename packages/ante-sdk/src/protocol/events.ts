@@ -515,7 +515,7 @@ const extractJsonCandidates = (value: string): string[] => {
   return [...new Set(candidates)];
 };
 
-const parseJsonPayload = (value: string): unknown | null => {
+const parseJsonPayload = (value: string): unknown => {
   for (const candidate of extractJsonCandidates(value)) {
     try {
       return JSON.parse(candidate) as unknown;

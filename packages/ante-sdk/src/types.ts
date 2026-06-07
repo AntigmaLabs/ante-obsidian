@@ -48,7 +48,7 @@ export interface Usage {
 export interface ModelSpec {
   name: string;
   description?: string;
-  thinking?: AnteThinkingLevel | string;
+  thinking?: AnteThinkingLevel | (string & {});
 }
 
 export interface ProviderSpec {
