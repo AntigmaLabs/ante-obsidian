@@ -343,9 +343,9 @@ export class ChatAttachmentManager {
 
 const isCrossWindowInstance = <T>(
   value: unknown,
-  type: { new (...args: any[]): T },
+  type: abstract new (...args: never[]) => T,
 ): value is T => {
-  const candidate = value as { instanceOf?: (target: { new (...args: any[]): T }) => boolean } | null
+  const candidate = value as { instanceOf?: (target: abstract new (...args: never[]) => T) => boolean } | null
   if (candidate?.instanceOf) {
     return candidate.instanceOf(type)
   }

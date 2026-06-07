@@ -22,15 +22,15 @@ export const shouldHandlePromptEnter = (
   state: PromptKeydownState,
 ): boolean =>
   !state.isComposing &&
-  !Boolean(state.eventIsComposing)
+  state.eventIsComposing !== true
 
 export const shouldStopFromPromptShortcut = (
   state: PromptStopShortcutState,
 ): boolean =>
   state.ctrlKey &&
-  !Boolean(state.metaKey) &&
-  !Boolean(state.shiftKey) &&
-  !Boolean(state.altKey) &&
+  state.metaKey !== true &&
+  state.shiftKey !== true &&
+  state.altKey !== true &&
   state.key.toLowerCase() === "c"
 
 export const navigatePromptHistory = (

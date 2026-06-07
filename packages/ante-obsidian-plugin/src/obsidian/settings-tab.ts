@@ -41,7 +41,7 @@ export class TmdSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass("tmd-settings");
-    new Setting(containerEl).setName("Ante Obsidian Settings").setHeading();
+    new Setting(containerEl).setName("General").setHeading();
 
     const tabsEl = containerEl.createDiv({ cls: "tmd-settings-tabs" });
     const panelsEl = containerEl.createDiv({ cls: "tmd-settings-panels" });
