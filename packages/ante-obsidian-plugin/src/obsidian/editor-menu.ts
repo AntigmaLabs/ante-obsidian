@@ -18,14 +18,14 @@ export const populateEditorMenu = (menu: Menu, editor: Editor, plugin: TmdPlugin
 
   menu.addItem((entry) =>
     entry
-      .setTitle("Chat with Ante")
+      .setTitle("Chat with ante")
       .setIcon("terminal-square")
       .onClick(() => void plugin.openChatView())
   );
 
   menu.addItem((entry) =>
     entry
-      .setTitle("Open Ante Terminal")
+      .setTitle("Open ante terminal")
       .setIcon("square-terminal")
       .onClick(() => void plugin.openTerminalView())
   );

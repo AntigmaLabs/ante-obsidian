@@ -1,4 +1,4 @@
-import { App, Menu, Notice, setIcon } from "obsidian"
+import { App, Menu, Notice } from "obsidian"
 import type TmdPlugin from "./main"
 import {
   normalizeProvider,
@@ -197,7 +197,7 @@ export class ChatViewControls {
       // Pick first cached model for this provider — do NOT fall back to a
       // cross-provider default like gpt-5.4, which would cause ante to reject
       // the session when the active provider doesn't support that model.
-      return availableModels[0]!
+      return availableModels[0]
     }
     // No cache yet — return empty string so ante picks the provider's own default.
     return ""

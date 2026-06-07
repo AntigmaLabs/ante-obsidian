@@ -123,7 +123,6 @@ export default class TmdPlugin extends Plugin {
       console.error("[tmd] Failed to complete delayed initialization:", error);
     } finally {
       this.delayedInitializationComplete = true;
-      console.info("[tmd] Plugin fully initialized");
     }
   }
 
@@ -159,11 +158,11 @@ export default class TmdPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    const stored = await this.loadData();
+    const stored: unknown = await this.loadData();
     this.pluginData = (stored as TmdPluginData | null | undefined) ?? {};
     const legacySettings =
       this.pluginData.settings ??
-      (stored && !("settings" in (stored as Record<string, unknown>)) ? (stored as Partial<TmdSettings>) : undefined);
+      (stored && !("settings" in (stored as Record<string, unknown>)) ? stored : undefined);
     this.settings = normalizeSettings(legacySettings);
     this.pluginUpdateState = {
       lastNotifiedVersion:
@@ -219,7 +218,7 @@ export default class TmdPlugin extends Plugin {
   }
 
   private async handoffAnteSession(action: () => void | Promise<void>, reason: string): Promise<void> {
-    console.info("[tmd session]", reason);
+    void reason;
     await this.persistIdleAnteSession();
     await action();
   }
@@ -266,12 +265,6 @@ export default class TmdPlugin extends Plugin {
 
   async deleteChatConversation(conversationId: string): Promise<void> {
     const work = this.conversationSwitchLock.then(async () => {
-      const sessionId = this.chatManager.getConversationRuntimeSessionId(conversationId);
-      const activeSessionId = this.runtime.getActiveSessionId();
-      console.info(
-        "[tmd session]",
-        `Deleting chat conversation · id=${conversationId} · session=${sessionId ?? "none"} · active=${activeSessionId ?? "none"}`
-      );
       const removedTaskIds = this.chatManager.removeConversation(conversationId);
       this.taskEngine.clearTasks(removedTaskIds);
     });
@@ -283,10 +276,8 @@ export default class TmdPlugin extends Plugin {
 
   async persistIdleAnteSession(): Promise<void> {
     if (this.taskEngine.hasActiveTask()) {
-      console.info("[tmd session]", "Skipping Ante session persist because a task is still running");
       return;
     }
-    console.info("[tmd session]", `Persisting idle Ante session · active=${this.runtime.getActiveSessionId() ?? "none"}`);
     await this.runtime.persistActiveSession();
   }
 

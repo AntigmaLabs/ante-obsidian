@@ -30,11 +30,8 @@ export const logAttachmentDebug = (
   message: string,
   details?: Record<string, unknown>,
 ): void => {
-  if (details) {
-    console.info("[tmd chat attachments]", message, details)
-    return
-  }
-  console.info("[tmd chat attachments]", message)
+  void message
+  void details
 }
 
 export type ElectronDialogModule = {

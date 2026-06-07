@@ -22,7 +22,7 @@ export class SettingsPresetsRenderer {
 
     const headerRow = sectionEl.createDiv({ cls: "tmd-preset-toolbar" });
     const titleGroup = headerRow.createDiv({ cls: "tmd-preset-toolbar-copy" });
-    titleGroup.createEl("div", { text: "Preset Library", cls: "tmd-preset-title" });
+    titleGroup.createEl("div", { text: "Preset library", cls: "tmd-preset-title" });
 
     const summary = titleGroup.createEl("p", { cls: "tmd-preset-summary" });
     summary.setText("Built-in and custom presets share one ordered library.");
@@ -78,14 +78,14 @@ export class SettingsPresetsRenderer {
         rowEl.removeClass("is-drop-target", "is-drop-after");
       });
 
-      rowEl.addEventListener("drop", async (event) => {
+      rowEl.addEventListener("drop", (event) => {
         if (!this.draggingPresetId || this.draggingPresetId === preset.id) {
           return;
         }
         event.preventDefault();
         const rect = rowEl.getBoundingClientRect();
         const insertAfter = event.clientY >= rect.top + rect.height / 2;
-        await this.reorderPreset(this.draggingPresetId, preset.id, insertAfter);
+        void this.reorderPreset(this.draggingPresetId, preset.id, insertAfter);
       });
 
       const contentEl = rowEl.createDiv({ cls: "tmd-preset-content" });
@@ -129,8 +129,8 @@ export class SettingsPresetsRenderer {
       } else {
         deleteButton.setAttribute("aria-label", `Delete ${preset.label}`);
         setIcon(deleteButton, "trash");
-        deleteButton.addEventListener("click", async () => {
-          await this.deleteCustomPreset(preset.id);
+        deleteButton.addEventListener("click", () => {
+          void this.deleteCustomPreset(preset.id);
         });
       }
     }

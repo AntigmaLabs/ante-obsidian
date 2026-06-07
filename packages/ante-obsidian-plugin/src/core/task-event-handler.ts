@@ -7,7 +7,6 @@ import {
   toDocumentChangeArtifactFromApprovalTool
 } from "./artifacts";
 import type {
-  ContextSnapshot,
   DocumentChangeArtifact,
   RuntimeEvent,
   RuntimeToolCall,
@@ -19,7 +18,6 @@ import type {
 import {
   TaskArtifactManager,
   matchesContextFilePath,
-  isNativeFileEditingToolName,
   isUserSkippedToolMessage,
   approvalHasOnlyFileEditingTools,
   deriveTaskStatusFromArtifacts
@@ -28,13 +26,8 @@ import type { TaskStdoutBuffer } from "./task-stdout-buffer";
 
 const MAX_RUNTIME_TIMELINE_ENTRIES = 12;
 
-const isDebugEnabled = (): boolean =>
-  typeof window !== "undefined" && window.localStorage?.getItem("tmd-debug") === "true";
-
 const logDebug = (...args: unknown[]): void => {
-  if (isDebugEnabled()) {
-    console.info("[tmd task event]", ...args);
-  }
+  void args;
 };
 
 const shouldCoalesceArtifact = (
@@ -274,7 +267,7 @@ export class TaskEventHandler {
           getArtifactTargetKey(existing) === getArtifactTargetKey(artifactToAdd)
       );
       if (existingIndex >= 0) {
-        const existing = nextArtifacts[existingIndex]!;
+        const existing = nextArtifacts[existingIndex];
         this.artifactManager.cleanupStagedPreview(existing);
         nextArtifacts[existingIndex] = mergeDocumentChangeArtifacts(existing, artifactToAdd);
       } else {
@@ -370,9 +363,9 @@ export class TaskEventHandler {
         );
         const nextArtifacts = task.artifacts.slice();
         if (existingIndex >= 0) {
-          this.artifactManager.cleanupStagedPreview(nextArtifacts[existingIndex]!);
+          this.artifactManager.cleanupStagedPreview(nextArtifacts[existingIndex]);
           nextArtifacts[existingIndex] = mergeDocumentChangeArtifacts(
-            nextArtifacts[existingIndex]!,
+            nextArtifacts[existingIndex],
             artifact
           );
         } else {

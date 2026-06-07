@@ -75,7 +75,7 @@ export class TmdTerminalView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "Ante Workspace"
+    return "Ante workspace"
   }
 
   async onOpen(): Promise<void> {

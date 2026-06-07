@@ -104,7 +104,7 @@ export class TmdChatView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "Chat with Ante"
+    return "Chat with ante"
   }
 
   async onOpen(): Promise<void> {
@@ -210,8 +210,8 @@ export class TmdChatView extends ItemView {
     this.drawerCloseBtnEl = layout.drawerCloseBtnEl
 
     setIcon(this.consoleToggleBtnEl, "sliders")
-    this.consoleToggleBtnEl.setAttribute("aria-label", "Session Console")
-    this.consoleToggleBtnEl.setAttribute("title", "Session Console")
+    this.consoleToggleBtnEl.setAttribute("aria-label", "Session console")
+    this.consoleToggleBtnEl.setAttribute("title", "Session console")
 
     setIcon(this.drawerCloseBtnEl, "x")
     this.drawerCloseBtnEl.setAttribute("aria-label", "Close drawer")

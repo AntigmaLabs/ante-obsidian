@@ -17,7 +17,7 @@ import { cancelTimeout, scheduleTimeout, type TimerHandle } from "../core/timers
 import { reduceRunVariant, type ActiveRun } from "./ante-run-event-reducer";
 import type { AnteRuntime, RuntimeObserver } from "./ante-runtime";
 import type { AnteRuntimeConfig } from "./ante-runtime-config";
-import { configSignature, sessionTargetSignature } from "./ante-runtime-config";
+import { sessionTargetSignature } from "./ante-runtime-config";
 import { AnteSessionLifecycle, type AnteTransportHooks } from "./ante-session-lifecycle";
 import { generateOpId, parseEnvelope, serializeOperation } from "./ante-protocol";
 import type { AnteTransport } from "./transport/ante-transport";
@@ -25,16 +25,10 @@ import type { AnteTransport } from "./transport/ante-transport";
 const INTERRUPT_FALLBACK_MS = 750;
 
 const logDebug = (...args: unknown[]): void => {
-  if (typeof window !== "undefined" && window.localStorage?.getItem("tmd-debug") === "true") {
-    console.info("[tmd]", ...args);
-  }
+  void args;
 };
 
-const previewText = (value: string, maxChars = 240): string =>
-  value.length <= maxChars ? value : `${value.slice(0, maxChars)}...`;
-
 const emitDiagnosticLog = (observer: RuntimeObserver | null | undefined, text: string): void => {
-  console.info("[tmd session]", text);
   observer?.onEvent({
     type: "log",
     stream: "system",
@@ -237,7 +231,11 @@ export class AnteSessionDriver implements AnteRuntime {
 
   private async runInternal(request: TaskRequest, observer: RuntimeObserver): Promise<void> {
     const config = this.resolveConfigForRequest(request);
-    console.info(`[tmd session] Executing turn with provider: "${config.provider}", model: "${config.model}", thinking: "${config.thinking ?? "default"}"`);
+    observer.onEvent({
+      type: "log",
+      stream: "system",
+      text: `Executing turn · provider=${config.provider} · model=${config.model} · thinking=${config.thinking ?? "default"}`
+    });
     if (!config.command.trim()) {
       observer.onExit({ status: "failed", error: "Ante command is required" });
       return;
@@ -323,7 +321,6 @@ export class AnteSessionDriver implements AnteRuntime {
       onMessage: (message) => this.handleTransportMessage(message),
       onDiagnostic: (event) => {
         this.lifecycle.pushStartupDiagnostic(event);
-        console.info("[tmd transport]", `${event.stream}: ${event.text}`);
         this.activeRun?.observer.onEvent({ type: "log", stream: event.stream, text: event.text });
       },
       onError: (error) => {
@@ -343,7 +340,6 @@ export class AnteSessionDriver implements AnteRuntime {
         this.lifecycle.stopTransport();
       },
       onClose: (info) => {
-        console.info("[tmd transport] close", info ?? {});
         this.clearInterruptTimer();
         const closeError = new Error(
           info?.reason === "SIGTERM" ? "Ante server exited after SIGTERM" : `Ante server exited with code ${info?.code ?? "unknown"}`

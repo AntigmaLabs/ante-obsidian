@@ -41,15 +41,18 @@ const ensureWebSocketArgs = (args: string[], address: string): string[] => {
   return sanitized;
 };
 
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((entry: unknown) => typeof entry === "string");
+
 const parseArgs = (argsJson: string): string[] => {
   if (!argsJson.trim()) {
     return [];
   }
   const parsed = JSON.parse(argsJson) as unknown;
-  if (!Array.isArray(parsed) || parsed.some((entry) => typeof entry !== "string")) {
+  if (!isStringArray(parsed)) {
     throw new Error("Ante arguments JSON must be a string array");
   }
-  return [...parsed];
+  return parsed;
 };
 
 export const __test__ = {
