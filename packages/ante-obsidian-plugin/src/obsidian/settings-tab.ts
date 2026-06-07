@@ -208,6 +208,33 @@ export class TmdSettingTab extends PluginSettingTab {
                 this.display();
               });
           });
+
+        // ── Model override ─────────────────────────────────────────────────────
+        const currentProvider = this.pluginRef.settings.anteProvider;
+        const availableModels = this.pluginRef.getAvailableModelNamesForProvider(currentProvider);
+
+        new Setting(modelSectionEl)
+          .setName("Model override")
+          .setDesc("Ask Ante to use this model for the selected provider override.")
+          .addDropdown((dropdown) => {
+            if (availableModels.length === 0) {
+              dropdown.addOption("", "No models available");
+              dropdown.setDisabled(true);
+            } else {
+              for (const model of availableModels) {
+                dropdown.addOption(model, model);
+              }
+              const currentModel = this.pluginRef.settings.anteModel;
+              const validModel = availableModels.includes(currentModel)
+                ? currentModel
+                : (availableModels[0] ?? "");
+              dropdown.setValue(validModel);
+            }
+            return dropdown.onChange(async (value) => {
+              this.pluginRef.settings.anteModel = value;
+              await this.pluginRef.saveSettings();
+            });
+          });
       }
 
       // ── API key section (dynamic per provider) ─────────────────────────────

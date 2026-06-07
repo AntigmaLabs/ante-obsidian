@@ -2,7 +2,7 @@ import { Editor, MarkdownView, Notice, TFile, type App } from "obsidian";
 import { formatLoadingLabel } from "../core/loading-label";
 import { resolveMentionTrigger } from "../core/mention-trigger-state";
 import { buildParagraphSelection } from "../core/paragraph-selection";
-import type { ContextSnapshot, PresetId, TaskTriggerSource } from "../core/types";
+import type { ContextSnapshot, PresetId, TaskTriggerSource, TaskRecord } from "../core/types";
 import type TmdPlugin from "./main";
 
 const INVISIBLE_ZERO = "\u200B";
@@ -10,7 +10,115 @@ const INVISIBLE_ONE = "\u200C";
 const INVISIBLE_SEPARATOR = "\u2063";
 
 function logTmdDebug(message: string): void {
-  console.debug(`[tmd-debug] ${message}`);
+  if (globalThis.localStorage?.getItem("tmd-debug") === "true") {
+    console.debug(`[tmd-debug] ${message}`);
+  }
+}
+
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function truncateText(text: string, maxLen: number): string {
+  if (text.length <= maxLen) {
+    return text;
+  }
+  return `${text.slice(0, maxLen - 3)}...`;
+}
+
+function getLastNonEmptyLine(text: string): string {
+  let currentIndex = text.length;
+  while (currentIndex > 0) {
+    const nextNewline = text.lastIndexOf("\n", currentIndex - 1);
+    const line = nextNewline === -1
+      ? text.slice(0, currentIndex).trim()
+      : text.slice(nextNewline + 1, currentIndex).trim();
+    if (line) {
+      return line;
+    }
+    if (nextNewline === -1) {
+      break;
+    }
+    currentIndex = nextNewline;
+  }
+  return "";
+}
+
+function getProgressTextForRunningTask(task: TaskRecord): string {
+  // 1. Try to get the latest line of thinkingText (reasoning process)
+  const thinking = task.telemetry?.thinkingText;
+  if (thinking) {
+    const lastLine = getLastNonEmptyLine(thinking);
+    if (lastLine) {
+      // Clean up markdown markers
+      const cleanLine = lastLine.replace(/[\*\_`#]/g, "").trim();
+      if (cleanLine) {
+        return truncateText(cleanLine, 60);
+      }
+    }
+  }
+
+  // 2. Try to get progress from processLane (high-level step labels)
+  if (task.processLane?.steps) {
+    const activeStep = task.processLane.steps.find((step) => step.status === "in_progress")
+      ?? task.processLane.steps.find((step) => step.status === "pending");
+    if (activeStep) {
+      return activeStep.activeLabel ?? activeStep.label;
+    }
+    const completedSteps = task.processLane.steps.filter((step) => step.status === "completed");
+    if (completedSteps.length > 0) {
+      const lastCompleted = completedSteps[completedSteps.length - 1];
+      const completedLabel = lastCompleted?.activeLabel ?? lastCompleted?.label;
+      if (completedLabel) {
+        return completedLabel;
+      }
+    }
+  }
+
+  // 3. Fallback to the latest log line if processLane is empty/missing
+  if (task.logs && task.logs.length > 0) {
+    for (let i = task.logs.length - 1; i >= 0; i--) {
+      const log = task.logs[i];
+      if (log && log.text.trim()) {
+        const text = log.text.trim();
+        // Ignore internal protocol tags
+        if (
+          !text.startsWith("Ante ") &&
+          !text.startsWith("Reusing ") &&
+          !text.startsWith("Launching ") &&
+          !text.startsWith("Protocol ") &&
+          !text.startsWith("Session ")
+        ) {
+          const firstLine = text.split("\n")[0] ?? "";
+          return truncateText(firstLine, 60);
+        }
+      }
+    }
+  }
+
+  return "";
+}
+
+function buildPlaceholderBody(
+  loadingSeed: string,
+  loadingFrameIndex: number,
+  model: string | undefined,
+  progressText: string
+): string {
+  const lines: string[] = [];
+  if (model) {
+    lines.push(`> <small style="color: var(--text-muted); opacity: 0.55; font-size: 0.75em;">model: ${escapeHtml(model)}</small>`);
+  }
+  if (progressText) {
+    lines.push(`> <small style="color: var(--text-muted); opacity: 0.7; font-style: italic;">Doing: ${escapeHtml(progressText)}</small>`);
+  }
+  lines.push(`> ${formatLoadingLabel(loadingSeed, loadingFrameIndex)}`);
+  return lines.join("\n");
 }
 
 interface PlaceholderMarkers {
@@ -161,11 +269,14 @@ export class MentionTriggerService {
     const loadingSeed = window.crypto.randomUUID();
     logTmdDebug(`runTaskWithPlaceholder started: seed=${loadingSeed} file=${context.filePath}`);
     const markers = this.createPlaceholderMarkers(loadingSeed);
-    const placeholderPrefix = replaceFrom.ch > 0 ? "\n\n" : "";
-    const placeholderSuffix = "\n\n";
+    const placeholderPrefix = replaceFrom.ch > 0 ? "\n" : "";
+    const placeholderSuffix = "\n";
+    const resolvedTarget = this.plugin.getResolvedAnteTarget();
+    
+    let latestProgressText = "";
     const placeholderText = `${placeholderPrefix}${this.wrapPlaceholder(
       markers,
-      `> ${formatLoadingLabel(loadingSeed, loadingFrameIndex)}`
+      buildPlaceholderBody(loadingSeed, loadingFrameIndex, resolvedTarget.model, latestProgressText)
     )}${placeholderSuffix}`;
 
     this.performEditorReplace(editor, () => {
@@ -180,7 +291,12 @@ export class MentionTriggerService {
 
     const updateLoading = () => {
       loadingFrameIndex += 1;
-      this.replacePlaceholderBody(editor, markers, `> ${formatLoadingLabel(loadingSeed, loadingFrameIndex)}`, context.filePath);
+      this.replacePlaceholderBody(
+        editor,
+        markers,
+        buildPlaceholderBody(loadingSeed, loadingFrameIndex, resolvedTarget.model, latestProgressText),
+        context.filePath
+      );
     };
     const timer = window.setInterval(updateLoading, 800);
 
@@ -211,6 +327,7 @@ export class MentionTriggerService {
         logTmdDebug(`Subscriber update: taskId=${taskId} status=${task.status} artifacts=${task.artifacts.length} hasTextResult=${!!task.textResult}`);
 
         if (task.status === "running") {
+          latestProgressText = getProgressTextForRunningTask(task);
           return;
         }
 

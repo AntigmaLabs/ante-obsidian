@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.11 - 2026-06-07
+
+- **Improved Chat & Mentions UX**: Show the active model and task progress inside inline mentions (with safe rendering & optimized performance), and relocate the loading indicator to the bottom of the active chat block with a rotating word switcher
+- **Diagnostics & Feedback**: Add a bug report button to settings and improve runtime error log diagnostics
+- **Settings Model Override**: Add a model selection dropdown to the settings tab when CLI defaults are overridden
+
 ## 0.6.10 - 2026-06-04
 
 - **Dynamic Models & Providers**: Automatically source active LLM models and providers from the local Ante CLI catalog
