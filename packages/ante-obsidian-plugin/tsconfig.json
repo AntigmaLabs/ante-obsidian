@@ -1,8 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@antigma/ante-sdk": ["../ante-sdk/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

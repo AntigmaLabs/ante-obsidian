@@ -36,7 +36,7 @@ export class ChatAttachmentManager {
     })
 
     this.composerContainerEl.addEventListener("dragover", (event) => {
-      if (!(event instanceof DragEvent)) {
+      if (!isCrossWindowInstance(event, DragEvent)) {
         return
       }
       if (!event.dataTransfer?.files?.length) {
@@ -51,12 +51,12 @@ export class ChatAttachmentManager {
     })
 
     this.composerContainerEl.addEventListener("dragleave", (event) => {
-      if (!(event instanceof DragEvent)) {
+      if (!isCrossWindowInstance(event, DragEvent)) {
         return
       }
       const relatedTarget = event.relatedTarget
       if (
-        relatedTarget instanceof Node &&
+        isCrossWindowInstance(relatedTarget, Node) &&
         this.composerContainerEl.contains(relatedTarget)
       ) {
         return
@@ -66,7 +66,7 @@ export class ChatAttachmentManager {
     })
 
     this.composerContainerEl.addEventListener("drop", (event) => {
-      if (!(event instanceof DragEvent)) {
+      if (!isCrossWindowInstance(event, DragEvent)) {
         return
       }
       event.preventDefault()
@@ -339,4 +339,15 @@ export class ChatAttachmentManager {
       this.isAttachmentDragActive,
     )
   }
+}
+
+const isCrossWindowInstance = <T>(
+  value: unknown,
+  type: abstract new (...args: never[]) => T,
+): value is T => {
+  const candidate = value as { instanceOf?: (target: abstract new (...args: never[]) => T) => boolean } | null
+  if (candidate?.instanceOf) {
+    return candidate.instanceOf(type)
+  }
+  return value instanceof type
 }

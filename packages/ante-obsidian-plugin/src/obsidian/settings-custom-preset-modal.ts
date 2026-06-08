@@ -27,10 +27,10 @@ export class CustomPresetModal extends Modal {
     const { contentEl } = this;
     this.modalEl.addClass("tmd-preset-modal");
     contentEl.empty();
-    contentEl.createEl("h3", {
-      text: this.existingPreset ? "Edit Custom Preset" : "Add Custom Preset",
-      cls: "tmd-preset-modal-title"
-    });
+    const titleSetting = new Setting(contentEl)
+      .setName(this.existingPreset ? "Edit Custom Preset" : "Add Custom Preset")
+      .setHeading();
+    titleSetting.settingEl.addClass("tmd-preset-modal-title");
 
     const nameSetting = new Setting(contentEl)
       .setName("Preset name")

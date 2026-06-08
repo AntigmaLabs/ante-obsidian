@@ -83,11 +83,11 @@ const runGitDiffNoIndex = async (oldPath: string, newPath: string): Promise<stri
 
   let stdout = "";
   let stderr = "";
-  child.stdout.on("data", (chunk) => {
-    stdout += chunk.toString("utf8");
+  child.stdout.on("data", (chunk: Buffer | string) => {
+    stdout += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk;
   });
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk.toString("utf8");
+  child.stderr.on("data", (chunk: Buffer | string) => {
+    stderr += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk;
   });
 
   const exitCode = await new Promise<number>((resolve, reject) => {

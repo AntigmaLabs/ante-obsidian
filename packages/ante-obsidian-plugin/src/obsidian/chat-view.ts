@@ -33,6 +33,7 @@ import { ChatViewControls } from "./chat-view-controls"
 import { ChatAttachmentManager } from "./chat-attachment-manager"
 import { ChatPromptRunner } from "./chat-prompt-runner"
 import { ChatMessageRenderer } from "./chat-message-renderer"
+import { showConfirmDialog, showPromptDialog } from "./dialogs"
 
 export const TMD_CHAT_VIEW_TYPE = "tmd-chat-view"
 
@@ -103,7 +104,7 @@ export class TmdChatView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "Chat with Ante"
+    return "Chat with ante"
   }
 
   async onOpen(): Promise<void> {
@@ -209,8 +210,8 @@ export class TmdChatView extends ItemView {
     this.drawerCloseBtnEl = layout.drawerCloseBtnEl
 
     setIcon(this.consoleToggleBtnEl, "sliders")
-    this.consoleToggleBtnEl.setAttribute("aria-label", "Session Console")
-    this.consoleToggleBtnEl.setAttribute("title", "Session Console")
+    this.consoleToggleBtnEl.setAttribute("aria-label", "Session console")
+    this.consoleToggleBtnEl.setAttribute("title", "Session console")
 
     setIcon(this.drawerCloseBtnEl, "x")
     this.drawerCloseBtnEl.setAttribute("aria-label", "Close drawer")
@@ -549,13 +550,20 @@ export class TmdChatView extends ItemView {
           )
           return
         }
-        if (window.confirm(`Delete chat "${conversation.title}"?`)) {
+        void showConfirmDialog(this.app, {
+          title: "Delete chat",
+          message: `Delete chat "${conversation.title}"?`,
+          confirmText: "Delete",
+        }).then((confirmed) => {
+          if (!confirmed) {
+            return
+          }
           void this.plugin
             .deleteChatConversation(conversation.id)
             .catch((error) => {
               new Notice(error instanceof Error ? error.message : String(error))
             })
-        }
+        })
       })
 
       const anchor: ChildNode | null = previousEl
@@ -571,10 +579,15 @@ export class TmdChatView extends ItemView {
   private handleConversationContextMenu(
     conversation: ChatConversationRecord,
   ): void {
-    const nextTitle = window.prompt("Rename chat", conversation.title)
-    if (nextTitle && nextTitle.trim()) {
-      this.plugin.chatManager.renameConversation(conversation.id, nextTitle)
-    }
+    void showPromptDialog(this.app, {
+      title: "Rename chat",
+      initialValue: conversation.title,
+      submitText: "Rename",
+    }).then((nextTitle) => {
+      if (nextTitle && nextTitle.trim()) {
+        this.plugin.chatManager.renameConversation(conversation.id, nextTitle)
+      }
+    })
   }
 
   private syncContext(context: ContextSnapshot | null): void {

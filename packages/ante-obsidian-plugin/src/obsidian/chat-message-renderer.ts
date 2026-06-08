@@ -16,7 +16,6 @@ import {
   buildRuntimeLogLines,
   getAttachmentFileName,
   hashText,
-  formatAttachmentLabel,
 } from "./chat-view-helpers"
 import {
   resolveArtifactDiffs,
@@ -34,6 +33,14 @@ import {
 } from "./runtime-details-renderer"
 import { renderArtifactDiffList } from "./artifact-diff-renderer"
 import { appendErrorReportLink } from "./utils"
+
+type RefreshPrompt = {
+  conversationId: string
+  sourceRole: "user" | "assistant"
+  prompt: string
+  context: ContextSnapshot | null
+  runtimeSessionId: string | null
+}
 
 export interface ChatMessageElements {
   rootEl: HTMLDivElement
@@ -90,8 +97,8 @@ export class ChatMessageRenderer extends Component {
     private readonly shouldStickToBottom: () => boolean,
     private readonly scrollToBottom: () => void,
     private readonly hasRunningTaskForConversation: (conversationId: string) => boolean,
-    private readonly getRefreshPrompt: (message: ChatMessageRecord) => any,
-    private readonly refreshMessage: (prompt: any) => Promise<void>,
+    private readonly getRefreshPrompt: (message: ChatMessageRecord) => RefreshPrompt | null,
+    private readonly refreshMessage: (prompt: RefreshPrompt) => Promise<void>,
     private readonly triggerRender: () => void,
   ) {
     super()
@@ -663,7 +670,7 @@ export class ChatMessageRenderer extends Component {
       this.expandedArtifactIds.has(artifact.id),
     )
     if (!hasExpandedArtifact) {
-      this.expandedArtifactIds.add(resolvedArtifacts[0]!.artifact.id)
+      this.expandedArtifactIds.add(resolvedArtifacts[0].artifact.id)
     }
     this.autoExpandedArtifactGroups.add(groupKey)
   }

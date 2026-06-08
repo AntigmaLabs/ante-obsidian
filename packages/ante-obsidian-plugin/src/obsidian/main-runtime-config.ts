@@ -45,7 +45,11 @@ export const buildAnteRuntimeConfig = (
 
   // Populate credentials for all known API-key providers
   const providerKeys = input.settings.providerKeys ?? {}
-  const legacySettings = input.settings as any
+  const legacySettings = input.settings as unknown as Record<string, unknown>
+  const getLegacyString = (key: string): string => {
+    const value = legacySettings[key]
+    return typeof value === "string" ? value : ""
+  }
 
   for (const provider of input.apiKeyProviders) {
     if (provider.authType !== "api-key") {
@@ -59,9 +63,9 @@ export const buildAnteRuntimeConfig = (
     let envKey: string | undefined = keyConfig?.envKey
     if (!envKey) {
       if (providerId === "gemini") {
-        envKey = legacySettings.geminiApiKeyEnvKey || provider.envKey
+        envKey = getLegacyString("geminiApiKeyEnvKey") || provider.envKey
       } else if (providerId === "anthropic") {
-        envKey = legacySettings.anthropicApiKeyEnvKey || provider.envKey
+        envKey = getLegacyString("anthropicApiKeyEnvKey") || provider.envKey
       } else {
         envKey = provider.envKey
       }
@@ -75,9 +79,9 @@ export const buildAnteRuntimeConfig = (
     let apiKey = keyConfig?.apiKey ?? ""
     if (!apiKey) {
       if (providerId === "gemini") {
-        apiKey = legacySettings.geminiApiKey ?? ""
+        apiKey = getLegacyString("geminiApiKey")
       } else if (providerId === "anthropic") {
-        apiKey = legacySettings.anthropicApiKey ?? ""
+        apiKey = getLegacyString("anthropicApiKey")
       }
     }
 

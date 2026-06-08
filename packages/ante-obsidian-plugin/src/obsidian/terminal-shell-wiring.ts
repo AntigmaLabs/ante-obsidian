@@ -54,7 +54,6 @@ export const wireTerminalPrompt = (
       !shouldHandlePromptEnter({
         isComposing: options.getIsComposing(),
         eventIsComposing: event.isComposing,
-        keyCode: (event as KeyboardEvent).keyCode,
       })
     ) {
       return

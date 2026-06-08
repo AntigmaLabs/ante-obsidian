@@ -1,6 +1,6 @@
 {
   "name": "ante-obsidian-plugin",
-  "version": "0.6.11",
+  "version": "0.6.12",
   "private": true,
   "license": "MIT",
   "description": "Obsidian desktop plugin for Ante-powered terminal Markdown workflows with diff previews and Chat with Ante.",
@@ -13,6 +13,7 @@
     "diff": "^8.0.3"
   },
   "devDependencies": {
+    "@types/diff": "^7.0.2",
     "@types/node": "^24.0.0",
     "obsidian": "^1.12.3",
     "typescript": "^5.9.3"

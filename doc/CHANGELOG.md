@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.12 - 2026-06-08
+
+- **Community Review Readiness**: Align the plugin source with Obsidian's current review checks, including API compatibility, settings labels, source typing, and release metadata.
+
 ## 0.6.11 - 2026-06-07
 
 - **Improved Chat & Mentions UX**: Show the active model and task progress inside inline mentions (with safe rendering & optimized performance), and relocate the loading indicator to the bottom of the active chat block with a rotating word switcher

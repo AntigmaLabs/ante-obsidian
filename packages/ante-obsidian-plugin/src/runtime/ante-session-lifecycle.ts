@@ -1,4 +1,5 @@
 import type { TaskRequest } from "../core/types";
+import { cancelTimeout, scheduleTimeout, type TimerHandle } from "../core/timers";
 import type { RuntimeObserver } from "./ante-runtime";
 import type { AnteRuntimeConfig } from "./ante-runtime-config";
 import { configSignature, sessionTargetSignature } from "./ante-runtime-config";
@@ -20,14 +21,14 @@ type SessionTransitionState = {
   reject: (error: Error) => void;
   targetSessionId?: string;
   hasSeenTargetSession: boolean;
-  settleTimer: ReturnType<typeof setTimeout> | null;
+  settleTimer: TimerHandle | null;
 };
 
 type ShutdownState = {
   promise: Promise<void>;
   resolve: () => void;
   reject: (error: Error) => void;
-  timer: ReturnType<typeof setTimeout> | null;
+  timer: TimerHandle | null;
 };
 
 export interface AnteTransportHooks {
@@ -442,7 +443,7 @@ export class AnteSessionLifecycle {
       reject,
       timer: null
     };
-    shutdown.timer = setTimeout(() => {
+    shutdown.timer = scheduleTimeout(() => {
       if (this.shutdownState !== shutdown) {
         return;
       }
@@ -478,14 +479,14 @@ export class AnteSessionLifecycle {
 
   private clearShutdownTimer(shutdown: ShutdownState | null): void {
     if (shutdown?.timer != null) {
-      clearTimeout(shutdown.timer);
+      cancelTimeout(shutdown.timer);
       shutdown.timer = null;
     }
   }
 
   private clearSessionTransitionTimer(transition: SessionTransitionState | null): void {
     if (transition?.settleTimer != null) {
-      clearTimeout(transition.settleTimer);
+      cancelTimeout(transition.settleTimer);
       transition.settleTimer = null;
     }
   }

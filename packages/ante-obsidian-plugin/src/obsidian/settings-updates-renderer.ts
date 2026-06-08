@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import type TmdPlugin from "./main";
 import type { AnteVersionCheckResult } from "./ante-updater";
 import type { PluginVersionCheckResult } from "./plugin-updater";
+import { showConfirmDialog } from "./dialogs";
 
 const DEFAULT_SHELL = "/bin/zsh";
 
@@ -558,11 +559,12 @@ export class SettingsUpdatesRenderer {
     if (this.installingPlugin) {
       return;
     }
-    if (
-      !confirm(
-        `This will run the Ante Obsidian installer and update this vault's plugin files.\n\n${installCommand}\n\nContinue?`
-      )
-    ) {
+    const confirmed = await showConfirmDialog(this.pluginRef.app, {
+      title: "Update plugin files",
+      message: `This will run the Ante Obsidian installer and update this vault's plugin files.\n\n${installCommand}`,
+      confirmText: "Continue"
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -589,7 +591,12 @@ export class SettingsUpdatesRenderer {
       ? "This will update the local Ante CLI via the 'ante update' command. Continue?"
       : "This will run the official Ante installer script for channel 'latest'. Continue?";
 
-    if (!confirm(confirmMessage)) {
+    const confirmed = await showConfirmDialog(this.pluginRef.app, {
+      title: isUpdate ? "Update Ante CLI" : "Install Ante CLI",
+      message: confirmMessage,
+      confirmText: "Continue"
+    });
+    if (!confirmed) {
       return;
     }
 

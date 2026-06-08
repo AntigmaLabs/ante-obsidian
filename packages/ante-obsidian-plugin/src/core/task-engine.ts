@@ -19,12 +19,8 @@ import { TaskEventHandler } from "./task-event-handler";
 
 type StateListener = (state: TmdState) => void;
 
-const isDebugEnabled = (): boolean => globalThis.localStorage?.getItem("tmd-debug") === "true";
-
 const logDebug = (...args: unknown[]): void => {
-  if (isDebugEnabled()) {
-    console.info("[tmd task]", ...args);
-  }
+  void args;
 };
 
 interface StartDocumentTaskInput {

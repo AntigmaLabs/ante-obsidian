@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import { createConnection } from "node:net";
 import type { Readable } from "node:stream";
+import { setTimeout as setNodeTimeout } from "node:timers";
 import type { AnteTransport } from "./transport";
 import { resolveCommandPath } from "./stdio";
 
@@ -22,7 +23,14 @@ const flushBufferedLines = (buffer: string, emit: (line: string) => void): strin
   return pending;
 };
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    if (typeof window !== "undefined") {
+      window.setTimeout(resolve, ms);
+      return;
+    }
+    setNodeTimeout(resolve, ms);
+  });
 
 const toWebSocketUrl = (address: string): string => {
   const trimmed = address.trim();

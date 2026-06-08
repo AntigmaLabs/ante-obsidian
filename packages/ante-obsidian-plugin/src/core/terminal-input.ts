@@ -8,7 +8,6 @@ export interface PromptHistoryState {
 export interface PromptKeydownState {
   isComposing: boolean;
   eventIsComposing?: boolean;
-  keyCode?: number;
 }
 
 export interface PromptStopShortcutState {
@@ -23,16 +22,15 @@ export const shouldHandlePromptEnter = (
   state: PromptKeydownState,
 ): boolean =>
   !state.isComposing &&
-  !Boolean(state.eventIsComposing) &&
-  state.keyCode !== 229
+  state.eventIsComposing !== true
 
 export const shouldStopFromPromptShortcut = (
   state: PromptStopShortcutState,
 ): boolean =>
   state.ctrlKey &&
-  !Boolean(state.metaKey) &&
-  !Boolean(state.shiftKey) &&
-  !Boolean(state.altKey) &&
+  state.metaKey !== true &&
+  state.shiftKey !== true &&
+  state.altKey !== true &&
   state.key.toLowerCase() === "c"
 
 export const navigatePromptHistory = (

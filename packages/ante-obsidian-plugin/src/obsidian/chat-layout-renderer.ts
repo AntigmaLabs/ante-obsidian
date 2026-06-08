@@ -144,28 +144,28 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
 
   // Render Console Drawer internal structure
   const drawerHeaderEl = div({ cls: "tmd-console-drawer-header" }).appendTo(consoleDrawerEl)
-  drawerHeaderEl.createEl("div", { text: "Session Console", cls: "tmd-console-drawer-title" })
+  drawerHeaderEl.createEl("div", { text: "Session console", cls: "tmd-console-drawer-title" })
   const drawerCloseBtnEl = button({
     cls: "tmd-console-drawer-close-btn clickable-icon",
   }).appendTo(drawerHeaderEl)
 
   // Provider vertical field
   const providerBlockEl = div({ cls: "tmd-console-field-block" }).appendTo(consoleDrawerEl)
-  providerBlockEl.createEl("span", { text: "Service Provider", cls: "tmd-console-field-label" })
+  providerBlockEl.createEl("span", { text: "Service provider", cls: "tmd-console-field-label" })
   const providerButtonEl = button({
     cls: "tmd-chat-picker tmd-chat-provider-picker",
   }).appendTo(providerBlockEl)
 
   // Model vertical field
   const modelBlockEl = div({ cls: "tmd-console-field-block" }).appendTo(consoleDrawerEl)
-  modelBlockEl.createEl("span", { text: "Model Target", cls: "tmd-console-field-label" })
+  modelBlockEl.createEl("span", { text: "Model target", cls: "tmd-console-field-label" })
   const modelButtonEl = button({
     cls: "tmd-chat-picker tmd-chat-model-picker",
   }).appendTo(modelBlockEl)
 
-  // Thinking Level vertical field
+  // Thinking level vertical field
   const thinkingBlockEl = div({ cls: "tmd-console-field-block" }).appendTo(consoleDrawerEl)
-  thinkingBlockEl.createEl("span", { text: "Thinking Level", cls: "tmd-console-field-label" })
+  thinkingBlockEl.createEl("span", { text: "Thinking level", cls: "tmd-console-field-label" })
   const thinkingButtonEl = button({
     cls: "tmd-chat-picker tmd-chat-thinking-picker",
   }).appendTo(thinkingBlockEl)
@@ -203,7 +203,7 @@ const renderChatComposer = (mainEl: HTMLDivElement): ChatComposerNodes => {
   
   const fileInputEl = inputShellEl.createEl("input", {
     cls: "tmd-chat-file-input",
-  }) as HTMLInputElement
+  })
   fileInputEl.type = "file"
   fileInputEl.multiple = true
 

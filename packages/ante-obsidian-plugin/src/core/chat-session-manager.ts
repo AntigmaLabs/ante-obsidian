@@ -12,12 +12,8 @@ type ChatListener = (state: ChatStateSnapshot) => void;
 
 const MAX_CONVERSATION_TITLE_CHARS = 60;
 
-const isDebugEnabled = (): boolean => globalThis.localStorage?.getItem("tmd-debug") === "true";
-
 const logDebug = (...args: unknown[]): void => {
-  if (isDebugEnabled()) {
-    console.info("[tmd chat]", ...args);
-  }
+  void args;
 };
 
 const previewText = (value: string, maxChars = 240): string =>
@@ -724,14 +720,12 @@ export class ChatSessionManager {
       runtimeSessionId: task.runtimeSession?.sessionId
     };
 
-    if (isDebugEnabled()) {
-      const runtimeArtifactCount = task.artifacts.filter((artifact) => Boolean(artifact.runtimeToolId)).length;
-      const fallbackArtifactCount = task.artifacts.length - runtimeArtifactCount;
-      if (runtimeArtifactCount > 0 || fallbackArtifactCount > 0 || extractedStreamingText != null) {
-        logDebug(
-          `syncTask id=${task.id} status=${task.status} runtimeArtifacts=${runtimeArtifactCount} fallbackArtifacts=${fallbackArtifactCount} structuredStreaming=${extractedStreamingText != null}`,
-        );
-      }
+    const runtimeArtifactCount = task.artifacts.filter((artifact) => Boolean(artifact.runtimeToolId)).length;
+    const fallbackArtifactCount = task.artifacts.length - runtimeArtifactCount;
+    if (runtimeArtifactCount > 0 || fallbackArtifactCount > 0 || extractedStreamingText != null) {
+      logDebug(
+        `syncTask id=${task.id} status=${task.status} runtimeArtifacts=${runtimeArtifactCount} fallbackArtifacts=${fallbackArtifactCount} structuredStreaming=${extractedStreamingText != null}`,
+      );
       if (extractedStreamingText != null && task.stdoutText.trim()) {
         logDebug(`syncTask structured preview=${JSON.stringify(previewText(task.stdoutText, 400))}`);
       }

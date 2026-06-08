@@ -11,7 +11,6 @@ test("shouldHandlePromptEnter blocks IME composition enter events", () => {
     shouldHandlePromptEnter({
       isComposing: true,
       eventIsComposing: false,
-      keyCode: 13,
     }),
     false,
   );
@@ -19,7 +18,6 @@ test("shouldHandlePromptEnter blocks IME composition enter events", () => {
     shouldHandlePromptEnter({
       isComposing: false,
       eventIsComposing: true,
-      keyCode: 13,
     }),
     false,
   );
@@ -27,15 +25,6 @@ test("shouldHandlePromptEnter blocks IME composition enter events", () => {
     shouldHandlePromptEnter({
       isComposing: false,
       eventIsComposing: false,
-      keyCode: 229,
-    }),
-    false,
-  );
-  assert.equal(
-    shouldHandlePromptEnter({
-      isComposing: false,
-      eventIsComposing: false,
-      keyCode: 13,
     }),
     true,
   );

@@ -1,4 +1,3 @@
-import type TmdPlugin from "./main"
 import {
   normalizeProvider,
 } from "./settings"

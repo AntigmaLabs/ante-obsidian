@@ -157,7 +157,7 @@ const extractCommandLookupResult = (stdout: string): string => {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  return lines.length > 0 ? lines[lines.length - 1]! : "";
+  return lines.length > 0 ? lines[lines.length - 1] : "";
 };
 
 const isValidCommandLookupResult = (result: string, requestedCommand: string): boolean => {

@@ -1,4 +1,7 @@
 import { App, MarkdownView, Notice, Plugin, type WorkspaceLeaf } from "obsidian";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { resolveAnteThinkingPreference, type AnteThinkingLevel } from "../core/ante-thinking";
 import { TaskEngine } from "../core/task-engine";
 import type { ContextSnapshot, PresetId } from "../core/types";
@@ -120,11 +123,10 @@ export default class TmdPlugin extends Plugin {
       console.error("[tmd] Failed to complete delayed initialization:", error);
     } finally {
       this.delayedInitializationComplete = true;
-      console.info("[tmd] Plugin fully initialized");
     }
   }
 
-  async onunload(): Promise<void> {
+  onunload(): void {
     if (this.editorChangeDebounceTimer != null) {
       window.clearTimeout(this.editorChangeDebounceTimer);
       this.editorChangeDebounceTimer = null;
@@ -132,11 +134,18 @@ export default class TmdPlugin extends Plugin {
     this.unsubscribeTaskEngine?.();
 
     this.mentionTrigger?.destroy();
-    await this.runtime?.persistActiveSession().catch(() => {});
     this.chatManager?.dispose();
-    this.runtime?.dispose();
-    this.app.workspace.detachLeavesOfType(TMD_CHAT_VIEW_TYPE);
-    this.app.workspace.detachLeavesOfType(TMD_TERMINAL_VIEW_TYPE);
+    void this.cleanupRuntimeOnUnload();
+  }
+
+  private async cleanupRuntimeOnUnload(): Promise<void> {
+    try {
+      await this.runtime?.persistActiveSession();
+    } catch {
+      // Obsidian does not await onunload; cleanup should not surface transient shutdown failures.
+    } finally {
+      this.runtime?.dispose();
+    }
   }
 
   async saveSettings(): Promise<void> {
@@ -149,11 +158,11 @@ export default class TmdPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    const stored = await this.loadData();
+    const stored: unknown = await this.loadData();
     this.pluginData = (stored as TmdPluginData | null | undefined) ?? {};
     const legacySettings =
       this.pluginData.settings ??
-      (stored && !("settings" in (stored as Record<string, unknown>)) ? (stored as Partial<TmdSettings>) : undefined);
+      (stored && !("settings" in (stored as Record<string, unknown>)) ? stored : undefined);
     this.settings = normalizeSettings(legacySettings);
     this.pluginUpdateState = {
       lastNotifiedVersion:
@@ -209,7 +218,7 @@ export default class TmdPlugin extends Plugin {
   }
 
   private async handoffAnteSession(action: () => void | Promise<void>, reason: string): Promise<void> {
-    console.info("[tmd session]", reason);
+    void reason;
     await this.persistIdleAnteSession();
     await action();
   }
@@ -256,12 +265,6 @@ export default class TmdPlugin extends Plugin {
 
   async deleteChatConversation(conversationId: string): Promise<void> {
     const work = this.conversationSwitchLock.then(async () => {
-      const sessionId = this.chatManager.getConversationRuntimeSessionId(conversationId);
-      const activeSessionId = this.runtime.getActiveSessionId();
-      console.info(
-        "[tmd session]",
-        `Deleting chat conversation · id=${conversationId} · session=${sessionId ?? "none"} · active=${activeSessionId ?? "none"}`
-      );
       const removedTaskIds = this.chatManager.removeConversation(conversationId);
       this.taskEngine.clearTasks(removedTaskIds);
     });
@@ -273,10 +276,8 @@ export default class TmdPlugin extends Plugin {
 
   async persistIdleAnteSession(): Promise<void> {
     if (this.taskEngine.hasActiveTask()) {
-      console.info("[tmd session]", "Skipping Ante session persist because a task is still running");
       return;
     }
-    console.info("[tmd session]", `Persisting idle Ante session · active=${this.runtime.getActiveSessionId() ?? "none"}`);
     await this.runtime.persistActiveSession();
   }
 
@@ -414,13 +415,13 @@ export default class TmdPlugin extends Plugin {
   async openChatView(): Promise<void> {
     const leaf = await this.ensureLeaf(TMD_CHAT_VIEW_TYPE);
     await leaf.setViewState({ type: TMD_CHAT_VIEW_TYPE, active: true });
-    this.app.workspace.revealLeaf(leaf);
+    this.revealLeaf(leaf);
   }
 
   async openTerminalView(): Promise<void> {
     const leaf = await this.ensureLeaf(TMD_TERMINAL_VIEW_TYPE);
     await leaf.setViewState({ type: TMD_TERMINAL_VIEW_TYPE, active: true });
-    this.app.workspace.revealLeaf(leaf);
+    this.revealLeaf(leaf);
     if (this.isAnteInstalled()) {
       void this.runtime.ensureWarmSession().catch(() => {
         // Ignore idle warmup failures here; the visible task path still surfaces errors.
@@ -573,9 +574,6 @@ export default class TmdPlugin extends Plugin {
    * Empty when the catalog hasn't loaded (Ante missing or too old).
    */
   getConfiguredProviders(): AnteCatalogProvider[] {
-    const { homedir } = require("node:os") as typeof import("node:os");
-    const { join } = require("node:path") as typeof import("node:path");
-    const { existsSync } = require("node:fs") as typeof import("node:fs");
     const anteHome = (typeof process !== "undefined" && process.env?.ANTE_HOME) || join(homedir(), ".ante");
 
     return this.getAllProviders().filter((p) => {
@@ -654,40 +652,44 @@ export default class TmdPlugin extends Plugin {
 
   private registerCommands(): void {
     this.addCommand({
-      id: "open-ante-chat",
-      name: "Chat with Ante",
+      id: "open-chat",
+      name: "Chat",
       callback: async () => this.openChatView()
     });
 
     this.addCommand({
-      id: "open-ante-terminal",
-      name: "Open Ante Terminal",
+      id: "open-terminal",
+      name: "Open terminal",
       callback: async () => this.openTerminalView()
     });
 
     this.addCommand({
-      id: "run-ante-default",
-      name: "Run @ante on current note",
+      id: "run-default",
+      name: "Run on current note",
       callback: async () => this.runPresetFromContextMenu("default")
     });
 
     this.addCommand({
-      id: "run-ante-research",
-      name: "Run @ante research on current note",
+      id: "run-research",
+      name: "Run research on current note",
       callback: async () => this.runPresetFromContextMenu("research")
     });
 
     this.addCommand({
-      id: "run-ante-plan",
-      name: "Run @ante plan on current note",
+      id: "run-plan",
+      name: "Run plan on current note",
       callback: async () => this.runPresetFromContextMenu("plan")
     });
 
     this.addCommand({
-      id: "run-ante-summary",
-      name: "Run @ante summary on current note",
+      id: "run-summary",
+      name: "Run summary on current note",
       callback: async () => this.runPresetFromContextMenu("summary")
     });
+  }
+
+  private revealLeaf(leaf: WorkspaceLeaf): void {
+    this.app.workspace.setActiveLeaf(leaf, { focus: true });
   }
 
   private registerEditorMenu(): void {

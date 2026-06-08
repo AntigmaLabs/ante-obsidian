@@ -116,7 +116,7 @@ export const extractRuntimeSummary = (
   return null
 }
 
-export const parseJsonPayload = (value: string): unknown | null => {
+export const parseJsonPayload = (value: string): unknown => {
   const trimmed = value.trim()
   if (!trimmed) {
     return null

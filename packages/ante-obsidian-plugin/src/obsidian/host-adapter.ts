@@ -138,7 +138,7 @@ export class ObsidianHostAdapter implements HostAdapter {
       const file = this.getFile(targetPath);
       if (file instanceof TFile) {
         try {
-          await this.app.vault.delete(file);
+          await this.app.fileManager.trashFile(file);
           new Notice(`Deleted ${targetPath}`);
         } catch (error) {
           throw new Error(
@@ -195,7 +195,6 @@ export class ObsidianHostAdapter implements HostAdapter {
     if (!view.file) {
       throw new Error("Markdown view has no file");
     }
-    const startedAt = performance.now();
     const editor = view.editor;
     const selectionText = editor.getSelection();
     const from = editor.getCursor("from");

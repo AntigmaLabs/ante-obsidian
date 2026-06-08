@@ -31,10 +31,6 @@ const formatFileCountLabel = (fileCount: number, changeCount: number): string =>
   return changeCount > fileCount ? `${fileLabel} · ${changeCount} changes` : fileLabel;
 };
 
-const assertNever = (value: never): never => {
-  throw new Error(`Unexpected value: ${String(value)}`);
-};
-
 type InlineSegment = {
   text: string;
   kind: "common" | "remove" | "add";
@@ -162,7 +158,7 @@ const collectDiffHunks = (rows: PatchRow[]): DiffHunk[] => {
         activeHunk = { header: "@@", rows: [] };
         hunks.push(activeHunk);
       }
-      activeHunk.rows.push(row as RenderableDiffRow);
+      activeHunk.rows.push(row);
     }
   }
 

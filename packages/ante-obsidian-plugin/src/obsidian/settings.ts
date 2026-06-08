@@ -243,18 +243,19 @@ const normalizeLastSelectedModelsByProvider = (raw: unknown): Record<string, str
 
 export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefined): TmdSettings => {
   const raw = stored ?? {};
+  const rawRecord = raw as Record<string, unknown>;
   const anteProvider = normalizeProvider(typeof raw.anteProvider === "string" ? raw.anteProvider : DEFAULT_SETTINGS.anteProvider);
   const anteModel = typeof raw.anteModel === "string" ? raw.anteModel.trim() : DEFAULT_SETTINGS.anteModel;
   const anteThinking = normalizeAnteThinkingPreference(raw.anteThinking);
 
   // Legacy flat fields (for migration)
-  const legacyGeminiKey = typeof raw.geminiApiKey === "string" ? raw.geminiApiKey : "";
-  const legacyGeminiEnvKey = typeof raw.geminiApiKeyEnvKey === "string" && raw.geminiApiKeyEnvKey.trim()
-    ? raw.geminiApiKeyEnvKey.trim()
+  const legacyGeminiKey = typeof rawRecord["geminiApiKey"] === "string" ? rawRecord["geminiApiKey"] : "";
+  const legacyGeminiEnvKey = typeof rawRecord["geminiApiKeyEnvKey"] === "string" && rawRecord["geminiApiKeyEnvKey"].trim()
+    ? rawRecord["geminiApiKeyEnvKey"].trim()
     : "GEMINI_API_KEY";
-  const legacyAnthropicKey = typeof raw.anthropicApiKey === "string" ? raw.anthropicApiKey : "";
-  const legacyAnthropicEnvKey = typeof raw.anthropicApiKeyEnvKey === "string" && raw.anthropicApiKeyEnvKey.trim()
-    ? raw.anthropicApiKeyEnvKey.trim()
+  const legacyAnthropicKey = typeof rawRecord["anthropicApiKey"] === "string" ? rawRecord["anthropicApiKey"] : "";
+  const legacyAnthropicEnvKey = typeof rawRecord["anthropicApiKeyEnvKey"] === "string" && rawRecord["anthropicApiKeyEnvKey"].trim()
+    ? rawRecord["anthropicApiKeyEnvKey"].trim()
     : "ANTHROPIC_API_KEY";
 
   const providerKeys = normalizeProviderKeys(
