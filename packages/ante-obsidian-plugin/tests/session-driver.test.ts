@@ -141,6 +141,7 @@ const config: AnteRuntimeConfig = {
   thinking: null,
   autoApproveTools: true,
   env: {},
+  appendSystemPrompt: "Obsidian system prompt append.",
 };
 
 test("run reports invalid startup errors as a failed exit instead of throwing", async () => {
@@ -449,6 +450,7 @@ test("initial chat requests start a fresh session instead of reusing the current
       provider: config.provider,
       streaming: true,
       thinking: null,
+      append_system_prompt: config.appendSystemPrompt,
     },
   });
 });
@@ -485,6 +487,7 @@ test("runtime target think level is forwarded when starting a fresh session", as
       provider: "openai-subscription",
       streaming: true,
       thinking: "Max",
+      append_system_prompt: config.appendSystemPrompt,
     },
   });
 });

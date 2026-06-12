@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { OBSIDIAN_APPEND_SYSTEM_PROMPT } from "../src/core/obsidian-system-prompt";
 import { buildAnteRuntimeConfig } from "../src/obsidian/main-runtime-config";
 import type { AnteCatalogProvider } from "../src/obsidian/ante-catalog";
 
@@ -47,6 +48,7 @@ test("buildAnteRuntimeConfig prefers explicit gemini key and emits only selected
   assert.equal(config.provider, "gemini");
   assert.equal(config.model, "gemini-3-flash-preview");
   assert.equal(config.thinking, "Deep");
+  assert.equal(config.appendSystemPrompt, OBSIDIAN_APPEND_SYSTEM_PROMPT);
   assert.deepEqual(config.env, {
     ANTE_ENV: "obsidian",
     GEMINI_API_KEY: "gemini-inline",
@@ -80,5 +82,6 @@ test("buildAnteRuntimeConfig falls back from shell env to process env for anthro
   assert.equal(config.connectionMode, "stdio");
   assert.equal(config.autoApproveTools, false);
   assert.equal(config.thinking, null);
+  assert.equal(config.appendSystemPrompt, OBSIDIAN_APPEND_SYSTEM_PROMPT);
   assert.deepEqual(config.env, { ANTE_ENV: "obsidian", ANTHROPIC_API_KEY: "anthropic-process" });
 });

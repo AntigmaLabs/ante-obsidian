@@ -544,6 +544,7 @@ export class AnteSessionDriver implements AnteRuntime {
             provider: string;
             streaming: boolean;
             thinking: AnteRuntimeConfig["thinking"];
+            append_system_prompt?: string;
           };
         }
       | { ResumeSession: { session_id: string } }
@@ -571,6 +572,7 @@ export class AnteSessionDriver implements AnteRuntime {
         provider: config.provider.trim(),
         streaming: true,
         thinking: config.thinking,
+        append_system_prompt: config.appendSystemPrompt?.trim() || undefined,
       },
     });
   }

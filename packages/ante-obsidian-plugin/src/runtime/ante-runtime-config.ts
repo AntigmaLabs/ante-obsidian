@@ -11,6 +11,7 @@ export interface AnteRuntimeConfig {
   thinking: AnteThinkingLevel | null;
   autoApproveTools: boolean;
   env: Record<string, string>;
+  appendSystemPrompt?: string;
 }
 
 export const configSignature = (config: AnteRuntimeConfig): string =>
@@ -23,6 +24,7 @@ export const configSignature = (config: AnteRuntimeConfig): string =>
     model: config.model.trim(),
     provider: config.provider.trim(),
     thinking: config.thinking,
+    appendSystemPrompt: config.appendSystemPrompt?.trim() ?? "",
     env: Object.entries(config.env)
       .filter(([, value]) => value.trim())
       .sort(([left], [right]) => left.localeCompare(right)),

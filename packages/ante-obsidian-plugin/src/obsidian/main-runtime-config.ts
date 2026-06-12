@@ -1,4 +1,5 @@
 import { resolveAnteThinkingPreference, type AnteThinkingLevel } from "../core/ante-thinking";
+import { OBSIDIAN_APPEND_SYSTEM_PROMPT } from "../core/obsidian-system-prompt";
 import { DEFAULT_ANTE_ARGS_JSON } from "../runtime/create-ante-runtime";
 import { normalizeEnvVarName } from "./shell-env";
 import type { TmdSettings } from "./settings";
@@ -30,6 +31,7 @@ export const buildAnteRuntimeConfig = (
   thinking: AnteThinkingLevel | null;
   autoApproveTools: boolean;
   env: Record<string, string>;
+  appendSystemPrompt: string;
 } => {
   const env: Record<string, string> = {
     ANTE_ENV: "obsidian",
@@ -100,5 +102,6 @@ export const buildAnteRuntimeConfig = (
     thinking: resolveAnteThinkingPreference(input.settings.anteThinking),
     autoApproveTools: input.settings.autoApproveAnteTools,
     env,
+    appendSystemPrompt: OBSIDIAN_APPEND_SYSTEM_PROMPT,
   };
 };

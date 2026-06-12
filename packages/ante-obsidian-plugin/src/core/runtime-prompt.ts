@@ -18,7 +18,7 @@ const buildContextBlock = (request: TaskRequest): string => {
   const notePath = request.context.filePath ?? "Untitled.md";
   const cursor = formatCursor(request);
 
-  return [
+  const lines = [
     vaultPath
       ? `Current Obsidian vault path: ${vaultPath}`
       : "Current Obsidian vault path: <unknown>",
@@ -26,7 +26,9 @@ const buildContextBlock = (request: TaskRequest): string => {
     selection ? `Selected text:\n${selection}` : "Selected text: <none>",
     cursor ?? "",
     documentText ? `Current note content:\n${documentText}` : "Current note content: <empty>",
-  ].join("\n\n");
+  ].filter(Boolean);
+
+  return ["<obsidian_context>", ...lines, "</obsidian_context>"].join("\n\n");
 };
 
 const buildVaultAnalysisBlock = (): string =>
@@ -38,8 +40,13 @@ const buildVaultAnalysisBlock = (): string =>
 const buildObsidianCliBlock = (request: TaskRequest): string =>
   request.obsidianCliPromptBlock?.trim() ?? "";
 
-const buildSchemaBlock = (): string =>
+const buildInlineEditRulesBlock = (): string =>
   [
+    "Inline Markdown edit rules:",
+    "- Treat this request as a direct edit against the current Obsidian note.",
+    "- If selected text is present, use the selection as the default edit scope.",
+    "- If there is no selected text and a cursor position is provided, apply the request near that cursor or the current paragraph.",
+    "- Only rewrite the whole note when the user clearly asks for note-level changes.",
     "Use native file-editing tools when the user asks to create or modify Markdown files.",
     "Prefer Read plus Write/Edit so the host can capture approval details and render diffs from real file contents.",
     "Prefer Write over Edit when appending at the end of a note or when the old_string would be ambiguous, repeated, or consist mostly of whitespace/newlines.",
@@ -51,6 +58,17 @@ const buildSchemaBlock = (): string =>
     "- Use Read before Write/Edit when the current file contents may have changed or when the target path is ambiguous.",
     "- Keep edits scoped to the requested file and location.",
     "- Never copy the prompt instructions, schema text, or context labels into file content.",
+    "- Do not wrap normal replies in code fences unless the user asked for a code block.",
+  ].join("\n");
+
+const buildChatAnswerRulesBlock = (): string =>
+  [
+    "Chat response rules:",
+    "- Answer directly from the provided Obsidian context when possible.",
+    "- Do not create or modify files unless the user clearly asks you to write, edit, create, replace, append, or reorganize note content.",
+    "- If the user asks for Markdown file changes, use native file-editing tools and keep the final reply short.",
+    "- If the provided context is insufficient, say what is missing before considering other files or tools.",
+    "- Do not emit JSON envelopes such as type=text, type=change, or type=changes.",
     "- Do not wrap normal replies in code fences unless the user asked for a code block.",
   ].join("\n");
 
@@ -122,6 +140,41 @@ const buildTerminalContextBlock = (request: TaskRequest): string => {
   return lines.join("\n\n");
 };
 
+const buildChatPrompt = (
+  request: TaskRequest,
+  instructionLabel: "User instruction" | "Follow-up user instruction",
+  instruction: string,
+): string =>
+  [
+    "You are operating inside Chat with Ante in an Obsidian vault.",
+    `Preset: ${request.preset.label}`,
+    `Goal: ${request.preset.goal}`,
+    instruction ? `${instructionLabel}:\n${instruction}` : "",
+    buildObsidianCliBlock(request),
+    buildVaultAnalysisBlock(),
+    buildContextBlock(request),
+    buildChatAnswerRulesBlock(),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+const buildInlinePrompt = (request: TaskRequest, inlineInstruction: string): string =>
+  [
+    "You are handling an inline Markdown editing task for an Obsidian note.",
+    `Preset: ${request.preset.label}`,
+    `Goal: ${request.preset.goal}`,
+    request.preset.systemInstructions
+      ? `Execution instructions:\n${request.preset.systemInstructions}`
+      : "",
+    inlineInstruction ? `User instruction:\n${inlineInstruction}` : "",
+    buildObsidianCliBlock(request),
+    buildVaultAnalysisBlock(),
+    buildContextBlock(request),
+    buildInlineEditRulesBlock(),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
 export const buildInteractivePrompt = (request: TaskRequest): string => {
   const inlineInstruction = request.inlineInstruction.trim();
   const followUpPrompt = request.followUpPrompt?.trim() ?? "";
@@ -142,21 +195,7 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
         .filter(Boolean)
         .join("\n\n");
     }
-    return [
-      "You are operating inside Chat with Ante in an Obsidian vault.",
-      `Preset: ${request.preset.label}`,
-      `Goal: ${request.preset.goal}`,
-      request.preset.systemInstructions
-        ? `Execution instructions:\n${request.preset.systemInstructions}`
-        : "",
-      followUpPrompt ? `Follow-up user instruction:\n${followUpPrompt}` : "",
-      buildObsidianCliBlock(request),
-      buildVaultAnalysisBlock(),
-      buildContextBlock(request),
-      buildSchemaBlock(),
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+    return buildChatPrompt(request, "Follow-up user instruction", followUpPrompt);
   }
 
   if (request.kind === "terminal") {
@@ -177,21 +216,9 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
       .join("\n\n");
   }
 
-  return [
-    request.kind === "chat"
-      ? "You are operating inside Chat with Ante in an Obsidian vault."
-      : "You are handling a Markdown editing task for an Obsidian note.",
-    `Preset: ${request.preset.label}`,
-    `Goal: ${request.preset.goal}`,
-    request.preset.systemInstructions
-      ? `Execution instructions:\n${request.preset.systemInstructions}`
-      : "",
-    inlineInstruction ? `User instruction:\n${inlineInstruction}` : "",
-    buildObsidianCliBlock(request),
-    buildVaultAnalysisBlock(),
-    buildContextBlock(request),
-    buildSchemaBlock(),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  if (request.kind === "chat") {
+    return buildChatPrompt(request, "User instruction", inlineInstruction);
+  }
+
+  return buildInlinePrompt(request, inlineInstruction);
 };

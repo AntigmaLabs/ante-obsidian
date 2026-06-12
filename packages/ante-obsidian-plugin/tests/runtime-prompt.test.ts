@@ -32,7 +32,7 @@ const chatRequest = (overrides: Partial<TaskRequest> = {}): TaskRequest => ({
     id: "default",
     label: "@ante",
     goal: "Discuss the current Markdown content before editing anything.",
-    systemInstructions: "Prefer answering directly unless the user asks for file changes.",
+    systemInstructions: "Prefer a direct document edit when the requested outcome is concrete.",
   },
   context: {
     vaultPath: "/vaults/personal",
@@ -42,6 +42,31 @@ const chatRequest = (overrides: Partial<TaskRequest> = {}): TaskRequest => ({
     selection: null,
   },
   inlineInstruction: "What should I do next?",
+  ...overrides,
+});
+
+const documentRequest = (overrides: Partial<TaskRequest> = {}): TaskRequest => ({
+  taskId: "task-document-1",
+  kind: "document",
+  triggerSource: "mention",
+  preset: {
+    id: "default",
+    label: "@ante",
+    goal: "Handle the current Markdown content directly and choose the lightest useful operation.",
+    systemInstructions: "Prefer a direct document edit when the requested outcome is concrete.",
+  },
+  context: {
+    vaultPath: "/vaults/personal",
+    filePath: "Draft.md",
+    noteTitle: "Draft",
+    documentText: "# Draft\n\nThis paragraph needs polish.\n",
+    selection: {
+      text: "This paragraph needs polish.",
+      from: { line: 2, ch: 0 },
+      to: { line: 2, ch: 28 },
+    },
+  },
+  inlineInstruction: "Make this clearer.",
   ...overrides,
 });
 
@@ -86,11 +111,15 @@ test("chat prompt uses the chat-specific framing and includes note context", () 
 
   assert.match(prompt, /Chat with Ante in an Obsidian vault/i);
   assert.match(prompt, /Preset: @ante/);
+  assert.match(prompt, /Chat response rules:/);
+  assert.match(prompt, /Do not create or modify files unless the user clearly asks/i);
   assert.match(prompt, /User instruction:\nWhat should I do next\?/);
   assert.match(prompt, /Current Obsidian vault path: \/vaults\/personal/);
   assert.match(prompt, /folder organization, and nearby documentation context/i);
   assert.match(prompt, /Current note path: Inbox\.md/);
   assert.match(prompt, /follow up with design team/);
+  assert.doesNotMatch(prompt, /Execution instructions:/);
+  assert.doesNotMatch(prompt, /Prefer a direct document edit when the requested outcome is concrete/);
 });
 
 test("chat follow-up prompt still includes the latest note context", () => {
@@ -120,17 +149,26 @@ test("chat follow-up prompt still includes the latest note context", () => {
   assert.match(prompt, /Current note path: Projects\/Today\.md/);
   assert.match(prompt, /Selected text:\nsync plugin chat context/);
   assert.match(prompt, /Current note content:\n# Today/);
-  assert.match(
-    prompt,
-    /Never copy the prompt instructions, schema text, or context labels into file content\./,
-  );
-  assert.match(
-    prompt,
-    /Use native file-editing tools when the user asks to create or modify Markdown files\./,
-  );
+  assert.match(prompt, /Chat response rules:/);
+  assert.match(prompt, /Do not create or modify files unless the user clearly asks/i);
   assert.doesNotMatch(prompt, /fallback JSON object/i);
   assert.match(
     prompt,
     /Do not emit JSON envelopes such as type=text, type=change, or type=changes\./,
   );
+});
+
+test("inline prompt keeps edit-specific preset instructions and scope rules", () => {
+  const prompt = buildInteractivePrompt(documentRequest());
+
+  assert.match(prompt, /inline Markdown editing task for an Obsidian note/i);
+  assert.match(prompt, /Execution instructions:/);
+  assert.match(prompt, /Prefer a direct document edit when the requested outcome is concrete/);
+  assert.match(prompt, /User instruction:\nMake this clearer\./);
+  assert.match(prompt, /<obsidian_context>/);
+  assert.match(prompt, /Selected text:\nThis paragraph needs polish\./);
+  assert.match(prompt, /Inline Markdown edit rules:/);
+  assert.match(prompt, /use the selection as the default edit scope/i);
+  assert.match(prompt, /Only rewrite the whole note when the user clearly asks/i);
+  assert.match(prompt, /Use native file-editing tools when the user asks to create or modify Markdown files\./);
 });
