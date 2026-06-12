@@ -18,26 +18,27 @@ test("serve args remove legacy yolo flag", () => {
 });
 
 test("stripTransportArgs removes stdio, websocket transport flags, and legacy yolo", () => {
-  assert.deepEqual(__test__.stripTransportArgs(["serve", "--stdio", "--offline-model", "model.gguf"]), [
+  assert.deepEqual(
+    __test__.stripTransportArgs(["serve", "--stdio", "--offline-model", "model.gguf"]),
+    ["serve", "--offline-model", "model.gguf"],
+  );
+  assert.deepEqual(__test__.stripTransportArgs(["serve", "--ws", "127.0.0.1:8765", "--yolo"]), [
     "serve",
-    "--offline-model",
-    "model.gguf"
   ]);
-  assert.deepEqual(__test__.stripTransportArgs(["serve", "--ws", "127.0.0.1:8765", "--yolo"]), ["serve"]);
 });
 
 test("ensureWebSocketArgs removes prior transport flags and appends ws address", () => {
-  assert.deepEqual(__test__.ensureWebSocketArgs(["serve", "--stdio", "--offline-model", "model.gguf"], "127.0.0.1:8765"), [
-    "serve",
-    "--offline-model",
-    "model.gguf",
-    "--ws",
-    "127.0.0.1:8765"
-  ]);
+  assert.deepEqual(
+    __test__.ensureWebSocketArgs(
+      ["serve", "--stdio", "--offline-model", "model.gguf"],
+      "127.0.0.1:8765",
+    ),
+    ["serve", "--offline-model", "model.gguf", "--ws", "127.0.0.1:8765"],
+  );
   assert.deepEqual(__test__.ensureWebSocketArgs(["--yolo"], "127.0.0.1:9000"), [
     "serve",
     "--ws",
-    "127.0.0.1:9000"
+    "127.0.0.1:9000",
   ]);
 });
 

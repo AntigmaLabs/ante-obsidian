@@ -4,11 +4,16 @@ import type {
   DocumentChangeArtifact,
   RuntimeApprovalRequest,
   RuntimeProcessLane,
-  RuntimeTelemetryState
+  RuntimeTelemetryState,
 } from "./types";
 
 export type ChatMessageRole = "user" | "assistant";
-export type ChatMessageStatus = "streaming" | "completed" | "cancelled" | "failed" | "awaiting-apply";
+export type ChatMessageStatus =
+  | "streaming"
+  | "completed"
+  | "cancelled"
+  | "failed"
+  | "awaiting-apply";
 
 export interface ChatTurnRef {
   taskId: string;

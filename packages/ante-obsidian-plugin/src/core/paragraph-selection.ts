@@ -12,7 +12,7 @@ export interface ParagraphSelectionSnapshot {
 export const buildParagraphSelection = (
   editor: LineReader,
   lineNumber: number,
-  matchStart: number
+  matchStart: number,
 ): ParagraphSelectionSnapshot | null => {
   let start = lineNumber;
   let end = lineNumber;
@@ -44,7 +44,7 @@ export const buildParagraphSelection = (
     from: { line: start, ch: 0 },
     to: {
       line: lineNumber,
-      ch: editor.getLine(lineNumber).slice(0, matchStart).trimEnd().length
-    }
+      ch: editor.getLine(lineNumber).slice(0, matchStart).trimEnd().length,
+    },
   };
 };

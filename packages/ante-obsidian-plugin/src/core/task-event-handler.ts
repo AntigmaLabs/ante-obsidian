@@ -4,7 +4,7 @@ import {
   createRuntimeFileArtifact,
   getArtifactTargetKey,
   mergeDocumentChangeArtifacts,
-  toDocumentChangeArtifactFromApprovalTool
+  toDocumentChangeArtifactFromApprovalTool,
 } from "./artifacts";
 import type {
   DocumentChangeArtifact,
@@ -20,27 +20,21 @@ import {
   matchesContextFilePath,
   isUserSkippedToolMessage,
   approvalHasOnlyFileEditingTools,
-  deriveTaskStatusFromArtifacts
+  deriveTaskStatusFromArtifacts,
 } from "./task-artifact-manager";
 import type { TaskStdoutBuffer } from "./task-stdout-buffer";
+import { logDebug } from "./debug-log";
 
 const MAX_RUNTIME_TIMELINE_ENTRIES = 12;
 
-const logDebug = (...args: unknown[]): void => {
-  void args;
-};
-
 const shouldCoalesceArtifact = (
   existing: DocumentChangeArtifact,
-  incoming: DocumentChangeArtifact
+  incoming: DocumentChangeArtifact,
 ): boolean => {
   if (existing.applyState === "discarded" || existing.applyState === "failed") {
     return false;
   }
-  if (
-    existing.runtimeMode === "staged-preview" ||
-    incoming.runtimeMode === "staged-preview"
-  ) {
+  if (existing.runtimeMode === "staged-preview" || incoming.runtimeMode === "staged-preview") {
     return true;
   }
   if (existing.runtimeMode === "observed" || incoming.runtimeMode === "observed") {
@@ -65,14 +59,18 @@ export class TaskEventHandler {
       patchTask: (taskId: string, patch: Partial<TaskRecord>) => void;
       patchArtifacts: (
         taskId: string,
-        updater: (artifact: DocumentChangeArtifact) => DocumentChangeArtifact
+        updater: (artifact: DocumentChangeArtifact) => DocumentChangeArtifact,
       ) => void;
       updateTaskTelemetry: (
         taskId: string,
-        updater: (telemetry: RuntimeTelemetryState) => RuntimeTelemetryState
+        updater: (telemetry: RuntimeTelemetryState) => RuntimeTelemetryState,
       ) => void;
-      appendLog: (taskId: string, stream: TaskRecord["logs"][number]["stream"], text: string) => void;
-    }
+      appendLog: (
+        taskId: string,
+        stream: TaskRecord["logs"][number]["stream"],
+        text: string,
+      ) => void;
+    },
   ) {}
 
   async handleRuntimeEvent(request: TaskRequest, event: RuntimeEvent): Promise<void> {
@@ -90,20 +88,28 @@ export class TaskEventHandler {
       case "session.approval": {
         const shouldAutoStageApproval =
           request.kind === "chat" && approvalHasOnlyFileEditingTools(event.approval);
-        await this.addArtifactsFromApproval(request, event.approval, shouldAutoStageApproval ? "staged-preview" : "approval");
+        await this.addArtifactsFromApproval(
+          request,
+          event.approval,
+          shouldAutoStageApproval ? "staged-preview" : "approval",
+        );
         const task = this.callbacks.getTask(request.taskId);
         if (shouldAutoStageApproval) {
           this.runtime.respondToApproval(event.approval, "Skip");
-          this.callbacks.appendLog(request.taskId, "system", "Staged file preview created; skipped Ante file write");
+          this.callbacks.appendLog(
+            request.taskId,
+            "system",
+            "Staged file preview created; skipped Ante file write",
+          );
           this.callbacks.patchTask(request.taskId, {
             pendingApproval: undefined,
-            status: task.artifacts.length > 0 ? deriveTaskStatusFromArtifacts(task) : task.status
+            status: task.artifacts.length > 0 ? deriveTaskStatusFromArtifacts(task) : task.status,
           });
           return;
         }
         this.callbacks.patchTask(request.taskId, {
           pendingApproval: event.approval,
-          status: task.artifacts.length > 0 ? deriveTaskStatusFromArtifacts(task) : task.status
+          status: task.artifacts.length > 0 ? deriveTaskStatusFromArtifacts(task) : task.status,
         });
         return;
       }
@@ -117,15 +123,13 @@ export class TaskEventHandler {
         this.callbacks.updateTaskTelemetry(request.taskId, (telemetry) => ({
           ...telemetry,
           thinkingText:
-            event.mode === "full"
-              ? event.text
-              : `${telemetry.thinkingText ?? ""}${event.text}`
+            event.mode === "full" ? event.text : `${telemetry.thinkingText ?? ""}${event.text}`,
         }));
         return;
       case "session.usage":
         this.callbacks.updateTaskTelemetry(request.taskId, (telemetry) => ({
           ...telemetry,
-          usage: event.usage
+          usage: event.usage,
         }));
         return;
       case "session.compaction":
@@ -134,8 +138,8 @@ export class TaskEventHandler {
           compacting: event.phase === "start",
           timeline: this.appendTelemetryTimeline(telemetry.timeline, {
             kind: event.phase === "start" ? "compaction-start" : "compaction-end",
-            timestamp: new Date().toISOString()
-          })
+            timestamp: new Date().toISOString(),
+          }),
         }));
         return;
       case "session.info":
@@ -144,13 +148,13 @@ export class TaskEventHandler {
           lastInfo: {
             level: event.level,
             message: event.message,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           },
           timeline: this.appendTelemetryTimeline(telemetry.timeline, {
             kind: event.level,
             message: event.message,
-            timestamp: new Date().toISOString()
-          })
+            timestamp: new Date().toISOString(),
+          }),
         }));
         return;
       case "result.text":
@@ -158,8 +162,8 @@ export class TaskEventHandler {
           pendingApproval: undefined,
           textResult: {
             kind: "text",
-            text: event.text
-          }
+            text: event.text,
+          },
         });
         return;
       case "session.completed": {
@@ -168,7 +172,7 @@ export class TaskEventHandler {
           pendingApproval: undefined,
           processLane: undefined,
           status: task.artifacts.length > 0 ? deriveTaskStatusFromArtifacts(task) : "completed",
-          endedAt: new Date().toISOString()
+          endedAt: new Date().toISOString(),
         });
         return;
       }
@@ -178,12 +182,15 @@ export class TaskEventHandler {
           processLane: undefined,
           status: "failed",
           error: event.error,
-          endedAt: new Date().toISOString()
+          endedAt: new Date().toISOString(),
         });
     }
   }
 
-  private getRuntimeToolState(taskId: string, toolId: string): {
+  private getRuntimeToolState(
+    taskId: string,
+    toolId: string,
+  ): {
     tool: RuntimeToolCall;
     targetPath: string | null;
     beforeText: string;
@@ -194,9 +201,11 @@ export class TaskEventHandler {
   private setRuntimeToolState(
     taskId: string,
     toolId: string,
-    value: { tool: RuntimeToolCall; targetPath: string | null; beforeText: string }
+    value: { tool: RuntimeToolCall; targetPath: string | null; beforeText: string },
   ): void {
-    const tools = this.runtimeToolCalls.get(taskId) ?? new Map<string, { tool: RuntimeToolCall; targetPath: string | null; beforeText: string }>();
+    const tools =
+      this.runtimeToolCalls.get(taskId) ??
+      new Map<string, { tool: RuntimeToolCall; targetPath: string | null; beforeText: string }>();
     tools.set(toolId, value);
     this.runtimeToolCalls.set(taskId, tools);
   }
@@ -214,7 +223,7 @@ export class TaskEventHandler {
 
   private appendTelemetryTimeline(
     timeline: RuntimeTimelineEntry[],
-    entry: RuntimeTimelineEntry
+    entry: RuntimeTimelineEntry,
   ): RuntimeTimelineEntry[] {
     const next = [...timeline, entry];
     return next.slice(-MAX_RUNTIME_TIMELINE_ENTRIES);
@@ -223,14 +232,16 @@ export class TaskEventHandler {
   private async addArtifactsFromApproval(
     request: TaskRequest,
     approval: TaskRecord["pendingApproval"],
-    runtimeMode: DocumentChangeArtifact["runtimeMode"] = "approval"
+    runtimeMode: DocumentChangeArtifact["runtimeMode"] = "approval",
   ): Promise<void> {
     if (!approval) {
       return;
     }
 
     const task = this.callbacks.getTask(request.taskId);
-    const existingToolIds = new Set(task.artifacts.map((artifact) => artifact.runtimeToolId).filter(Boolean));
+    const existingToolIds = new Set(
+      task.artifacts.map((artifact) => artifact.runtimeToolId).filter(Boolean),
+    );
     const nextArtifacts = task.artifacts.slice();
     let changed = false;
 
@@ -245,26 +256,30 @@ export class TaskEventHandler {
       }
 
       const beforeText = matchesContextFilePath(targetPath, request.context)
-        ? request.context.documentText ?? ""
-        : (await this.host.readFile(targetPath)) ?? "";
+        ? (request.context.documentText ?? "")
+        : ((await this.host.readFile(targetPath)) ?? "");
       const artifact = toDocumentChangeArtifactFromApprovalTool(tool, beforeText, targetPath);
       if (!artifact) {
         if (["write", "edit"].includes(tool.name.trim().toLowerCase())) {
-          logDebug(`approval artifact skipped tool=${tool.name} id=${tool.id} target=${targetPath}`);
+          logDebug(
+            `approval artifact skipped tool=${tool.name} id=${tool.id} target=${targetPath}`,
+          );
         }
         continue;
       }
 
       const nextArtifact =
-        runtimeMode === "staged-preview" ? await this.artifactManager.materializeStagedPreviewArtifact(artifact) : artifact;
+        runtimeMode === "staged-preview"
+          ? await this.artifactManager.materializeStagedPreviewArtifact(artifact)
+          : artifact;
       const artifactToAdd = {
         ...nextArtifact,
-        runtimeMode
+        runtimeMode,
       };
       const existingIndex = nextArtifacts.findIndex(
         (existing) =>
           shouldCoalesceArtifact(existing, artifactToAdd) &&
-          getArtifactTargetKey(existing) === getArtifactTargetKey(artifactToAdd)
+          getArtifactTargetKey(existing) === getArtifactTargetKey(artifactToAdd),
       );
       if (existingIndex >= 0) {
         const existing = nextArtifacts[existingIndex];
@@ -285,28 +300,33 @@ export class TaskEventHandler {
     }
 
     this.callbacks.patchTask(request.taskId, {
-      artifacts: nextArtifacts
+      artifacts: nextArtifacts,
     });
   }
 
   private async handleRuntimeToolEvent(
     request: TaskRequest,
-    event: Extract<RuntimeEvent, { type: "session.tool" }>
+    event: Extract<RuntimeEvent, { type: "session.tool" }>,
   ): Promise<void> {
     const normalizedName = event.tool.name.trim().toLowerCase();
     if (event.phase === "start") {
-      const targetPath = this.artifactManager.resolveRuntimeToolTargetPath(event.tool, request.context);
+      const targetPath = this.artifactManager.resolveRuntimeToolTargetPath(
+        event.tool,
+        request.context,
+      );
       this.setRuntimeToolState(request.taskId, event.tool.id, {
         tool: event.tool,
         targetPath,
-        beforeText: matchesContextFilePath(targetPath, request.context) ? request.context.documentText ?? "" : ""
+        beforeText: matchesContextFilePath(targetPath, request.context)
+          ? (request.context.documentText ?? "")
+          : "",
       });
       if (targetPath && !matchesContextFilePath(targetPath, request.context)) {
         const beforeText = (await this.host.readFile(targetPath)) ?? "";
         this.setRuntimeToolState(request.taskId, event.tool.id, {
           tool: event.tool,
           targetPath,
-          beforeText
+          beforeText,
         });
       }
       if (normalizedName === "write") {
@@ -315,17 +335,19 @@ export class TaskEventHandler {
           const syntheticApprovalTool = {
             id: event.tool.id,
             name: event.tool.name,
-            argsText: event.tool.argsText
+            argsText: event.tool.argsText,
           };
           await this.addArtifactsFromApproval(request, {
             turnId: "",
             message: "",
-            tools: [syntheticApprovalTool]
+            tools: [syntheticApprovalTool],
           });
         }
       }
       if (normalizedName === "write" || normalizedName === "edit") {
-        logDebug(`tool start name=${event.tool.name} id=${event.tool.id} target=${targetPath ?? "none"}`);
+        logDebug(
+          `tool start name=${event.tool.name} id=${event.tool.id} target=${targetPath ?? "none"}`,
+        );
       }
       return;
     }
@@ -338,7 +360,7 @@ export class TaskEventHandler {
             ...cached.tool,
             ...event.tool,
             name: event.tool.name === "Tool" ? cached.tool.name : event.tool.name,
-            argsText: event.tool.argsText ?? cached.tool.argsText
+            argsText: event.tool.argsText ?? cached.tool.argsText,
           };
     if (
       !effectiveTool.isError &&
@@ -347,32 +369,37 @@ export class TaskEventHandler {
     ) {
       const task = this.callbacks.getTask(request.taskId);
       const afterText = (await this.host.readFile(cached.targetPath)) ?? "";
-      if (afterText !== cached.beforeText && !task.artifacts.some((artifact) => artifact.runtimeToolId === effectiveTool.id)) {
+      if (
+        afterText !== cached.beforeText &&
+        !task.artifacts.some((artifact) => artifact.runtimeToolId === effectiveTool.id)
+      ) {
         const artifact = createRuntimeFileArtifact({
           toolId: effectiveTool.id,
           title: "Edit file",
           targetPath: cached.targetPath,
           beforeText: cached.beforeText,
           afterText,
-          runtimeMode: "observed"
+          runtimeMode: "observed",
         });
         const existingIndex = task.artifacts.findIndex(
           (existing) =>
             shouldCoalesceArtifact(existing, artifact) &&
-            getArtifactTargetKey(existing) === getArtifactTargetKey(artifact)
+            getArtifactTargetKey(existing) === getArtifactTargetKey(artifact),
         );
         const nextArtifacts = task.artifacts.slice();
         if (existingIndex >= 0) {
           this.artifactManager.cleanupStagedPreview(nextArtifacts[existingIndex]);
           nextArtifacts[existingIndex] = mergeDocumentChangeArtifacts(
             nextArtifacts[existingIndex],
-            artifact
+            artifact,
           );
         } else {
           nextArtifacts.push(artifact);
         }
         this.callbacks.patchTask(request.taskId, { artifacts: nextArtifacts });
-        logDebug(`tool artifact created name=${effectiveTool.name} id=${effectiveTool.id} target=${cached.targetPath}`);
+        logDebug(
+          `tool artifact created name=${effectiveTool.name} id=${effectiveTool.id} target=${cached.targetPath}`,
+        );
       }
     }
 
@@ -394,10 +421,15 @@ export class TaskEventHandler {
       return {
         ...artifact,
         applyState: effectiveTool.isError ? "failed" : "applied",
-        applyError: effectiveTool.isError ? effectiveTool.resultText ?? "Tool execution failed" : undefined
+        applyError: effectiveTool.isError
+          ? (effectiveTool.resultText ?? "Tool execution failed")
+          : undefined,
       };
     });
-    if (effectiveTool.name.trim().toLowerCase() === "write" || effectiveTool.name.trim().toLowerCase() === "edit") {
+    if (
+      effectiveTool.name.trim().toLowerCase() === "write" ||
+      effectiveTool.name.trim().toLowerCase() === "edit"
+    ) {
       logDebug(
         `tool end name=${effectiveTool.name} id=${effectiveTool.id} matchedArtifact=${matched} status=${effectiveTool.status ?? ""} isError=${effectiveTool.isError === true}`,
       );

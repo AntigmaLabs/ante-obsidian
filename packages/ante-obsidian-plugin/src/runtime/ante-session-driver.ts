@@ -2,15 +2,20 @@ import { buildInteractivePrompt } from "../core/runtime-prompt";
 import {
   ANTE_DEFAULT_THINKING,
   resolveAnteThinkingPreference,
-  type AnteThinkingPreference
+  type AnteThinkingPreference,
 } from "../core/ante-thinking";
-import type { RuntimeApprovalDecision, RuntimeApprovalRequest, RuntimeSessionInfo, TaskRequest } from "../core/types";
+import type {
+  RuntimeApprovalDecision,
+  RuntimeApprovalRequest,
+  RuntimeSessionInfo,
+  TaskRequest,
+} from "../core/types";
 import {
   extractErrorMessage,
   extractSessionId,
   extractSessionModelSpec,
   extractSessionProviderSpec,
-  getVariant
+  getVariant,
 } from "./ante-event-parser";
 import { buildApprovalResponseOperation } from "./ante-approval";
 import { cancelTimeout, scheduleTimeout, type TimerHandle } from "../core/timers";
@@ -21,18 +26,15 @@ import { sessionTargetSignature } from "./ante-runtime-config";
 import { AnteSessionLifecycle, type AnteTransportHooks } from "./ante-session-lifecycle";
 import { generateOpId, parseEnvelope, serializeOperation } from "./ante-protocol";
 import type { AnteTransport } from "./transport/ante-transport";
+import { logDebug } from "../core/debug-log";
 
 const INTERRUPT_FALLBACK_MS = 750;
-
-const logDebug = (...args: unknown[]): void => {
-  void args;
-};
 
 const emitDiagnosticLog = (observer: RuntimeObserver | null | undefined, text: string): void => {
   observer?.onEvent({
     type: "log",
     stream: "system",
-    text
+    text,
   });
 };
 
@@ -65,12 +67,16 @@ export class AnteSessionDriver implements AnteRuntime {
 
   constructor(
     private readonly getConfig: () => AnteRuntimeConfig,
-    createTransport: (config: AnteRuntimeConfig) => AnteTransport
+    createTransport: (config: AnteRuntimeConfig) => AnteTransport,
   ) {
     this.lifecycle = new AnteSessionLifecycle(createTransport);
   }
 
-  async ensureWarmSession(target?: { provider: string; model: string; thinking: AnteThinkingPreference }): Promise<void> {
+  async ensureWarmSession(target?: {
+    provider: string;
+    model: string;
+    thinking: AnteThinkingPreference;
+  }): Promise<void> {
     const config = target ? this.resolveTargetConfig(target) : this.getConfig();
     await this.lifecycle.ensureWarmSession(config, this.createTransportHooks(), (warmConfig) => {
       this.beginSession(warmConfig);
@@ -85,7 +91,7 @@ export class AnteSessionDriver implements AnteRuntime {
     return {
       provider: "ante",
       sessionId,
-      ...this.activeSessionDetails
+      ...this.activeSessionDetails,
     };
   }
 
@@ -109,12 +115,12 @@ export class AnteSessionDriver implements AnteRuntime {
           return;
         }
         this.finishCancelledRun(true);
-      }, INTERRUPT_FALLBACK_MS)
+      }, INTERRUPT_FALLBACK_MS),
     };
     this.activeRun.observer.onEvent({
       type: "log",
       stream: "system",
-      text: "Interrupting Ante turn"
+      text: "Interrupting Ante turn",
     });
     this.sendOperation("Interrupt");
   }
@@ -128,7 +134,10 @@ export class AnteSessionDriver implements AnteRuntime {
     if (!this.lifecycle.getActiveSessionId() || this.activeRun) {
       return;
     }
-    emitDiagnosticLog(undefined, `Persisting Ante session via Shutdown · session=${this.lifecycle.getActiveSessionId()}`);
+    emitDiagnosticLog(
+      undefined,
+      `Persisting Ante session via Shutdown · session=${this.lifecycle.getActiveSessionId()}`,
+    );
     await this.lifecycle.persistActiveSession(() => {
       this.lifecycle.send(serializeOperation("Shutdown", generateOpId()));
     });
@@ -174,7 +183,7 @@ export class AnteSessionDriver implements AnteRuntime {
         "TurnEnd",
         "SessionStart",
         "SessionUpdated",
-        "ExtensionRefreshed"
+        "ExtensionRefreshed",
       ].includes(variant.name)
     ) {
       logDebug(`transport variant type=${variant.name} parent=${envelope.parent ?? "none"}`);
@@ -191,7 +200,7 @@ export class AnteSessionDriver implements AnteRuntime {
     if (this.shouldIgnoreEventForActiveRun(envelope.parent)) {
       emitDiagnosticLog(
         this.activeRun.observer,
-        `Ignoring replay event · type=${variant.name} · parent=${envelope.parent ?? "none"} · expected=${this.activeRun.userInputOpId ?? "none"}`
+        `Ignoring replay event · type=${variant.name} · parent=${envelope.parent ?? "none"} · expected=${this.activeRun.userInputOpId ?? "none"}`,
       );
       return;
     }
@@ -203,7 +212,7 @@ export class AnteSessionDriver implements AnteRuntime {
       interruptPending: Boolean(this.interruptState),
       nowMs: () => performance.now(),
       logDebug: (message) => logDebug(message),
-      respondToApproval: (approval, decision) => this.respondToApproval(approval, decision)
+      respondToApproval: (approval, decision) => this.respondToApproval(approval, decision),
     });
 
     if (!outcome || !this.activeRun) {
@@ -234,7 +243,7 @@ export class AnteSessionDriver implements AnteRuntime {
     observer.onEvent({
       type: "log",
       stream: "system",
-      text: `Executing turn · provider=${config.provider} · model=${config.model} · thinking=${config.thinking ?? "default"}`
+      text: `Executing turn · provider=${config.provider} · model=${config.model} · thinking=${config.thinking ?? "default"}`,
     });
     if (!config.command.trim()) {
       observer.onExit({ status: "failed", error: "Ante command is required" });
@@ -257,33 +266,36 @@ export class AnteSessionDriver implements AnteRuntime {
         observer,
         hooks,
         (freshConfig) => this.beginSession(freshConfig),
-        (targetSessionId) => this.beginResumeSession(targetSessionId)
+        (targetSessionId) => this.beginResumeSession(targetSessionId),
       );
       if (prepMode === "launch") {
         observer.onEvent({
           type: "log",
           stream: "system",
-          text: `Launching Ante server · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"} · cwd=${config.cwd.trim() || process.cwd()}`
+          text: `Launching Ante server · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"} · cwd=${config.cwd.trim() || process.cwd()}`,
         });
       } else if (prepMode === "reuse") {
         observer.onEvent({
           type: "log",
           stream: "system",
-          text: `Reusing existing Ante session · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"}`
+          text: `Reusing existing Ante session · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"}`,
         });
       } else {
         observer.onEvent({
           type: "log",
           stream: "system",
-          text: `Booting Ante session · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"}`
+          text: `Booting Ante session · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"}`,
         });
       }
 
       emitDiagnosticLog(
         observer,
-        `Session prep start · requested=${request.runtimeSessionId?.trim() || "new"} · current=${this.lifecycle.getActiveSessionId() ?? "none"} · mode=${request.mode ?? "initial"}`
+        `Session prep start · requested=${request.runtimeSessionId?.trim() || "new"} · current=${this.lifecycle.getActiveSessionId() ?? "none"} · mode=${request.mode ?? "initial"}`,
       );
-      emitDiagnosticLog(observer, `Session prep ready · active=${this.lifecycle.getActiveSessionId() ?? "none"}`);
+      emitDiagnosticLog(
+        observer,
+        `Session prep ready · active=${this.lifecycle.getActiveSessionId() ?? "none"}`,
+      );
       await this.ensureSessionTarget(request, config, observer);
     } catch (error) {
       const startupError =
@@ -301,7 +313,7 @@ export class AnteSessionDriver implements AnteRuntime {
       finalMessage: "",
       emittedStdout: false,
       completed: false,
-      startedAtMs: performance.now()
+      startedAtMs: performance.now(),
     };
 
     const activeSessionId = this.lifecycle.getActiveSessionId();
@@ -310,7 +322,7 @@ export class AnteSessionDriver implements AnteRuntime {
         type: "runtime.session",
         provider: "ante",
         sessionId: activeSessionId,
-        ...this.activeSessionDetails
+        ...this.activeSessionDetails,
       });
     }
     this.sendUserInput(request);
@@ -332,7 +344,11 @@ export class AnteSessionDriver implements AnteRuntime {
         this.lifecycle.rejectSessionTransition(errorWithDiagnostics);
         if (this.activeRun) {
           this.lifecycle.flushStartupDiagnostics((entry) => {
-            this.activeRun?.observer.onEvent({ type: "log", stream: entry.stream, text: entry.text });
+            this.activeRun?.observer.onEvent({
+              type: "log",
+              stream: entry.stream,
+              text: entry.text,
+            });
           });
           this.activeRun.observer.onExit({ status: "failed", error: errorWithDiagnostics.message });
           this.activeRun = null;
@@ -342,7 +358,9 @@ export class AnteSessionDriver implements AnteRuntime {
       onClose: (info) => {
         this.clearInterruptTimer();
         const closeError = new Error(
-          info?.reason === "SIGTERM" ? "Ante server exited after SIGTERM" : `Ante server exited with code ${info?.code ?? "unknown"}`
+          info?.reason === "SIGTERM"
+            ? "Ante server exited after SIGTERM"
+            : `Ante server exited with code ${info?.code ?? "unknown"}`,
         );
         const errorWithDiagnostics = this.lifecycle.withStartupDiagnostics(closeError);
         const activeRun = this.activeRun;
@@ -362,15 +380,19 @@ export class AnteSessionDriver implements AnteRuntime {
         });
         activeRun.observer.onExit({
           status: info?.reason === "SIGTERM" ? "cancelled" : "failed",
-          error: info?.reason === "SIGTERM" ? undefined : errorWithDiagnostics.message
+          error: info?.reason === "SIGTERM" ? undefined : errorWithDiagnostics.message,
         });
         this.activeRun = null;
         this.lifecycle.stopTransport();
-      }
+      },
     };
   }
 
-  private handleLifecycleVariant(variantName: string, payload: unknown, parentOpId: string | undefined): boolean {
+  private handleLifecycleVariant(
+    variantName: string,
+    payload: unknown,
+    parentOpId: string | undefined,
+  ): boolean {
     switch (variantName) {
       case "SessionStart": {
         const sessionId = extractSessionId(payload) ?? crypto.randomUUID();
@@ -379,13 +401,13 @@ export class AnteSessionDriver implements AnteRuntime {
         this.activeSessionDetails = {
           activeProvider: providerSpec?.name,
           activeModel: modelSpec?.name,
-          availableModels: providerSpec?.preferredModels.map((model) => model.name)
+          availableModels: providerSpec?.preferredModels.map((model) => model.name),
         };
         this.lifecycle.resolveWarmup(sessionId);
         this.lifecycle.handleSessionStart(sessionId, emitDiagnosticLog);
         emitDiagnosticLog(
           this.activeRun?.observer ?? null,
-          `Protocol SessionStart · session=${sessionId} · parent=${parentOpId ?? "none"}`
+          `Protocol SessionStart · session=${sessionId} · parent=${parentOpId ?? "none"}`,
         );
         if (!this.activeRun) {
           return true;
@@ -395,7 +417,7 @@ export class AnteSessionDriver implements AnteRuntime {
           type: "runtime.session",
           provider: "ante",
           sessionId,
-          ...this.activeSessionDetails
+          ...this.activeSessionDetails,
         });
         return true;
       }
@@ -410,7 +432,7 @@ export class AnteSessionDriver implements AnteRuntime {
         }
         emitDiagnosticLog(
           this.activeRun?.observer ?? null,
-          `Protocol Error · message=${rawMessage} · parent=${parentOpId ?? "none"} · payload=${payloadText}`
+          `Protocol Error · message=${rawMessage} · parent=${parentOpId ?? "none"} · payload=${payloadText}`,
         );
         this.lifecycle.rejectShutdown(new Error(message));
         this.lifecycle.rejectSessionTransition(new Error(message));
@@ -425,7 +447,10 @@ export class AnteSessionDriver implements AnteRuntime {
         return true;
       }
       case "SessionEnd":
-        emitDiagnosticLog(this.activeRun?.observer ?? null, `Protocol SessionEnd · parent=${parentOpId ?? "none"}`);
+        emitDiagnosticLog(
+          this.activeRun?.observer ?? null,
+          `Protocol SessionEnd · parent=${parentOpId ?? "none"}`,
+        );
         if (!this.activeRun) {
           this.lifecycle.handleSessionEnd();
           return true;
@@ -435,7 +460,7 @@ export class AnteSessionDriver implements AnteRuntime {
         this.lifecycle.handleExtensionRefresh(extractSessionId(payload), emitDiagnosticLog);
         emitDiagnosticLog(
           this.activeRun?.observer ?? null,
-          `Protocol ExtensionRefreshed · session=${extractSessionId(payload) ?? "none"} · parent=${parentOpId ?? "none"}`
+          `Protocol ExtensionRefreshed · session=${extractSessionId(payload) ?? "none"} · parent=${parentOpId ?? "none"}`,
         );
         return true;
       case "SessionUpdated":
@@ -448,7 +473,7 @@ export class AnteSessionDriver implements AnteRuntime {
             availableModels:
               providerSpec && providerSpec.preferredModels.length > 0
                 ? providerSpec.preferredModels.map((model) => model.name)
-                : this.activeSessionDetails.availableModels
+                : this.activeSessionDetails.availableModels,
           };
         }
         this.lifecycle.handleSessionUpdated(emitDiagnosticLog);
@@ -460,7 +485,7 @@ export class AnteSessionDriver implements AnteRuntime {
           this.activeRun.observer.onEvent({
             type: "session.info",
             level: "info",
-            message: "Ante session updated"
+            message: "Ante session updated",
           });
         }
         return true;
@@ -483,26 +508,29 @@ export class AnteSessionDriver implements AnteRuntime {
       stream: "system",
       text: shouldReuseContext
         ? `Sending context reference · note=${request.context.filePath ?? "none"}`
-        : `Sending Markdown context · note=${request.context.filePath ?? "none"}`
+        : `Sending Markdown context · note=${request.context.filePath ?? "none"}`,
     });
 
     const prompt = buildInteractivePrompt(request);
     logDebug(
-      `prompt stats prompt=${prompt.length} chars doc=${request.context.documentText?.length ?? 0} chars selection=${request.context.selection?.text.length ?? 0} chars`
+      `prompt stats prompt=${prompt.length} chars doc=${request.context.documentText?.length ?? 0} chars selection=${request.context.selection?.text.length ?? 0} chars`,
     );
 
     const opId = this.sendOperation({
-      UserInput: prompt
+      UserInput: prompt,
     });
     if (this.activeRun) {
       this.activeRun.userInputOpId = opId;
       this.activeRun.userInputSentAtMs = performance.now();
-      emitDiagnosticLog(this.activeRun.observer, `Sent UserInput · op=${opId} · session=${this.lifecycle.getActiveSessionId() ?? "none"}`);
+      emitDiagnosticLog(
+        this.activeRun.observer,
+        `Sent UserInput · op=${opId} · session=${this.lifecycle.getActiveSessionId() ?? "none"}`,
+      );
     }
     const elapsed = Math.round(performance.now() - startedAt);
     if (elapsed >= 16) {
       logDebug(
-        `sendUserInput ${elapsed}ms file=${request.context.filePath ?? "none"} prompt=${prompt.length} chars doc=${request.context.documentText?.length ?? 0}`
+        `sendUserInput ${elapsed}ms file=${request.context.filePath ?? "none"} prompt=${prompt.length} chars doc=${request.context.documentText?.length ?? 0}`,
       );
     }
     this.lastSentContextFingerprint = fingerprint;
@@ -510,13 +538,25 @@ export class AnteSessionDriver implements AnteRuntime {
 
   private sendOperation(
     op:
-      | { StartSession: { model: string; provider: string; streaming: boolean; thinking: AnteRuntimeConfig["thinking"] } }
+      | {
+          StartSession: {
+            model: string;
+            provider: string;
+            streaming: boolean;
+            thinking: AnteRuntimeConfig["thinking"];
+          };
+        }
       | { ResumeSession: { session_id: string } }
       | { UpdateSession: { model: { name: string }; provider: string } }
       | { UserInput: string }
-      | { ApprovalResponse: { turn_id: string; responses: Array<[string, RuntimeApprovalDecision]> } }
+      | {
+          ApprovalResponse: {
+            turn_id: string;
+            responses: Array<[string, RuntimeApprovalDecision]>;
+          };
+        }
       | "Interrupt"
-      | "Shutdown"
+      | "Shutdown",
   ): string {
     const opId = generateOpId();
     this.lifecycle.send(serializeOperation(op, opId));
@@ -530,16 +570,16 @@ export class AnteSessionDriver implements AnteRuntime {
         model: config.model.trim(),
         provider: config.provider.trim(),
         streaming: true,
-        thinking: config.thinking
-      }
+        thinking: config.thinking,
+      },
     });
   }
 
   private beginResumeSession(targetSessionId: string): void {
     this.sendOperation({
       ResumeSession: {
-        session_id: targetSessionId
-      }
+        session_id: targetSessionId,
+      },
     });
   }
 
@@ -548,10 +588,10 @@ export class AnteSessionDriver implements AnteRuntime {
     this.sendOperation({
       UpdateSession: {
         model: {
-          name: config.model.trim()
+          name: config.model.trim(),
         },
-        provider: config.provider.trim()
-      }
+        provider: config.provider.trim(),
+      },
     });
   }
 
@@ -598,7 +638,7 @@ export class AnteSessionDriver implements AnteRuntime {
       filePath: request.context.filePath,
       noteTitle: request.context.noteTitle,
       documentText: request.context.documentText,
-      selection: request.context.selection
+      selection: request.context.selection,
     });
   }
 
@@ -610,9 +650,11 @@ export class AnteSessionDriver implements AnteRuntime {
     return this.resolveTargetConfig(request.runtimeTarget);
   }
 
-  private resolveTargetConfig(
-    target: { provider: string; model: string; thinking: AnteThinkingPreference }
-  ): AnteRuntimeConfig {
+  private resolveTargetConfig(target: {
+    provider: string;
+    model: string;
+    thinking: AnteThinkingPreference;
+  }): AnteRuntimeConfig {
     const config = this.getConfig();
     return {
       ...config,
@@ -621,14 +663,14 @@ export class AnteSessionDriver implements AnteRuntime {
       thinking:
         target.thinking === ANTE_DEFAULT_THINKING
           ? config.thinking
-          : resolveAnteThinkingPreference(target.thinking)
+          : resolveAnteThinkingPreference(target.thinking),
     };
   }
 
   private async ensureSessionTarget(
     request: TaskRequest,
     config: AnteRuntimeConfig,
-    observer: RuntimeObserver
+    observer: RuntimeObserver,
   ): Promise<void> {
     if (!request.runtimeTarget) {
       return;
@@ -643,7 +685,7 @@ export class AnteSessionDriver implements AnteRuntime {
     observer.onEvent({
       type: "log",
       stream: "system",
-      text: `Updating Ante session · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"}`
+      text: `Updating Ante session · provider=${config.provider.trim()} · model=${config.model.trim()} · thinking=${config.thinking ?? "default"}`,
     });
     await this.lifecycle.updateSession(config, observer, (nextConfig) => {
       this.beginUpdateSession(nextConfig);

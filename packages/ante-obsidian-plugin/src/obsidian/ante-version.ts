@@ -13,7 +13,10 @@ export const parseAnteVersionOutput = (stdout: string): string | null => {
   return normalized || null;
 };
 
-export const shouldOfferAnteUpdate = (localVersion: string | null, latestVersion: string | null): boolean => {
+export const shouldOfferAnteUpdate = (
+  localVersion: string | null,
+  latestVersion: string | null,
+): boolean => {
   if (!localVersion || !latestVersion) {
     return false;
   }
@@ -23,5 +26,5 @@ export const shouldOfferAnteUpdate = (localVersion: string | null, latestVersion
 export const __test__ = {
   normalizeAnteVersion,
   parseAnteVersionOutput,
-  shouldOfferAnteUpdate
+  shouldOfferAnteUpdate,
 };

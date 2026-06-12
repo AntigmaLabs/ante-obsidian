@@ -15,9 +15,14 @@ import {
   extractTurnPauseApproval,
   extractTurnStatus,
   extractUsage,
-  getVariant
+  getVariant,
 } from "../protocol/events";
-import { generateOpId, parseEnvelope, serializeOperation, type AnteOperation } from "../protocol/wire";
+import {
+  generateOpId,
+  parseEnvelope,
+  serializeOperation,
+  type AnteOperation,
+} from "../protocol/wire";
 
 export interface AnteClient {
   connect(): Promise<void>;
@@ -29,7 +34,9 @@ export interface AnteClient {
   shutdown(): void;
   close(): void;
   setMessageHandler(handler: (message: SDKMessage) => void): void;
-  setDoneHandler(handler: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void): void;
+  setDoneHandler(
+    handler: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void,
+  ): void;
   getSessionId(): string | null;
 }
 
@@ -37,19 +44,23 @@ export class AnteProtocolClient implements AnteClient {
   private readonly options: ResolvedOptions;
   private readonly transport: AnteTransport;
   private onMessage: (message: SDKMessage) => void = () => {};
-  private onDone: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void = () => {};
+  private onDone: (result: {
+    status: "completed" | "failed" | "cancelled";
+    error?: string;
+  }) => void = () => {};
   private sessionId: string | null = null;
   private finalText = "";
   private activeInputOpId: string | null = null;
-  private pendingSession:
-    | {
-        targetSessionId?: string;
-        resolve: (sessionId: string) => void;
-        reject: (error: Error) => void;
-      }
-    | null = null;
+  private pendingSession: {
+    targetSessionId?: string;
+    resolve: (sessionId: string) => void;
+    reject: (error: Error) => void;
+  } | null = null;
 
-  constructor(options: Options = {}, transportFactory: (options: ResolvedOptions) => AnteTransport = createTransport) {
+  constructor(
+    options: Options = {},
+    transportFactory: (options: ResolvedOptions) => AnteTransport = createTransport,
+  ) {
     this.options = resolveOptions(options);
     this.transport = transportFactory(this.options);
   }
@@ -58,7 +69,13 @@ export class AnteProtocolClient implements AnteClient {
     this.transport.setMessageHandler((line) => this.handleTransportMessage(line));
     this.transport.setDiagnosticHandler((event) => {
       this.options.stderr?.(event.text);
-      this.emit({ type: "system", subtype: "diagnostic", stream: event.stream, text: event.text, session_id: this.sessionId ?? undefined });
+      this.emit({
+        type: "system",
+        subtype: "diagnostic",
+        stream: event.stream,
+        text: event.text,
+        session_id: this.sessionId ?? undefined,
+      });
     });
     this.transport.setErrorHandler((error) => {
       this.rejectPendingSession(error);
@@ -92,8 +109,8 @@ export class AnteProtocolClient implements AnteClient {
         append_system_prompt: this.options.appendSystemPrompt,
         allowed_tools: this.options.allowedTools,
         disallowed_tools: this.options.disallowedTools,
-        cwd: this.options.cwd
-      }
+        cwd: this.options.cwd,
+      },
     });
     return this.createPendingSession();
   }
@@ -130,7 +147,9 @@ export class AnteProtocolClient implements AnteClient {
     this.onMessage = handler;
   }
 
-  setDoneHandler(handler: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void): void {
+  setDoneHandler(
+    handler: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void,
+  ): void {
     this.onDone = handler;
   }
 
@@ -147,7 +166,13 @@ export class AnteProtocolClient implements AnteClient {
   private handleTransportMessage(line: string): void {
     const envelope = parseEnvelope(line);
     if (!envelope) {
-      this.emit({ type: "system", subtype: "diagnostic", stream: "stdout", text: line, session_id: this.sessionId ?? undefined });
+      this.emit({
+        type: "system",
+        subtype: "diagnostic",
+        stream: "stdout",
+        text: line,
+        session_id: this.sessionId ?? undefined,
+      });
       return;
     }
 
@@ -155,7 +180,12 @@ export class AnteProtocolClient implements AnteClient {
     if (!variant) {
       return;
     }
-    if (!this.isLifecycleVariant(variant.name) && this.activeInputOpId && envelope.parent && envelope.parent !== this.activeInputOpId) {
+    if (
+      !this.isLifecycleVariant(variant.name) &&
+      this.activeInputOpId &&
+      envelope.parent &&
+      envelope.parent !== this.activeInputOpId
+    ) {
       return;
     }
     this.handleVariant(variant.name, variant.payload);
@@ -177,7 +207,7 @@ export class AnteProtocolClient implements AnteClient {
           provider: providerSpec?.name ?? this.options.provider,
           modelSpec: modelSpec ?? undefined,
           providerSpec: providerSpec ?? undefined,
-          permissionMode: this.options.permissionMode
+          permissionMode: this.options.permissionMode,
         });
         return;
       }
@@ -185,14 +215,22 @@ export class AnteProtocolClient implements AnteClient {
         const text = extractText(payload);
         if (text) {
           this.finalText += text;
-          this.emit({ type: "stream_event", event: { type: "text_delta", text }, session_id: this.sessionId ?? undefined });
+          this.emit({
+            type: "stream_event",
+            event: { type: "text_delta", text },
+            session_id: this.sessionId ?? undefined,
+          });
         }
         return;
       }
       case "ThinkingDelta": {
         const text = extractText(payload);
         if (text) {
-          this.emit({ type: "stream_event", event: { type: "thinking_delta", text }, session_id: this.sessionId ?? undefined });
+          this.emit({
+            type: "stream_event",
+            event: { type: "thinking_delta", text },
+            session_id: this.sessionId ?? undefined,
+          });
         }
         return;
       }
@@ -200,7 +238,11 @@ export class AnteProtocolClient implements AnteClient {
         const text = extractText(payload);
         if (text) {
           this.finalText = text;
-          this.emit({ type: "assistant", message: { content: [{ type: "text", text }] }, session_id: this.sessionId ?? undefined });
+          this.emit({
+            type: "assistant",
+            message: { content: [{ type: "text", text }] },
+            session_id: this.sessionId ?? undefined,
+          });
         }
         return;
       }
@@ -208,7 +250,12 @@ export class AnteProtocolClient implements AnteClient {
       case "ToolEnd": {
         const tool = extractToolCall(name, payload);
         if (tool) {
-          this.emit({ type: "tool", phase: name === "ToolStart" ? "start" : "end", tool, session_id: this.sessionId ?? undefined });
+          this.emit({
+            type: "tool",
+            phase: name === "ToolStart" ? "start" : "end",
+            tool,
+            session_id: this.sessionId ?? undefined,
+          });
           return;
         }
         const process = buildProcessLaneFromToolPayload(name, payload, undefined);
@@ -217,7 +264,7 @@ export class AnteProtocolClient implements AnteClient {
           subtype: "diagnostic",
           stream: "system",
           text: process?.label ?? `Ante ${name}`,
-          session_id: this.sessionId ?? undefined
+          session_id: this.sessionId ?? undefined,
         });
         return;
       }
@@ -229,13 +276,27 @@ export class AnteProtocolClient implements AnteClient {
         return;
       }
       case "UsageUpdate":
-        this.emit({ type: "usage", usage: extractUsage(payload), session_id: this.sessionId ?? undefined });
+        this.emit({
+          type: "usage",
+          usage: extractUsage(payload),
+          session_id: this.sessionId ?? undefined,
+        });
         return;
       case "CompactStart":
-        this.emit({ type: "system", subtype: "status", status: "compacting", session_id: this.sessionId ?? undefined });
+        this.emit({
+          type: "system",
+          subtype: "status",
+          status: "compacting",
+          session_id: this.sessionId ?? undefined,
+        });
         return;
       case "CompactEnd":
-        this.emit({ type: "system", subtype: "status", status: null, session_id: this.sessionId ?? undefined });
+        this.emit({
+          type: "system",
+          subtype: "status",
+          status: null,
+          session_id: this.sessionId ?? undefined,
+        });
         return;
       case "Info":
       case "Goodbye":
@@ -244,25 +305,41 @@ export class AnteProtocolClient implements AnteClient {
           subtype: "diagnostic",
           stream: "system",
           text: extractInfoMessage(payload) ?? name,
-          session_id: this.sessionId ?? undefined
+          session_id: this.sessionId ?? undefined,
         });
         return;
       case "Error": {
         const error = extractErrorMessage(payload);
-        this.emit({ type: "result", subtype: "error", error, session_id: this.sessionId ?? undefined });
+        this.emit({
+          type: "result",
+          subtype: "error",
+          error,
+          session_id: this.sessionId ?? undefined,
+        });
         this.rejectPendingSession(new Error(error));
         this.emitDone({ status: "failed", error });
         return;
       }
       case "TurnEnd": {
         const status = extractTurnStatus(payload)?.toLowerCase();
-        const interrupted = Boolean(status && ["interrupted", "cancelled", "canceled", "aborted"].includes(status));
+        const interrupted = Boolean(
+          status && ["interrupted", "cancelled", "canceled", "aborted"].includes(status),
+        );
         if (interrupted) {
-          this.emit({ type: "result", subtype: "cancelled", session_id: this.sessionId ?? undefined });
+          this.emit({
+            type: "result",
+            subtype: "cancelled",
+            session_id: this.sessionId ?? undefined,
+          });
           this.emitDone({ status: "cancelled" });
           return;
         }
-        this.emit({ type: "result", subtype: "success", result: this.finalText, session_id: this.sessionId ?? undefined });
+        this.emit({
+          type: "result",
+          subtype: "success",
+          result: this.finalText,
+          session_id: this.sessionId ?? undefined,
+        });
         this.emitDone({ status: "completed" });
         return;
       }
@@ -290,7 +367,7 @@ export class AnteProtocolClient implements AnteClient {
       this.pendingSession = {
         targetSessionId,
         resolve,
-        reject
+        reject,
       };
     });
   }

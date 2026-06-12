@@ -15,7 +15,9 @@ export interface PluginVersionCheckResult {
 export class PluginUpdater {
   constructor(private readonly currentVersion: string) {}
 
-  async checkForUpdate(releaseUrl = DEFAULT_UPDATE_CONFIG.pluginReleaseApiUrl): Promise<PluginVersionCheckResult> {
+  async checkForUpdate(
+    releaseUrl = DEFAULT_UPDATE_CONFIG.pluginReleaseApiUrl,
+  ): Promise<PluginVersionCheckResult> {
     const checkedAt = new Date().toISOString();
     try {
       const response = await requestUrl({
@@ -23,8 +25,8 @@ export class PluginUpdater {
         method: "GET",
         throw: false,
         headers: {
-          Accept: "application/vnd.github+json"
-        }
+          Accept: "application/vnd.github+json",
+        },
       });
 
       if (response.status < 200 || response.status >= 300) {
@@ -35,14 +37,15 @@ export class PluginUpdater {
             updateAvailable: false,
             sourceAvailable: false,
             checkedAt,
-            latestUrl: DEFAULT_UPDATE_CONFIG.pluginRepositoryUrl
+            latestUrl: DEFAULT_UPDATE_CONFIG.pluginRepositoryUrl,
           };
         }
         throw new Error(`Failed to fetch Ante Obsidian release info (${response.status})`);
       }
 
       const body = response.json as Record<string, unknown>;
-      const latestVersion = typeof body.tag_name === "string" ? normalizePluginVersion(body.tag_name) : "";
+      const latestVersion =
+        typeof body.tag_name === "string" ? normalizePluginVersion(body.tag_name) : "";
       if (!latestVersion) {
         throw new Error("Ante Obsidian release info missing tag_name");
       }
@@ -53,7 +56,7 @@ export class PluginUpdater {
         latestUrl: DEFAULT_UPDATE_CONFIG.pluginRepositoryUrl,
         sourceAvailable: true,
         updateAvailable: shouldOfferPluginUpdate(this.currentVersion, latestVersion),
-        checkedAt
+        checkedAt,
       };
     } catch (error) {
       return {
@@ -63,7 +66,7 @@ export class PluginUpdater {
         sourceAvailable: true,
         checkedAt,
         latestUrl: DEFAULT_UPDATE_CONFIG.pluginRepositoryUrl,
-        error: error instanceof Error ? error.message : "Failed to check Ante Obsidian updates"
+        error: error instanceof Error ? error.message : "Failed to check Ante Obsidian updates",
       };
     }
   }

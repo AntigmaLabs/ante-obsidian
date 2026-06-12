@@ -9,7 +9,7 @@ import {
   extractTurnPauseDetail,
   extractTurnStatus,
   extractUsage,
-  parseAssistantMessage
+  parseAssistantMessage,
 } from "./ante-event-parser";
 import { buildApprovalProcessLane, describeAutoApprovedTools } from "./ante-approval";
 import type { RuntimeObserver } from "./ante-runtime";
@@ -75,7 +75,7 @@ export const reduceRunVariant = ({
   interruptPending,
   nowMs,
   logDebug,
-  respondToApproval
+  respondToApproval,
 }: ReduceRunVariantInput): ReducedRunOutcome | null => {
   switch (variantName) {
     case "MessageDelta": {
@@ -97,7 +97,7 @@ export const reduceRunVariant = ({
       activeRun.observer.onEvent({
         type: "session.thinking",
         text: delta,
-        mode: "delta"
+        mode: "delta",
       });
       return null;
     }
@@ -109,7 +109,7 @@ export const reduceRunVariant = ({
       activeRun.observer.onEvent({
         type: "session.thinking",
         text,
-        mode: "full"
+        mode: "full",
       });
       return null;
     }
@@ -118,7 +118,9 @@ export const reduceRunVariant = ({
       if (!message.trim()) {
         return null;
       }
-      logDebug(`AgentMessage len=${message.length} preview=${JSON.stringify(previewText(message))}`);
+      logDebug(
+        `AgentMessage len=${message.length} preview=${JSON.stringify(previewText(message))}`,
+      );
       markFirstStdout(activeRun, nowMs);
       activeRun.finalMessage = message;
       activeRun.observer.onEvent({ type: "log", stream: "stdout", text: message });
@@ -136,7 +138,9 @@ export const reduceRunVariant = ({
         }
       }
       const process =
-        variantName === "TurnStart" ? undefined : buildProcessLaneFromToolPayload(variantName, payload, activeRun.processLane);
+        variantName === "TurnStart"
+          ? undefined
+          : buildProcessLaneFromToolPayload(variantName, payload, activeRun.processLane);
       if (process) {
         activeRun.processLane = process;
         activeRun.observer.onEvent({ type: "process.update", process });
@@ -145,7 +149,7 @@ export const reduceRunVariant = ({
         activeRun.observer.onEvent({
           type: "log",
           stream: "system",
-          text: detail ? `Ante ${variantName}: ${detail}` : `Ante ${variantName}`
+          text: detail ? `Ante ${variantName}: ${detail}` : `Ante ${variantName}`,
         });
       }
       return null;
@@ -165,7 +169,7 @@ export const reduceRunVariant = ({
         activeRun.observer.onEvent({
           type: "log",
           stream: "system",
-          text: detail ? `Ante ToolEnd: ${detail}` : "Ante ToolEnd"
+          text: detail ? `Ante ToolEnd: ${detail}` : "Ante ToolEnd",
         });
       }
       return null;
@@ -177,20 +181,20 @@ export const reduceRunVariant = ({
         activeRun.processLane = buildApprovalProcessLane(approval, activeRun.processLane?.steps);
         activeRun.observer.onEvent({
           type: "process.update",
-          process: activeRun.processLane
+          process: activeRun.processLane,
         });
         if (activeRun.autoApproveTools && !approvalHasFileEditingTools(approval)) {
           activeRun.observer.onEvent({
             type: "log",
             stream: "system",
-            text: describeAutoApprovedTools(approval)
+            text: describeAutoApprovedTools(approval),
           });
           respondToApproval(approval, "AcceptForSession");
           return null;
         }
         activeRun.observer.onEvent({
           type: "session.approval",
-          approval
+          approval,
         });
         return null;
       }
@@ -198,51 +202,57 @@ export const reduceRunVariant = ({
       activeRun.observer.onEvent({
         type: "log",
         stream: "system",
-        text: detail ? `Ante TurnPause: ${detail}` : "Ante TurnPause"
+        text: detail ? `Ante TurnPause: ${detail}` : "Ante TurnPause",
       });
       return null;
     }
     case "UsageUpdate":
       activeRun.observer.onEvent({
         type: "session.usage",
-        usage: extractUsage(payload)
+        usage: extractUsage(payload),
       });
       return null;
     case "CompactStart":
       activeRun.observer.onEvent({
         type: "session.compaction",
-        phase: "start"
+        phase: "start",
       });
       return null;
     case "CompactEnd":
       activeRun.observer.onEvent({
         type: "session.compaction",
-        phase: "end"
+        phase: "end",
       });
       return null;
     case "Info":
       activeRun.observer.onEvent({
         type: "session.info",
         level: "info",
-        message: extractInfoMessage(payload)
+        message: extractInfoMessage(payload),
       });
       return null;
     case "Goodbye":
       activeRun.observer.onEvent({
         type: "session.info",
         level: "goodbye",
-        message: extractInfoMessage(payload)
+        message: extractInfoMessage(payload),
       });
       return null;
     case "TurnEnd": {
       const status = extractTurnStatus(payload)?.toLowerCase();
       const errorMessage = extractErrorMessage(payload);
-      const isSuccess = Boolean(status && ["completed", "success", "succeeded", "ok"].includes(status));
-      const isInterrupted = Boolean(status && ["interrupted", "cancelled", "canceled", "aborted"].includes(status));
+      const isSuccess = Boolean(
+        status && ["completed", "success", "succeeded", "ok"].includes(status),
+      );
+      const isInterrupted = Boolean(
+        status && ["interrupted", "cancelled", "canceled", "aborted"].includes(status),
+      );
       const completedAtMs = nowMs();
       const totalMs = Math.round(completedAtMs - activeRun.startedAtMs);
       const sessionBootMs =
-        activeRun.sessionReadyAtMs != null ? Math.round(activeRun.sessionReadyAtMs - activeRun.startedAtMs) : null;
+        activeRun.sessionReadyAtMs != null
+          ? Math.round(activeRun.sessionReadyAtMs - activeRun.startedAtMs)
+          : null;
       const postSendToFirstEventMs =
         activeRun.userInputSentAtMs != null && activeRun.firstEventAtMs != null
           ? Math.round(activeRun.firstEventAtMs - activeRun.userInputSentAtMs)
@@ -252,7 +262,7 @@ export const reduceRunVariant = ({
           ? Math.round(activeRun.firstStdoutAtMs - activeRun.userInputSentAtMs)
           : null;
       logDebug(
-        `timing total=${totalMs}ms${sessionBootMs != null ? ` session=${sessionBootMs}ms` : ""}${postSendToFirstEventMs != null ? ` send->event=${postSendToFirstEventMs}ms` : ""}${postSendToFirstStdoutMs != null ? ` send->stdout=${postSendToFirstStdoutMs}ms` : ""}`
+        `timing total=${totalMs}ms${sessionBootMs != null ? ` session=${sessionBootMs}ms` : ""}${postSendToFirstEventMs != null ? ` send->event=${postSendToFirstEventMs}ms` : ""}${postSendToFirstStdoutMs != null ? ` send->stdout=${postSendToFirstStdoutMs}ms` : ""}`,
       );
       if (interruptPending && isInterrupted) {
         return { status: "cancelled" };
@@ -264,11 +274,11 @@ export const reduceRunVariant = ({
       }
       if (activeRun.finalMessage.trim()) {
         logDebug(
-          `TurnEnd finalMessage len=${activeRun.finalMessage.length} preview=${JSON.stringify(previewText(activeRun.finalMessage, 1000))}`
+          `TurnEnd finalMessage len=${activeRun.finalMessage.length} preview=${JSON.stringify(previewText(activeRun.finalMessage, 1000))}`,
         );
         const parsedEvents = parseAssistantMessage(activeRun.finalMessage);
         logDebug(
-          `TurnEnd parsedEvents count=${parsedEvents.length} types=${parsedEvents.map((event) => event.type).join(",") || "none"}`
+          `TurnEnd parsedEvents count=${parsedEvents.length} types=${parsedEvents.map((event) => event.type).join(",") || "none"}`,
         );
         for (const event of parsedEvents) {
           activeRun.observer.onEvent(event);

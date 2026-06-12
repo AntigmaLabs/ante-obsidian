@@ -5,7 +5,7 @@ import type {
   ProcessStep,
   ProviderSpec,
   ToolCall,
-  Usage
+  Usage,
 } from "../types";
 
 const getStringField = (value: unknown, keys: string[]): string | null => {
@@ -138,7 +138,12 @@ export const extractErrorMessage = (value: unknown): string => {
           return statusRecord.Failed;
         }
         if (statusRecord.Failed && typeof statusRecord.Failed === "object") {
-          const nested = findNestedStringField(statusRecord.Failed, ["message", "error", "description", "details"]);
+          const nested = findNestedStringField(statusRecord.Failed, [
+            "message",
+            "error",
+            "description",
+            "details",
+          ]);
           if (nested) {
             return nested;
           }
@@ -172,7 +177,7 @@ export const extractUsage = (value: unknown): Usage => {
       "input_tokens",
       "inputTokens",
       "prompt_token_count",
-      "input_token_count"
+      "input_token_count",
     ]),
     completionTokens: findNestedNumberField(value, [
       "completion_tokens",
@@ -180,14 +185,10 @@ export const extractUsage = (value: unknown): Usage => {
       "output_tokens",
       "outputTokens",
       "completion_token_count",
-      "output_token_count"
+      "output_token_count",
     ]),
-    totalTokens: findNestedNumberField(value, [
-      "total_tokens",
-      "totalTokens",
-      "total_token_count"
-    ]),
-    raw: value
+    totalTokens: findNestedNumberField(value, ["total_tokens", "totalTokens", "total_token_count"]),
+    raw: value,
   };
 };
 
@@ -216,31 +217,31 @@ export const extractTurnPauseApproval = (value: unknown): ApprovalRequest | null
   }
 
   const approvalRecord = approval as Record<string, unknown>;
-  const message = findNestedStringField(approvalRecord, ["message"]) ?? "Please approve the following tool calls";
-  const tools =
-    Array.isArray(approvalRecord.tools)
-      ? approvalRecord.tools.reduce<ApprovalRequest["tools"]>((all, tool) => {
-          if (!tool || typeof tool !== "object" || Array.isArray(tool)) {
-            return all;
-          }
-          const toolRecord = tool as Record<string, unknown>;
-          const name = typeof toolRecord.name === "string" ? toolRecord.name.trim() : "";
-          const id = typeof toolRecord.id === "string" ? toolRecord.id.trim() : "";
-          if (!id) {
-            return all;
-          }
-          const argsText =
-            toolRecord.args && typeof toolRecord.args === "object" && !Array.isArray(toolRecord.args)
-              ? JSON.stringify(toolRecord.args)
-              : undefined;
-          all.push({
-            id,
-            name: name || "Tool",
-            argsText
-          });
+  const message =
+    findNestedStringField(approvalRecord, ["message"]) ?? "Please approve the following tool calls";
+  const tools = Array.isArray(approvalRecord.tools)
+    ? approvalRecord.tools.reduce<ApprovalRequest["tools"]>((all, tool) => {
+        if (!tool || typeof tool !== "object" || Array.isArray(tool)) {
           return all;
-        }, [])
-      : [];
+        }
+        const toolRecord = tool as Record<string, unknown>;
+        const name = typeof toolRecord.name === "string" ? toolRecord.name.trim() : "";
+        const id = typeof toolRecord.id === "string" ? toolRecord.id.trim() : "";
+        if (!id) {
+          return all;
+        }
+        const argsText =
+          toolRecord.args && typeof toolRecord.args === "object" && !Array.isArray(toolRecord.args)
+            ? JSON.stringify(toolRecord.args)
+            : undefined;
+        all.push({
+          id,
+          name: name || "Tool",
+          argsText,
+        });
+        return all;
+      }, [])
+    : [];
 
   if (!turnId) {
     return null;
@@ -249,7 +250,7 @@ export const extractTurnPauseApproval = (value: unknown): ApprovalRequest | null
   return {
     turnId,
     message,
-    tools
+    tools,
   };
 };
 
@@ -273,7 +274,12 @@ const normalizeProcessStepStatus = (value: unknown): ProcessStep["status"] => {
   if (normalized === "completed" || normalized === "done") {
     return "completed";
   }
-  if (normalized === "in_progress" || normalized === "in-progress" || normalized === "active" || normalized === "running") {
+  if (
+    normalized === "in_progress" ||
+    normalized === "in-progress" ||
+    normalized === "active" ||
+    normalized === "running"
+  ) {
     return "in_progress";
   }
   return "pending";
@@ -289,7 +295,7 @@ const extractTodoSteps = (value: unknown): ProcessStep[] => {
     record.todos,
     record.args && typeof record.args === "object" && !Array.isArray(record.args)
       ? (record.args as Record<string, unknown>).todos
-      : undefined
+      : undefined,
   ];
 
   for (const candidate of candidates) {
@@ -302,7 +308,8 @@ const extractTodoSteps = (value: unknown): ProcessStep[] => {
       }
       const todo = entry as Record<string, unknown>;
       const labelCandidate = typeof todo.content === "string" ? todo.content.trim() : "";
-      const activeLabelCandidate = typeof todo.activeForm === "string" ? todo.activeForm.trim() : "";
+      const activeLabelCandidate =
+        typeof todo.activeForm === "string" ? todo.activeForm.trim() : "";
       const label = labelCandidate || activeLabelCandidate;
       if (!label) {
         return steps;
@@ -311,7 +318,7 @@ const extractTodoSteps = (value: unknown): ProcessStep[] => {
         id: typeof todo.id === "string" && todo.id.trim() ? todo.id.trim() : `todo-${index}`,
         label,
         activeLabel: activeLabelCandidate || undefined,
-        status: normalizeProcessStepStatus(todo.status)
+        status: normalizeProcessStepStatus(todo.status),
       });
       return steps;
     }, []);
@@ -323,7 +330,7 @@ const extractTodoSteps = (value: unknown): ProcessStep[] => {
 export const buildProcessLaneFromToolPayload = (
   eventName: "ToolStart" | "ToolUpdate" | "ToolEnd",
   payload: unknown,
-  current: ProcessLane | undefined
+  current: ProcessLane | undefined,
 ): ProcessLane | undefined => {
   const toolName = getStringField(payload, ["name", "tool_name"]) ?? current?.toolName;
   const todoSteps = extractTodoSteps(payload);
@@ -337,7 +344,7 @@ export const buildProcessLaneFromToolPayload = (
       phase: "planning",
       label: activeStep?.activeLabel ?? activeStep?.label ?? "Updating plan",
       toolName,
-      steps: todoSteps
+      steps: todoSteps,
     };
   }
 
@@ -353,13 +360,13 @@ export const buildProcessLaneFromToolPayload = (
     phase: "running",
     label: `Running ${toolName}`,
     toolName,
-    steps: current?.steps ?? []
+    steps: current?.steps ?? [],
   };
 };
 
 export const extractToolCall = (
   eventName: "ToolStart" | "ToolEnd",
-  payload: unknown
+  payload: unknown,
 ): ToolCall | null => {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null;
@@ -374,7 +381,9 @@ export const extractToolCall = (
 
   const name = getStringField(record, ["name", "tool_name"]) ?? "Tool";
   const argsText =
-    record.args && typeof record.args === "object" && !Array.isArray(record.args) ? JSON.stringify(record.args) : undefined;
+    record.args && typeof record.args === "object" && !Array.isArray(record.args)
+      ? JSON.stringify(record.args)
+      : undefined;
   const resultText =
     record.result_json == null
       ? undefined
@@ -391,11 +400,12 @@ export const extractToolCall = (
     argsText,
     resultText,
     status,
-    isError: record.is_error === true
+    isError: record.is_error === true,
   };
 };
 
-export const extractSessionId = (value: unknown): string | null => getStringField(value, ["session_id", "sessionId", "id"]);
+export const extractSessionId = (value: unknown): string | null =>
+  getStringField(value, ["session_id", "sessionId", "id"]);
 
 export const extractModelSpec = (value: unknown): ModelSpec | null => {
   if (typeof value === "string" && value.trim()) {
@@ -411,8 +421,14 @@ export const extractModelSpec = (value: unknown): ModelSpec | null => {
   }
   return {
     name,
-    description: typeof record.description === "string" && record.description.trim() ? record.description.trim() : undefined,
-    thinking: typeof record.thinking === "string" && record.thinking.trim() ? record.thinking.trim() : undefined
+    description:
+      typeof record.description === "string" && record.description.trim()
+        ? record.description.trim()
+        : undefined,
+    thinking:
+      typeof record.thinking === "string" && record.thinking.trim()
+        ? record.thinking.trim()
+        : undefined,
   };
 };
 
@@ -457,7 +473,7 @@ export const extractProviderSpec = (value: unknown): ProviderSpec | null => {
     preferredModels: rawModels.flatMap((entry) => {
       const model = extractModelSpec(entry);
       return model ? [model] : [];
-    })
+    }),
   };
 };
 
@@ -547,7 +563,7 @@ const extractTopLevelJsonObject = (value: string, startIndex = 0): string | null
       escaped = true;
       continue;
     }
-    if (char === "\"") {
+    if (char === '"') {
       inString = !inString;
       continue;
     }
@@ -597,7 +613,9 @@ const extractStructuredTextFallback = (message: string): string | null => {
   }
 };
 
-export const parseAssistantMessage = (message: string): Array<{ type: "result.text"; text: string }> => {
+export const parseAssistantMessage = (
+  message: string,
+): Array<{ type: "result.text"; text: string }> => {
   const parsed = parseJsonPayload(message);
   if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
     const record = parsed as Record<string, unknown>;

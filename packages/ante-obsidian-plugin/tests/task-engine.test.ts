@@ -10,7 +10,7 @@ import type {
   PresetId,
   RuntimeApprovalDecision,
   RuntimeEvent,
-  TaskRequest
+  TaskRequest,
 } from "../src/core/types";
 
 const context: ContextSnapshot = {
@@ -18,13 +18,15 @@ const context: ContextSnapshot = {
   filePath: "Note.md",
   noteTitle: "Note",
   documentText: "alpha\n",
-  selection: null
+  selection: null,
 };
 
 class RuntimeStub {
   public readonly approvals: Array<{ turnId: string; decision: RuntimeApprovalDecision }> = [];
 
-  constructor(private readonly emit: (request: TaskRequest, onEvent: (event: RuntimeEvent) => void) => void) {}
+  constructor(
+    private readonly emit: (request: TaskRequest, onEvent: (event: RuntimeEvent) => void) => void,
+  ) {}
 
   async ensureWarmSession(): Promise<void> {}
 
@@ -33,7 +35,7 @@ class RuntimeStub {
     observer: {
       onEvent: (event: RuntimeEvent) => void;
       onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
-    }
+    },
   ): void {
     this.emit(request, observer.onEvent);
     observer.onExit({ status: "completed" });
@@ -65,7 +67,7 @@ class CancelledRuntimeStub extends RuntimeStub {
     observer: {
       onEvent: (event: RuntimeEvent) => void;
       onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
-    }
+    },
   ): void {
     observer.onExit({ status: "cancelled" });
   }
@@ -77,7 +79,7 @@ class HangingRuntimeStub extends RuntimeStub {
     observer: {
       onEvent: (event: RuntimeEvent) => void;
       onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
-    }
+    },
   ): void {
     this.emit(request, observer.onEvent);
   }
@@ -140,7 +142,7 @@ test("stdout chunks are aggregated outside the visible log list", async () => {
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Stream text"
+    inlineInstruction: "Stream text",
   });
 
   const task = engine.getState().tasks[0];
@@ -163,7 +165,7 @@ test("stdout preview buffer is capped", async () => {
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Stream long text"
+    inlineInstruction: "Stream long text",
   });
 
   const task = engine.getState().tasks[0];
@@ -179,12 +181,17 @@ test("full process logs mode preserves complete stdout", async () => {
     onEvent({ type: "session.completed", summary: "done" });
   });
 
-  const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById, () => true);
+  const engine = new TaskEngine(
+    runtime as never,
+    new HostStub() as never,
+    resolvePresetById,
+    () => true,
+  );
   await engine.startDocumentTask({
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Stream long text"
+    inlineInstruction: "Stream long text",
   });
 
   const task = engine.getState().tasks[0];
@@ -226,19 +233,16 @@ test("queueChatTask forwards runtime target overrides", async () => {
   });
 
   const engine = new TaskEngine(runtime as never, new HostStub() as never, resolvePresetById);
-  await engine.queueChatTask(
-    "task-1",
-    "Use Gemini",
-    false,
-    context,
-    null,
-    { provider: "gemini", model: "gemini-3-flash-preview", thinking: "Deep" }
-  );
+  await engine.queueChatTask("task-1", "Use Gemini", false, context, null, {
+    provider: "gemini",
+    model: "gemini-3-flash-preview",
+    thinking: "Deep",
+  });
 
   assert.deepEqual(capturedRequest?.runtimeTarget, {
     provider: "gemini",
     model: "gemini-3-flash-preview",
-    thinking: "Deep"
+    thinking: "Deep",
   });
 });
 
@@ -251,7 +255,7 @@ test("startChatTask follow-up reuses the latest chat session id", async () => {
     onEvent({
       type: "runtime.session",
       provider: "ante",
-      sessionId: runCount === 1 ? "session-1" : "session-2"
+      sessionId: runCount === 1 ? "session-1" : "session-2",
     });
     onEvent({ type: "result.text", text: runCount === 1 ? "first" : "second" });
     onEvent({ type: "session.completed", summary: "done" });
@@ -280,7 +284,11 @@ test("hasActiveTask becomes false after task completion even when currentTaskId 
 });
 
 test("cancelled runtime exits are preserved as cancelled tasks instead of failed tasks", async () => {
-  const engine = new TaskEngine(new CancelledRuntimeStub() as never, new HostStub() as never, resolvePresetById);
+  const engine = new TaskEngine(
+    new CancelledRuntimeStub() as never,
+    new HostStub() as never,
+    resolvePresetById,
+  );
 
   await engine.startChatTask("stop this");
 
@@ -326,16 +334,16 @@ test("startDocumentTask accepts a custom preset resolved at runtime", async () =
           source: "custom",
           enabled: true,
           sortOrder: 4,
-          interactionMode: "inline"
+          interactionMode: "inline",
         }
-      : BUILTIN_PRESETS[presetId]
+      : BUILTIN_PRESETS[presetId],
   );
 
   await engine.startDocumentTask({
     presetId: "custom-1",
     triggerSource: "context-menu",
     context,
-    inlineInstruction: "Use the custom preset"
+    inlineInstruction: "Use the custom preset",
   });
 
   assert.equal(capturedRequest?.preset.id, "custom-1");
@@ -355,11 +363,11 @@ test("native Write approvals create applied diff artifacts from tool args", asyn
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
     onEvent({
       type: "session.tool",
@@ -369,8 +377,8 @@ test("native Write approvals create applied diff artifacts from tool args", asyn
         name: "Write",
         resultText: JSON.stringify({ lines_written: 2 }),
         status: "Completed",
-        isError: false
-      }
+        isError: false,
+      },
     });
     onEvent({ type: "session.completed", summary: "done" });
   });
@@ -380,7 +388,7 @@ test("native Write approvals create applied diff artifacts from tool args", asyn
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Add beta"
+    inlineInstruction: "Add beta",
   });
 
   const task = engine.getState().tasks[0];
@@ -408,11 +416,11 @@ test("native Edit approvals create preview diff artifacts before execution", asy
               file_path: "Note.md",
               old_string: "alpha\n",
               new_string: "alpha\nbeta\n",
-              replace_all: false
-            })
-          }
-        ]
-      }
+              replace_all: false,
+            }),
+          },
+        ],
+      },
     });
   });
 
@@ -421,7 +429,7 @@ test("native Edit approvals create preview diff artifacts before execution", asy
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Preview edit"
+    inlineInstruction: "Preview edit",
   });
 
   const task = engine.getState().tasks[0];
@@ -449,11 +457,11 @@ test("native file-edit approval pauses switch the task to awaiting-apply before 
               file_path: "Note.md",
               old_string: "alpha\n",
               new_string: "alpha\nbeta\n",
-              replace_all: false
-            })
-          }
-        ]
-      }
+              replace_all: false,
+            }),
+          },
+        ],
+      },
     });
   });
 
@@ -462,7 +470,7 @@ test("native file-edit approval pauses switch the task to awaiting-apply before 
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Preview edit"
+    inlineInstruction: "Preview edit",
   });
 
   const task = engine.getState().tasks.find((entry) => entry.id === taskId);
@@ -485,11 +493,11 @@ test("chat file-edit approvals are staged locally and auto-skipped in Ante", asy
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
     onEvent({ type: "session.completed", summary: "done" });
   });
@@ -524,27 +532,27 @@ test("chat file-edit approvals coalesce repeated writes to the same file", async
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
+              content: "alpha\nbeta\n",
+            }),
           },
           {
             id: "tool-write-chat-2",
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\ngamma\n"
-            })
+              content: "alpha\nbeta\ngamma\n",
+            }),
           },
           {
             id: "tool-write-chat-3",
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\ngamma\ndelta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\ngamma\ndelta\n",
+            }),
+          },
+        ],
+      },
     });
     onEvent({ type: "session.completed", summary: "done" });
   });
@@ -560,7 +568,10 @@ test("chat file-edit approvals coalesce repeated writes to the same file", async
   assert.equal(task?.artifacts[0]?.runtimeToolId, "tool-write-chat-3");
   assert.equal(task?.artifacts[0]?.runtimeMode, "staged-preview");
   assert.equal(await readFsFile(task!.artifacts[0]!.baselinePath!, "utf8"), "alpha\n");
-  assert.equal(await readFsFile(task!.artifacts[0]!.stagedPath!, "utf8"), "alpha\nbeta\ngamma\ndelta\n");
+  assert.equal(
+    await readFsFile(task!.artifacts[0]!.stagedPath!, "utf8"),
+    "alpha\nbeta\ngamma\ndelta\n",
+  );
 });
 
 test("chat file previews ignore no-op write records for the same file", async () => {
@@ -573,9 +584,9 @@ test("chat file previews ignore no-op write records for the same file", async ()
         name: "Write",
         argsText: JSON.stringify({
           file_path: "Note.md",
-          content: "alpha\n"
-        })
-      }
+          content: "alpha\n",
+        }),
+      },
     });
     onEvent({
       type: "session.tool",
@@ -585,8 +596,8 @@ test("chat file previews ignore no-op write records for the same file", async ()
         name: "Write",
         resultText: JSON.stringify({ lines_written: 1 }),
         status: "Completed",
-        isError: false
-      }
+        isError: false,
+      },
     });
     onEvent({
       type: "session.approval",
@@ -599,11 +610,11 @@ test("chat file previews ignore no-op write records for the same file", async ()
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
     onEvent({ type: "session.completed", summary: "done" });
   });
@@ -633,11 +644,11 @@ test("chat file previews coalesce later same-file changes after a completed tool
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
     onEvent({
       type: "session.tool",
@@ -647,8 +658,8 @@ test("chat file previews coalesce later same-file changes after a completed tool
         name: "Write",
         resultText: JSON.stringify({ lines_written: 2 }),
         status: "Completed",
-        isError: false
-      }
+        isError: false,
+      },
     });
     onEvent({
       type: "session.approval",
@@ -661,11 +672,11 @@ test("chat file previews coalesce later same-file changes after a completed tool
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\ngamma\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\ngamma\n",
+            }),
+          },
+        ],
+      },
     });
     onEvent({ type: "session.completed", summary: "done" });
   });
@@ -696,11 +707,11 @@ test("applying a staged chat preview cleans up its temp directory", async () => 
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
     onEvent({ type: "session.completed", summary: "done" });
   });
@@ -738,11 +749,11 @@ test("discarding a staged chat preview cleans up its temp directory", async () =
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
     onEvent({ type: "session.completed", summary: "done" });
   });
@@ -778,11 +789,11 @@ test("clearing chat tasks cleans up staged preview temp directories", async () =
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
     onEvent({ type: "session.completed", summary: "done" });
   });
@@ -815,9 +826,9 @@ test("native Edit tools create artifacts from file snapshots on tool end", async
         argsText: JSON.stringify({
           file_path: path,
           old_string: "alpha\n",
-          new_string: "alpha\nbeta\n"
-        })
-      }
+          new_string: "alpha\nbeta\n",
+        }),
+      },
     });
     host.setFile(path, "alpha\nbeta\n");
     onEvent({
@@ -828,8 +839,8 @@ test("native Edit tools create artifacts from file snapshots on tool end", async
         name: "Tool",
         resultText: JSON.stringify({ patch: { lines: ["+beta"] } }),
         status: "Completed",
-        isError: false
-      }
+        isError: false,
+      },
     });
     onEvent({ type: "session.completed", summary: "done" });
   });
@@ -839,7 +850,7 @@ test("native Edit tools create artifacts from file snapshots on tool end", async
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Add beta with edit"
+    inlineInstruction: "Add beta with edit",
   });
 
   const task = engine.getState().tasks[0];
@@ -865,9 +876,9 @@ test("completed observed same-file edits remain separate artifacts", async () =>
           argsText: JSON.stringify({
             file_path: path,
             old_string: "alpha\n",
-            new_string: "alpha\nbeta\n"
-          })
-        }
+            new_string: "alpha\nbeta\n",
+          }),
+        },
       });
       await Promise.resolve();
       host.setFile(path, "alpha\nbeta\n");
@@ -879,8 +890,8 @@ test("completed observed same-file edits remain separate artifacts", async () =>
           name: "Tool",
           resultText: JSON.stringify({ patch: { lines: ["+beta"] } }),
           status: "Completed",
-          isError: false
-        }
+          isError: false,
+        },
       });
       await Promise.resolve();
       onEvent({
@@ -892,9 +903,9 @@ test("completed observed same-file edits remain separate artifacts", async () =>
           argsText: JSON.stringify({
             file_path: path,
             old_string: "alpha\nbeta\n",
-            new_string: "alpha\nbeta\ngamma\n"
-          })
-        }
+            new_string: "alpha\nbeta\ngamma\n",
+          }),
+        },
       });
       await Promise.resolve();
       host.setFile(path, "alpha\nbeta\ngamma\n");
@@ -906,8 +917,8 @@ test("completed observed same-file edits remain separate artifacts", async () =>
           name: "Tool",
           resultText: JSON.stringify({ patch: { lines: ["+gamma"] } }),
           status: "Completed",
-          isError: false
-        }
+          isError: false,
+        },
       });
       await Promise.resolve();
       onEvent({ type: "session.completed", summary: "done" });
@@ -919,7 +930,7 @@ test("completed observed same-file edits remain separate artifacts", async () =>
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Add beta and gamma with edits"
+    inlineInstruction: "Add beta and gamma with edits",
   });
   await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -946,9 +957,9 @@ test("failed Edit followed by successful Write only keeps the successful diff ar
           file_path: path,
           old_string: "alpha\n",
           new_string: "alpha\nbeta\n",
-          replace_all: false
-        })
-      }
+          replace_all: false,
+        }),
+      },
     });
     onEvent({
       type: "session.tool",
@@ -958,8 +969,8 @@ test("failed Edit followed by successful Write only keeps the successful diff ar
         name: "Tool",
         resultText: "old_string found 2 times",
         status: "Failed",
-        isError: true
-      }
+        isError: true,
+      },
     });
     onEvent({
       type: "session.approval",
@@ -972,11 +983,11 @@ test("failed Edit followed by successful Write only keeps the successful diff ar
             name: "Write",
             argsText: JSON.stringify({
               file_path: path,
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
     host.setFile(path, "alpha\nbeta\n");
     onEvent({
@@ -987,8 +998,8 @@ test("failed Edit followed by successful Write only keeps the successful diff ar
         name: "Write",
         resultText: JSON.stringify({ lines_written: 2 }),
         status: "Completed",
-        isError: false
-      }
+        isError: false,
+      },
     });
     onEvent({ type: "session.completed", summary: "done" });
   });
@@ -998,7 +1009,7 @@ test("failed Edit followed by successful Write only keeps the successful diff ar
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Add beta even if edit fallback is needed"
+    inlineInstruction: "Add beta even if edit fallback is needed",
   });
 
   const task = engine.getState().tasks[0];
@@ -1024,11 +1035,11 @@ test("applying an approval-backed native Write artifact modifies the host and sk
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
   });
   const host = new HostStub();
@@ -1038,7 +1049,7 @@ test("applying an approval-backed native Write artifact modifies the host and sk
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Preview beta"
+    inlineInstruction: "Preview beta",
   });
 
   const task = engine.getState().tasks[0];
@@ -1058,12 +1069,10 @@ test("applying an approval-backed native Write artifact modifies the host and sk
 });
 
 test("skipped-by-user ToolEnd does not overwrite a locally applied native artifact as failed", async () => {
-  let observerRef:
-    | {
-        onEvent: (event: RuntimeEvent) => void;
-        onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
-      }
-    | null = null;
+  let observerRef: {
+    onEvent: (event: RuntimeEvent) => void;
+    onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+  } | null = null;
 
   const runtime = new RuntimeStub((_request, onEvent) => {
     onEvent({
@@ -1077,11 +1086,11 @@ test("skipped-by-user ToolEnd does not overwrite a locally applied native artifa
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
   });
 
@@ -1090,7 +1099,7 @@ test("skipped-by-user ToolEnd does not overwrite a locally applied native artifa
     observer: {
       onEvent: (event: RuntimeEvent) => void;
       onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
-    }
+    },
   ): void => {
     observerRef = observer;
     runtime["emit"](request, observer.onEvent);
@@ -1102,7 +1111,7 @@ test("skipped-by-user ToolEnd does not overwrite a locally applied native artifa
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Preview beta"
+    inlineInstruction: "Preview beta",
   });
 
   const task = engine.getState().tasks[0];
@@ -1117,8 +1126,8 @@ test("skipped-by-user ToolEnd does not overwrite a locally applied native artifa
       name: "Write",
       resultText: "Tool call skipped by user, and was not executed.",
       status: "Skipped",
-      isError: true
-    }
+      isError: true,
+    },
   });
 
   const updatedTask = engine.getState().tasks[0];
@@ -1128,12 +1137,10 @@ test("skipped-by-user ToolEnd does not overwrite a locally applied native artifa
 });
 
 test("skipped-by-user ToolEnd does not overwrite a staged chat preview artifact as failed", async () => {
-  let observerRef:
-    | {
-        onEvent: (event: RuntimeEvent) => void;
-        onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
-      }
-    | null = null;
+  let observerRef: {
+    onEvent: (event: RuntimeEvent) => void;
+    onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+  } | null = null;
 
   const runtime = new RuntimeStub((_request, onEvent) => {
     onEvent({
@@ -1147,11 +1154,11 @@ test("skipped-by-user ToolEnd does not overwrite a staged chat preview artifact 
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
   });
 
@@ -1160,7 +1167,7 @@ test("skipped-by-user ToolEnd does not overwrite a staged chat preview artifact 
     observer: {
       onEvent: (event: RuntimeEvent) => void;
       onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
-    }
+    },
   ): void => {
     observerRef = observer;
     runtime["emit"](request, observer.onEvent);
@@ -1177,8 +1184,8 @@ test("skipped-by-user ToolEnd does not overwrite a staged chat preview artifact 
       name: "Tool",
       resultText: "Tool call skipped by user, and was not executed.",
       status: "Skipped",
-      isError: true
-    }
+      isError: true,
+    },
   });
 
   const task = engine.getState().tasks[0];
@@ -1188,12 +1195,10 @@ test("skipped-by-user ToolEnd does not overwrite a staged chat preview artifact 
 });
 
 test("observed same-file tool artifacts replace staged previews and clean temp files", async () => {
-  let observerRef:
-    | {
-        onEvent: (event: RuntimeEvent) => void;
-        onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
-      }
-    | null = null;
+  let observerRef: {
+    onEvent: (event: RuntimeEvent) => void;
+    onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+  } | null = null;
   const host = new MutableHostStub({ "Note.md": "alpha\n" });
   const runtime = new RuntimeStub((_request, onEvent) => {
     onEvent({
@@ -1207,11 +1212,11 @@ test("observed same-file tool artifacts replace staged previews and clean temp f
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
   });
 
@@ -1220,7 +1225,7 @@ test("observed same-file tool artifacts replace staged previews and clean temp f
     observer: {
       onEvent: (event: RuntimeEvent) => void;
       onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
-    }
+    },
   ): void => {
     observerRef = observer;
     runtime["emit"](request, observer.onEvent);
@@ -1242,9 +1247,9 @@ test("observed same-file tool artifacts replace staged previews and clean temp f
       argsText: JSON.stringify({
         file_path: "Note.md",
         old_string: "alpha\n",
-        new_string: "alpha\nbeta\ngamma\n"
-      })
-    }
+        new_string: "alpha\nbeta\ngamma\n",
+      }),
+    },
   });
   host.setFile("Note.md", "alpha\nbeta\ngamma\n");
   observerRef?.onEvent({
@@ -1254,8 +1259,8 @@ test("observed same-file tool artifacts replace staged previews and clean temp f
       id: "tool-edit-observed-1",
       name: "Tool",
       status: "Completed",
-      isError: false
-    }
+      isError: false,
+    },
   });
   await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -1269,12 +1274,10 @@ test("observed same-file tool artifacts replace staged previews and clean temp f
 });
 
 test("skipped-by-user ToolEnd does not overwrite a discarded native artifact as failed", async () => {
-  let observerRef:
-    | {
-        onEvent: (event: RuntimeEvent) => void;
-        onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
-      }
-    | null = null;
+  let observerRef: {
+    onEvent: (event: RuntimeEvent) => void;
+    onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
+  } | null = null;
 
   const runtime = new RuntimeStub((_request, onEvent) => {
     onEvent({
@@ -1288,11 +1291,11 @@ test("skipped-by-user ToolEnd does not overwrite a discarded native artifact as 
             name: "Write",
             argsText: JSON.stringify({
               file_path: "Note.md",
-              content: "alpha\nbeta\n"
-            })
-          }
-        ]
-      }
+              content: "alpha\nbeta\n",
+            }),
+          },
+        ],
+      },
     });
   });
 
@@ -1301,7 +1304,7 @@ test("skipped-by-user ToolEnd does not overwrite a discarded native artifact as 
     observer: {
       onEvent: (event: RuntimeEvent) => void;
       onExit: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void;
-    }
+    },
   ): void => {
     observerRef = observer;
     runtime["emit"](request, observer.onEvent);
@@ -1312,7 +1315,7 @@ test("skipped-by-user ToolEnd does not overwrite a discarded native artifact as 
     presetId: "default",
     triggerSource: "mention",
     context,
-    inlineInstruction: "Preview beta"
+    inlineInstruction: "Preview beta",
   });
 
   const task = engine.getState().tasks[0];
@@ -1327,8 +1330,8 @@ test("skipped-by-user ToolEnd does not overwrite a discarded native artifact as 
       name: "Tool",
       resultText: "Tool call skipped by user, and was not executed.",
       status: "Skipped",
-      isError: true
-    }
+      isError: true,
+    },
   });
 
   const updatedTask = engine.getState().tasks[0];

@@ -46,7 +46,7 @@ export const createTransport = (options: ResolvedOptions): AnteTransport => {
       args: ensureWebSocketArgs(options.anteArgs, normalizeWsListenAddress(options.wsAddress)),
       cwd: options.cwd,
       env: options.env,
-      address: options.wsAddress
+      address: options.wsAddress,
     });
   }
 
@@ -54,6 +54,6 @@ export const createTransport = (options: ResolvedOptions): AnteTransport => {
     command: options.pathToAnteExecutable,
     args: ensureStdioArgs(options.anteArgs),
     cwd: options.cwd,
-    env: options.env
+    env: options.env,
   });
 };

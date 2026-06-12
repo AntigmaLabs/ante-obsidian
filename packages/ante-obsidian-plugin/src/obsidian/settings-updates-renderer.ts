@@ -11,9 +11,10 @@ const quoteShellArg = (value: string): string => `'${value.replace(/'/g, `'\\''`
 
 const runShellCommand = (command: string): Promise<string> =>
   new Promise((resolve, reject) => {
-    const shellPath = (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
+    const shellPath =
+      (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
     const child = spawn(shellPath, ["-lc", command], {
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
     });
 
     let stdout = "";
@@ -47,14 +48,14 @@ export class SettingsUpdatesRenderer {
 
   constructor(
     private readonly pluginRef: TmdPlugin,
-    private readonly onStateChanged: () => void
+    private readonly onStateChanged: () => void,
   ) {}
 
   render(containerEl: HTMLElement): void {
     const sectionEl = containerEl.createDiv({ cls: "tmd-updates-section is-active" });
     sectionEl.createEl("p", {
       text: "Check plugin and local runtime update status.",
-      cls: "tmd-ante-update-summary"
+      cls: "tmd-ante-update-summary",
     });
 
     const listEl = sectionEl.createDiv({ cls: "tmd-updates-list" });
@@ -83,15 +84,18 @@ export class SettingsUpdatesRenderer {
     const headerEl = bodyEl.createDiv({ cls: "tmd-update-item-header" });
     const titleRowEl = headerEl.createDiv({ cls: "tmd-update-item-title-row" });
     titleRowEl.createSpan({ cls: "tmd-update-item-title", text: "Ante Obsidian" });
-    titleRowEl.createSpan({ cls: "tmd-update-item-status", text: this.getPluginUpdateStatusLabel() });
+    titleRowEl.createSpan({
+      cls: "tmd-update-item-status",
+      text: this.getPluginUpdateStatusLabel(),
+    });
 
     bodyEl.createDiv({
       cls: "tmd-update-item-summary",
-      text: this.getPluginUpdateSummary()
+      text: this.getPluginUpdateSummary(),
     });
     bodyEl.createDiv({
       cls: "tmd-update-item-meta",
-      text: this.getPluginUpdateMeta()
+      text: this.getPluginUpdateMeta(),
     });
 
     const actionsEl = itemEl.createDiv({ cls: "tmd-update-item-actions" });
@@ -100,7 +104,7 @@ export class SettingsUpdatesRenderer {
     this.decorateAnteActionButton(
       checkButton,
       this.checkingPluginVersion || this.installingPlugin ? "loader-circle" : "refresh-cw",
-      this.checkingPluginVersion ? "Checking" : "Check"
+      this.checkingPluginVersion ? "Checking" : "Check",
     );
     checkButton.disabled = this.checkingPluginVersion || this.installingPlugin;
     checkButton.addEventListener("click", () => {
@@ -109,7 +113,7 @@ export class SettingsUpdatesRenderer {
 
     if (this.pluginVersionState?.latestUrl) {
       const openButton = actionsEl.createEl("button", {
-        cls: this.pluginVersionState.updateAvailable ? "mod-cta" : ""
+        cls: this.pluginVersionState.updateAvailable ? "mod-cta" : "",
       });
       openButton.addClass("tmd-update-item-button");
       this.decorateAnteActionButton(openButton, "external-link", "Repo");
@@ -120,25 +124,27 @@ export class SettingsUpdatesRenderer {
 
     if (this.pluginVersionState?.updateAvailable) {
       const adapter = this.pluginRef.app.vault.adapter;
-      const vaultPath = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : "/path/to/your/vault";
+      const vaultPath =
+        adapter instanceof FileSystemAdapter ? adapter.getBasePath() : "/path/to/your/vault";
       const installScript = this.buildPluginInstallCommand(vaultPath);
 
       const scriptContainer = itemEl.createDiv({ cls: "tmd-update-script-container" });
-      scriptContainer.createEl("div", { 
-        text: "Install the update directly, or run this command in your terminal:", 
-        cls: "tmd-update-script-label" 
+      scriptContainer.createEl("div", {
+        text: "Install the update directly, or run this command in your terminal:",
+        cls: "tmd-update-script-label",
       });
 
       const rowEl = scriptContainer.createDiv({ cls: "tmd-update-script-row" });
       const codeBlock = rowEl.createEl("pre", { cls: "tmd-update-script-code" });
       codeBlock.createEl("code", { text: installScript });
 
-      const copyBtn = rowEl.createEl("button", { 
-        text: "Copy command", 
-        cls: "tmd-update-script-copy-btn" 
+      const copyBtn = rowEl.createEl("button", {
+        text: "Copy command",
+        cls: "tmd-update-script-copy-btn",
       });
       copyBtn.addEventListener("click", () => {
-        navigator.clipboard.writeText(installScript)
+        navigator.clipboard
+          .writeText(installScript)
           .then(() => {
             new Notice("Plugin update command copied to clipboard!");
           })
@@ -149,7 +155,7 @@ export class SettingsUpdatesRenderer {
 
       const installBtn = rowEl.createEl("button", {
         text: this.installingPlugin ? "Installing" : "Install",
-        cls: "tmd-update-script-copy-btn tmd-update-script-install-btn mod-cta"
+        cls: "tmd-update-script-copy-btn tmd-update-script-install-btn mod-cta",
       });
       installBtn.disabled = this.installingPlugin || this.checkingPluginVersion;
       installBtn.addEventListener("click", () => {
@@ -175,11 +181,11 @@ export class SettingsUpdatesRenderer {
 
     bodyEl.createDiv({
       cls: "tmd-update-item-summary",
-      text: this.getAnteUpdateSummary()
+      text: this.getAnteUpdateSummary(),
     });
     bodyEl.createDiv({
       cls: "tmd-update-item-meta",
-      text: this.getAnteUpdateMeta()
+      text: this.getAnteUpdateMeta(),
     });
 
     const actionsEl = itemEl.createDiv({ cls: "tmd-update-item-actions" });
@@ -188,21 +194,30 @@ export class SettingsUpdatesRenderer {
     this.decorateAnteActionButton(
       checkButton,
       this.checkingAnteVersion ? "loader-circle" : "refresh-cw",
-      this.checkingAnteVersion ? "Checking" : "Check"
+      this.checkingAnteVersion ? "Checking" : "Check",
     );
     checkButton.disabled = this.checkingAnteVersion || this.upgradingAnte;
     checkButton.addEventListener("click", () => {
       void this.refreshAnteVersionState();
     });
 
-    if (this.anteVersionState?.updateAvailable || (!this.anteVersionState?.localVersion && !!this.anteVersionState?.latestVersion)) {
+    if (
+      this.anteVersionState?.updateAvailable ||
+      (!this.anteVersionState?.localVersion && !!this.anteVersionState?.latestVersion)
+    ) {
       const upgradeButton = actionsEl.createEl("button", { cls: "mod-cta" });
       upgradeButton.addClass("tmd-update-item-button");
       const isUpdate = !!this.anteVersionState?.localVersion;
       this.decorateAnteActionButton(
         upgradeButton,
         this.upgradingAnte ? "loader-circle" : isUpdate ? "arrow-up-circle" : "download",
-        this.upgradingAnte ? (isUpdate ? "Updating" : "Installing") : isUpdate ? "Update" : "Install"
+        this.upgradingAnte
+          ? isUpdate
+            ? "Updating"
+            : "Installing"
+          : isUpdate
+            ? "Update"
+            : "Install",
       );
       upgradeButton.disabled = this.checkingAnteVersion || this.upgradingAnte;
       upgradeButton.addEventListener("click", () => {
@@ -213,7 +228,9 @@ export class SettingsUpdatesRenderer {
 
   private renderObsidianCliItem(containerEl: HTMLElement): void {
     const cliStatus = this.pluginRef.getObsidianCliStatus();
-    const itemEl = containerEl.createDiv({ cls: `tmd-update-item ${this.getObsidianCliStatusTone()}` });
+    const itemEl = containerEl.createDiv({
+      cls: `tmd-update-item ${this.getObsidianCliStatusTone()}`,
+    });
     const iconEl = itemEl.createDiv({ cls: "tmd-update-item-icon" });
     setIcon(iconEl, this.getObsidianCliStatusIcon());
 
@@ -221,26 +238,37 @@ export class SettingsUpdatesRenderer {
     const headerEl = bodyEl.createDiv({ cls: "tmd-update-item-header" });
     const titleRowEl = headerEl.createDiv({ cls: "tmd-update-item-title-row" });
     titleRowEl.createSpan({ cls: "tmd-update-item-title", text: "Obsidian CLI" });
-    titleRowEl.createSpan({ cls: "tmd-update-item-status", text: this.getObsidianCliStatusLabel() });
+    titleRowEl.createSpan({
+      cls: "tmd-update-item-status",
+      text: this.getObsidianCliStatusLabel(),
+    });
 
     bodyEl.createDiv({
       cls: "tmd-update-item-summary",
-      text: this.getObsidianCliSummary()
+      text: this.getObsidianCliSummary(),
     });
     bodyEl.createDiv({
       cls: "tmd-update-item-meta",
-      text: this.getObsidianCliMeta()
+      text: this.getObsidianCliMeta(),
     });
 
     const actionsEl = itemEl.createDiv({ cls: "tmd-update-item-actions" });
     const toggleButton = actionsEl.createEl("button", {
-      cls: cliStatus.available && this.pluginRef.settings.allowObsidianCli ? "mod-cta" : ""
+      cls: cliStatus.available && this.pluginRef.settings.allowObsidianCli ? "mod-cta" : "",
     });
     toggleButton.addClass("tmd-update-item-button");
     this.decorateAnteActionButton(
       toggleButton,
-      cliStatus.available ? (this.pluginRef.settings.allowObsidianCli ? "toggle-right" : "toggle-left") : "circle-slash",
-      cliStatus.available ? (this.pluginRef.settings.allowObsidianCli ? "Enabled" : "Disabled") : "Unavailable"
+      cliStatus.available
+        ? this.pluginRef.settings.allowObsidianCli
+          ? "toggle-right"
+          : "toggle-left"
+        : "circle-slash",
+      cliStatus.available
+        ? this.pluginRef.settings.allowObsidianCli
+          ? "Enabled"
+          : "Disabled"
+        : "Unavailable",
     );
     toggleButton.disabled = !cliStatus.available;
     toggleButton.addEventListener("click", () => {
@@ -482,7 +510,8 @@ export class SettingsUpdatesRenderer {
   }
 
   private getPluginUpdateMeta(): string {
-    const currentVersion = this.pluginVersionState?.currentVersion ?? this.pluginRef.manifest.version;
+    const currentVersion =
+      this.pluginVersionState?.currentVersion ?? this.pluginRef.manifest.version;
     if (this.pluginVersionState?.latestVersion) {
       return `Current ${currentVersion}  ->  Latest ${this.pluginVersionState.latestVersion}`;
     }
@@ -562,7 +591,7 @@ export class SettingsUpdatesRenderer {
     const confirmed = await showConfirmDialog(this.pluginRef.app, {
       title: "Update plugin files",
       message: `This will run the Ante Obsidian installer and update this vault's plugin files.\n\n${installCommand}`,
-      confirmText: "Continue"
+      confirmText: "Continue",
     });
     if (!confirmed) {
       return;
@@ -573,7 +602,10 @@ export class SettingsUpdatesRenderer {
     try {
       await runShellCommand(installCommand);
       this.pluginVersionState = await this.pluginRef.pluginUpdater.checkForUpdate();
-      new Notice("Ante Obsidian update installed. Reload community plugins or restart Obsidian to use it.", 12000);
+      new Notice(
+        "Ante Obsidian update installed. Reload community plugins or restart Obsidian to use it.",
+        12000,
+      );
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Plugin update install failed", 12000);
     } finally {
@@ -594,7 +626,7 @@ export class SettingsUpdatesRenderer {
     const confirmed = await showConfirmDialog(this.pluginRef.app, {
       title: isUpdate ? "Update Ante CLI" : "Install Ante CLI",
       message: confirmMessage,
-      confirmText: "Continue"
+      confirmText: "Continue",
     });
     if (!confirmed) {
       return;
@@ -613,7 +645,7 @@ export class SettingsUpdatesRenderer {
       new Notice(
         this.anteVersionState.localVersion
           ? `Ante ${isUpdate ? "updated" : "installed"} to ${this.anteVersionState.localVersion}`
-          : `Ante ${isUpdate ? "update" : "install"} completed`
+          : `Ante ${isUpdate ? "update" : "install"} completed`,
       );
     } catch (error) {
       const actionName = isUpdate ? "update" : "install";
@@ -623,7 +655,7 @@ export class SettingsUpdatesRenderer {
         latestVersion: this.anteVersionState?.latestVersion ?? null,
         updateAvailable: this.anteVersionState?.updateAvailable ?? false,
         checkedAt: new Date().toISOString(),
-        error: message
+        error: message,
       };
       new Notice(message);
     } finally {

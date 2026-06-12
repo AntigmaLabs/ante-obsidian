@@ -1,39 +1,34 @@
-import {
-  shouldHandlePromptEnter,
-  shouldStopFromPromptShortcut,
-} from "../core/terminal-input"
+import { shouldHandlePromptEnter, shouldStopFromPromptShortcut } from "../core/terminal-input";
 
 export interface TerminalPromptWiringOptions {
-  editorEl: HTMLDivElement
-  stopButtonEl: HTMLButtonElement
-  getEditorText: () => string
-  getIsComposing: () => boolean
-  setIsComposing: (value: boolean) => void
-  getHasRunningTask: () => boolean
-  onDraftChange: (text: string) => void
-  onStop: () => void
-  onSubmit: () => void
-  onNavigateHistory: (direction: "up" | "down") => void
+  editorEl: HTMLDivElement;
+  stopButtonEl: HTMLButtonElement;
+  getEditorText: () => string;
+  getIsComposing: () => boolean;
+  setIsComposing: (value: boolean) => void;
+  getHasRunningTask: () => boolean;
+  onDraftChange: (text: string) => void;
+  onStop: () => void;
+  onSubmit: () => void;
+  onNavigateHistory: (direction: "up" | "down") => void;
 }
 
-export const wireTerminalPrompt = (
-  options: TerminalPromptWiringOptions,
-): void => {
+export const wireTerminalPrompt = (options: TerminalPromptWiringOptions): void => {
   options.stopButtonEl.addEventListener("click", () => {
-    options.onStop()
-  })
+    options.onStop();
+  });
 
   options.editorEl.addEventListener("input", () => {
-    const text = options.getEditorText()
-    options.editorEl.classList.toggle("tmd-is-empty", text.length === 0)
-    options.onDraftChange(text)
-  })
+    const text = options.getEditorText();
+    options.editorEl.classList.toggle("tmd-is-empty", text.length === 0);
+    options.onDraftChange(text);
+  });
   options.editorEl.addEventListener("compositionstart", () => {
-    options.setIsComposing(true)
-  })
+    options.setIsComposing(true);
+  });
   options.editorEl.addEventListener("compositionend", () => {
-    options.setIsComposing(false)
-  })
+    options.setIsComposing(false);
+  });
   options.editorEl.addEventListener("keydown", (event) => {
     if (
       shouldStopFromPromptShortcut({
@@ -45,9 +40,9 @@ export const wireTerminalPrompt = (
       })
     ) {
       if (options.getHasRunningTask()) {
-        event.preventDefault()
-        options.onStop()
-        return
+        event.preventDefault();
+        options.onStop();
+        return;
       }
     }
     if (
@@ -56,21 +51,21 @@ export const wireTerminalPrompt = (
         eventIsComposing: event.isComposing,
       })
     ) {
-      return
+      return;
     }
     if (event.key === "Enter") {
-      event.preventDefault()
-      options.onSubmit()
-      return
+      event.preventDefault();
+      options.onSubmit();
+      return;
     }
     if (event.key === "ArrowUp") {
-      event.preventDefault()
-      options.onNavigateHistory("up")
-      return
+      event.preventDefault();
+      options.onNavigateHistory("up");
+      return;
     }
     if (event.key === "ArrowDown") {
-      event.preventDefault()
-      options.onNavigateHistory("down")
+      event.preventDefault();
+      options.onNavigateHistory("down");
     }
-  })
-}
+  });
+};

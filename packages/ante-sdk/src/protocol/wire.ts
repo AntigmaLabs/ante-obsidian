@@ -62,7 +62,8 @@ const generateUlid = (): string => {
 
 export const generateOpId = (): string => `op_${generateUlid()}`;
 
-export const serializeOperation = (op: AnteOperation, id = generateOpId()): string => JSON.stringify({ op, id });
+export const serializeOperation = (op: AnteOperation, id = generateOpId()): string =>
+  JSON.stringify({ op, id });
 
 export const parseEnvelope = (raw: string): AnteEventEnvelope | null => {
   try {

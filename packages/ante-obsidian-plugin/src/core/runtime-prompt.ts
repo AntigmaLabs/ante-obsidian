@@ -19,21 +19,24 @@ const buildContextBlock = (request: TaskRequest): string => {
   const cursor = formatCursor(request);
 
   return [
-    vaultPath ? `Current Obsidian vault path: ${vaultPath}` : "Current Obsidian vault path: <unknown>",
+    vaultPath
+      ? `Current Obsidian vault path: ${vaultPath}`
+      : "Current Obsidian vault path: <unknown>",
     `Current note path: ${notePath}`,
     selection ? `Selected text:\n${selection}` : "Selected text: <none>",
     cursor ?? "",
-    documentText ? `Current note content:\n${documentText}` : "Current note content: <empty>"
+    documentText ? `Current note content:\n${documentText}` : "Current note content: <empty>",
   ].join("\n\n");
 };
 
 const buildVaultAnalysisBlock = (): string =>
   [
     "You may use the current Obsidian vault path and note path to analyze the document in relation to the surrounding vault structure.",
-    "When useful, infer how this note fits within the vault, folder organization, and nearby documentation context based on those paths."
+    "When useful, infer how this note fits within the vault, folder organization, and nearby documentation context based on those paths.",
   ].join("\n");
 
-const buildObsidianCliBlock = (request: TaskRequest): string => request.obsidianCliPromptBlock?.trim() ?? "";
+const buildObsidianCliBlock = (request: TaskRequest): string =>
+  request.obsidianCliPromptBlock?.trim() ?? "";
 
 const buildSchemaBlock = (): string =>
   [
@@ -48,7 +51,7 @@ const buildSchemaBlock = (): string =>
     "- Use Read before Write/Edit when the current file contents may have changed or when the target path is ambiguous.",
     "- Keep edits scoped to the requested file and location.",
     "- Never copy the prompt instructions, schema text, or context labels into file content.",
-    "- Do not wrap normal replies in code fences unless the user asked for a code block."
+    "- Do not wrap normal replies in code fences unless the user asked for a code block.",
   ].join("\n");
 
 const buildTerminalPriorityBlock = (): string =>
@@ -58,7 +61,7 @@ const buildTerminalPriorityBlock = (): string =>
     "- If selected text is present and the user is asking about that selection, use the selection first.",
     "- Do not search the workspace, open other files, or call tools when the answer can be completed from the provided note or selection.",
     "- For requests like 'summarize the current markdown note', summarize only the current note content shown below.",
-    "- If the provided context is insufficient, say what is missing and only then consider other files or tools."
+    "- If the provided context is insufficient, say what is missing and only then consider other files or tools.",
   ].join("\n");
 
 const buildTerminalSchemaBlock = (): string =>
@@ -75,15 +78,17 @@ const buildTerminalSchemaBlock = (): string =>
     "- Only inspect other files or use tools when the user explicitly asks for that or the provided context is missing and insufficient.",
     "- When the user asks to create or update Markdown files, use native file-editing tools first and keep edits scoped to the requested file and location.",
     "- If more than one Markdown file must be created or updated, use multiple native file-editing tool calls rather than JSON.",
-    "- Plain terminal text must not be wrapped in JSON or code fences."
+    "- Plain terminal text must not be wrapped in JSON or code fences.",
   ].join("\n");
 
 const buildTerminalContextBlock = (request: TaskRequest): string => {
   if (request.reusePriorContext) {
     return [
-      request.context.filePath ? `Current note path: ${request.context.filePath}` : "Current note path: <unchanged>",
+      request.context.filePath
+        ? `Current note path: ${request.context.filePath}`
+        : "Current note path: <unchanged>",
       "Current note context is unchanged from the previous turn.",
-      "Reuse the same selected text and note content already established in this Ante session."
+      "Reuse the same selected text and note content already established in this Ante session.",
     ].join("\n\n");
   }
 
@@ -108,7 +113,9 @@ const buildTerminalContextBlock = (request: TaskRequest): string => {
   }
   const documentText = request.context.documentText?.trim();
   if (documentText) {
-    lines.push(`Current note content (authoritative for note summaries and note-level questions):\n${documentText}`);
+    lines.push(
+      `Current note content (authoritative for note summaries and note-level questions):\n${documentText}`,
+    );
   } else {
     lines.push("Current note content: <empty>");
   }
@@ -130,7 +137,7 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
         "",
         buildTerminalContextBlock(request),
         "",
-        buildTerminalSchemaBlock()
+        buildTerminalSchemaBlock(),
       ]
         .filter(Boolean)
         .join("\n\n");
@@ -139,12 +146,14 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
       "You are operating inside Chat with Ante in an Obsidian vault.",
       `Preset: ${request.preset.label}`,
       `Goal: ${request.preset.goal}`,
-      request.preset.systemInstructions ? `Execution instructions:\n${request.preset.systemInstructions}` : "",
+      request.preset.systemInstructions
+        ? `Execution instructions:\n${request.preset.systemInstructions}`
+        : "",
       followUpPrompt ? `Follow-up user instruction:\n${followUpPrompt}` : "",
       buildObsidianCliBlock(request),
       buildVaultAnalysisBlock(),
       buildContextBlock(request),
-      buildSchemaBlock()
+      buildSchemaBlock(),
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -162,7 +171,7 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
       "",
       buildTerminalContextBlock(request),
       "",
-      buildTerminalSchemaBlock()
+      buildTerminalSchemaBlock(),
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -174,12 +183,14 @@ export const buildInteractivePrompt = (request: TaskRequest): string => {
       : "You are handling a Markdown editing task for an Obsidian note.",
     `Preset: ${request.preset.label}`,
     `Goal: ${request.preset.goal}`,
-    request.preset.systemInstructions ? `Execution instructions:\n${request.preset.systemInstructions}` : "",
+    request.preset.systemInstructions
+      ? `Execution instructions:\n${request.preset.systemInstructions}`
+      : "",
     inlineInstruction ? `User instruction:\n${inlineInstruction}` : "",
     buildObsidianCliBlock(request),
     buildVaultAnalysisBlock(),
     buildContextBlock(request),
-    buildSchemaBlock()
+    buildSchemaBlock(),
   ]
     .filter(Boolean)
     .join("\n\n");

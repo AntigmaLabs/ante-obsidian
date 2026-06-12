@@ -64,7 +64,7 @@ interface RawAuthBody {
 
 /** AuthConfig is an externally-tagged enum: `{ bearer | header | query: {..} }`. */
 const deriveAuth = (
-  auth: unknown
+  auth: unknown,
 ): Pick<AnteCatalogProvider, "authType" | "envKey" | "oauthPreset"> => {
   if (!auth || typeof auth !== "object") {
     return { authType: "none" };
@@ -100,7 +100,7 @@ const parseProvider = (id: string, raw: unknown): AnteCatalogProvider | null => 
     .map((entry) =>
       entry && typeof entry === "object" && typeof (entry as { id?: unknown }).id === "string"
         ? (entry as { id: string }).id.trim()
-        : ""
+        : "",
     )
     .filter(Boolean);
 
@@ -150,7 +150,7 @@ export const parseAnteCatalog = (raw: string): AnteCatalog | null => {
  */
 export const readAnteCatalog = (
   anteCommand: string,
-  env: Record<string, string>
+  env: Record<string, string>,
 ): Promise<AnteCatalog | null> =>
   new Promise((resolve) => {
     const command = anteCommand.trim();

@@ -12,7 +12,7 @@ export const resolveMentionTrigger = (
   filePath: string,
   cursorLine: number,
   currentLine: string,
-  previousLine: string
+  previousLine: string,
 ): MentionTriggerResolution => {
   const previousLineIndex = cursorLine > 0 ? cursorLine - 1 : -1;
   const previousMatch = previousLineIndex >= 0 ? parseMentionLine(previousLine) : null;
@@ -24,7 +24,7 @@ export const resolveMentionTrigger = (
       matchLine: previousLineIndex,
       matchText: previousLine,
       lineKey: `${filePath}:${previousLineIndex}:${previousLine}`,
-      releaseHandledPrefix: null
+      releaseHandledPrefix: null,
     };
   }
 
@@ -34,6 +34,6 @@ export const resolveMentionTrigger = (
     matchLine: currentMatch ? cursorLine : -1,
     matchText: currentLine,
     lineKey: null,
-    releaseHandledPrefix: currentMatch ? `${filePath}:${cursorLine}:` : null
+    releaseHandledPrefix: currentMatch ? `${filePath}:${cursorLine}:` : null,
   };
 };

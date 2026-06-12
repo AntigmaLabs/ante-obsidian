@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AnteSessionDriver, configSignature, type AnteRuntimeConfig } from "../src/runtime/ante-session-driver";
+import {
+  AnteSessionDriver,
+  configSignature,
+  type AnteRuntimeConfig,
+} from "../src/runtime/ante-session-driver";
 import type { RuntimeObserver } from "../src/runtime/ante-runtime";
 import type { TaskRequest } from "../src/core/types";
 import type { AnteTransport } from "../src/runtime/transport/ante-transport";
@@ -14,16 +18,16 @@ const request: TaskRequest = {
     id: "default",
     label: "Default",
     goal: "Edit the current note",
-    systemInstructions: ""
+    systemInstructions: "",
   },
   context: {
     vaultPath: "/vaults/test",
     filePath: "Note.md",
     noteTitle: "Note",
     documentText: "hello",
-    selection: null
+    selection: null,
   },
-  inlineInstruction: "test"
+  inlineInstruction: "test",
 };
 
 class FakeTransport implements AnteTransport {
@@ -73,47 +77,55 @@ class TestSessionDriver extends AnteSessionDriver {
   }
 
   primeRun(observer: RuntimeObserver): void {
-    (this as unknown as {
-      activeRun: {
-        observer: RuntimeObserver;
-        request: TaskRequest;
-        autoApproveTools: boolean;
-        finalMessage: string;
-        emittedStdout: boolean;
-        completed: boolean;
-      };
-    }).activeRun = {
+    (
+      this as unknown as {
+        activeRun: {
+          observer: RuntimeObserver;
+          request: TaskRequest;
+          autoApproveTools: boolean;
+          finalMessage: string;
+          emittedStdout: boolean;
+          completed: boolean;
+        };
+      }
+    ).activeRun = {
       observer,
       request,
       autoApproveTools: true,
       finalMessage: "",
       emittedStdout: false,
-      completed: false
+      completed: false,
     };
   }
 
   primeSession(transport: FakeTransport, sessionId: string): void {
-    (this as unknown as {
-      lifecycle: {
-        transport: FakeTransport;
-        transportSignature: string;
-        sessionId: string;
-      };
-    }).lifecycle.transport = transport;
-    (this as unknown as {
-      lifecycle: {
-        transport: FakeTransport;
-        transportSignature: string;
-        sessionId: string;
-      };
-    }).lifecycle.transportSignature = configSignature(config);
-    (this as unknown as {
-      lifecycle: {
-        transport: FakeTransport;
-        transportSignature: string;
-        sessionId: string;
-      };
-    }).lifecycle.sessionId = sessionId;
+    (
+      this as unknown as {
+        lifecycle: {
+          transport: FakeTransport;
+          transportSignature: string;
+          sessionId: string;
+        };
+      }
+    ).lifecycle.transport = transport;
+    (
+      this as unknown as {
+        lifecycle: {
+          transport: FakeTransport;
+          transportSignature: string;
+          sessionId: string;
+        };
+      }
+    ).lifecycle.transportSignature = configSignature(config);
+    (
+      this as unknown as {
+        lifecycle: {
+          transport: FakeTransport;
+          transportSignature: string;
+          sessionId: string;
+        };
+      }
+    ).lifecycle.sessionId = sessionId;
     transport.connected = true;
   }
 }
@@ -128,7 +140,7 @@ const config: AnteRuntimeConfig = {
   provider: "openai-subscription",
   thinking: null,
   autoApproveTools: true,
-  env: {}
+  env: {},
 };
 
 test("run reports invalid startup errors as a failed exit instead of throwing", async () => {
@@ -136,7 +148,7 @@ test("run reports invalid startup errors as a failed exit instead of throwing", 
     () => config,
     () => {
       throw new Error("bad startup json");
-    }
+    },
   );
 
   const exits: Array<{ status: "completed" | "failed" | "cancelled"; error?: string }> = [];
@@ -144,7 +156,7 @@ test("run reports invalid startup errors as a failed exit instead of throwing", 
     onEvent: () => {},
     onExit: (result) => {
       exits.push(result);
-    }
+    },
   };
 
   assert.doesNotThrow(() => {
@@ -158,14 +170,17 @@ test("run reports invalid startup errors as a failed exit instead of throwing", 
 
 test("non-approval TurnPause still emits a log when auto-approve is enabled", () => {
   const events: Array<{ type: string; text?: string }> = [];
-  const driver = new TestSessionDriver(() => config, () => new FakeTransport());
+  const driver = new TestSessionDriver(
+    () => config,
+    () => new FakeTransport(),
+  );
   const observer: RuntimeObserver = {
     onEvent: (event) => {
       if (event.type === "log") {
         events.push(event);
       }
     },
-    onExit: () => {}
+    onExit: () => {},
   };
 
   driver.primeRun(observer);
@@ -176,20 +191,29 @@ test("non-approval TurnPause still emits a log when auto-approve is enabled", ()
           turn_id: "op_789",
           reason: {
             Wait: {
-              message: "still waiting"
-            }
-          }
-        }
-      }
-    })
+              message: "still waiting",
+            },
+          },
+        },
+      },
+    }),
   );
   assert.equal(events.length, 1);
   assert.match(events[0]?.text ?? "", /Ante TurnPause/);
 });
 
 test("thinking, usage, and compaction events are surfaced as structured runtime events", () => {
-  const driver = new TestSessionDriver(() => config, () => new FakeTransport());
-  const events: Array<{ type: string; text?: string; mode?: string; phase?: string; totalTokens?: number }> = [];
+  const driver = new TestSessionDriver(
+    () => config,
+    () => new FakeTransport(),
+  );
+  const events: Array<{
+    type: string;
+    text?: string;
+    mode?: string;
+    phase?: string;
+    totalTokens?: number;
+  }> = [];
   const observer: RuntimeObserver = {
     onEvent: (event) => {
       switch (event.type) {
@@ -204,7 +228,7 @@ test("thinking, usage, and compaction events are surfaced as structured runtime 
           break;
       }
     },
-    onExit: () => {}
+    onExit: () => {},
   };
 
   driver.primeRun(observer);
@@ -217,19 +241,22 @@ test("thinking, usage, and compaction events are surfaced as structured runtime 
     { type: "session.thinking", text: "plan...", mode: "delta" },
     { type: "session.usage", totalTokens: 42 },
     { type: "session.compaction", phase: "start" },
-    { type: "session.compaction", phase: "end" }
+    { type: "session.compaction", phase: "end" },
   ]);
 });
 
 test("cancelActiveRun sends Interrupt and preserves the session when Ante confirms interruption", () => {
   const transport = new FakeTransport();
-  const driver = new TestSessionDriver(() => config, () => transport);
+  const driver = new TestSessionDriver(
+    () => config,
+    () => transport,
+  );
   const exits: Array<{ status: "completed" | "failed" | "cancelled"; error?: string }> = [];
   const observer: RuntimeObserver = {
     onEvent: () => {},
     onExit: (result) => {
       exits.push(result);
-    }
+    },
   };
 
   driver.primeSession(transport, "ses_current");
@@ -248,13 +275,16 @@ test("cancelActiveRun sends Interrupt and preserves the session when Ante confir
 
 test("cancelActiveRun falls back to disconnect when Ante does not acknowledge the interrupt", async () => {
   const transport = new FakeTransport();
-  const driver = new TestSessionDriver(() => config, () => transport);
+  const driver = new TestSessionDriver(
+    () => config,
+    () => transport,
+  );
   const exits: Array<{ status: "completed" | "failed" | "cancelled"; error?: string }> = [];
   const observer: RuntimeObserver = {
     onEvent: () => {},
     onExit: (result) => {
       exits.push(result);
-    }
+    },
   };
 
   driver.primeSession(transport, "ses_current");
@@ -270,7 +300,10 @@ test("cancelActiveRun falls back to disconnect when Ante does not acknowledge th
 
 test("run resumes the requested session before sending user input", async () => {
   const transport = new FakeTransport();
-  const driver = new TestSessionDriver(() => config, () => transport);
+  const driver = new TestSessionDriver(
+    () => config,
+    () => transport,
+  );
   const events: Array<{ type: string; sessionId?: string; text?: string }> = [];
   const exits: Array<{ status: "completed" | "failed" | "cancelled"; error?: string }> = [];
   const observer: RuntimeObserver = {
@@ -284,7 +317,7 @@ test("run resumes the requested session before sending user input", async () => 
     },
     onExit: (result) => {
       exits.push(result);
-    }
+    },
   };
 
   driver.run(
@@ -293,21 +326,25 @@ test("run resumes the requested session before sending user input", async () => 
       kind: "chat",
       triggerSource: "chat",
       mode: "followup",
-      runtimeSessionId: "ses_target"
+      runtimeSessionId: "ses_target",
     },
-    observer
+    observer,
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(transport.sentMessages.length, 1);
   assert.deepEqual(JSON.parse(transport.sentMessages[0] ?? "{}").op, {
     ResumeSession: {
-      session_id: "ses_target"
-    }
+      session_id: "ses_target",
+    },
   });
 
   driver.emit(JSON.stringify({ event: { SessionStart: { session_id: "ses_target" } } }));
-  driver.emit(JSON.stringify({ event: { ExtensionRefreshed: { session_id: "ses_target", skills: [], subagents: [] } } }));
+  driver.emit(
+    JSON.stringify({
+      event: { ExtensionRefreshed: { session_id: "ses_target", skills: [], subagents: [] } },
+    }),
+  );
   driver.emit(JSON.stringify({ event: { AgentMessage: "old replay that should be ignored" } }));
   driver.emit(JSON.stringify({ event: { TurnEnd: { status: "Completed" } } }));
 
@@ -320,27 +357,32 @@ test("run resumes the requested session before sending user input", async () => 
       kind: "chat",
       triggerSource: "chat",
       mode: "followup",
-      runtimeSessionId: "ses_target"
-    })
+      runtimeSessionId: "ses_target",
+    }),
   });
 
-  driver.emit(JSON.stringify({ event: { AgentMessage: "{\"type\":\"text\",\"text\":\"fresh response\"}" } }));
+  driver.emit(
+    JSON.stringify({ event: { AgentMessage: '{"type":"text","text":"fresh response"}' } }),
+  );
   driver.emit(JSON.stringify({ event: { TurnEnd: { status: "Completed" } } }));
 
   assert.deepEqual(
     events.filter((event) => event.type === "runtime.session"),
-    [{ type: "runtime.session", sessionId: "ses_target" }]
+    [{ type: "runtime.session", sessionId: "ses_target" }],
   );
   assert.deepEqual(
     events.filter((event) => event.type === "result.text"),
-    [{ type: "result.text", text: "fresh response" }]
+    [{ type: "result.text", text: "fresh response" }],
   );
   assert.equal(exits.at(-1)?.status, "completed");
 });
 
 test("resume continues after SessionStart even when ExtensionRefreshed is not emitted", async () => {
   const transport = new FakeTransport();
-  const driver = new TestSessionDriver(() => config, () => transport);
+  const driver = new TestSessionDriver(
+    () => config,
+    () => transport,
+  );
 
   driver.run(
     {
@@ -348,17 +390,19 @@ test("resume continues after SessionStart even when ExtensionRefreshed is not em
       kind: "chat",
       triggerSource: "chat",
       mode: "followup",
-      runtimeSessionId: "ses_target_no_extension"
+      runtimeSessionId: "ses_target_no_extension",
     },
     {
       onEvent: () => {},
-      onExit: () => {}
-    }
+      onExit: () => {},
+    },
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(transport.sentMessages.length, 1);
-  driver.emit(JSON.stringify({ event: { SessionStart: { session_id: "ses_target_no_extension" } } }));
+  driver.emit(
+    JSON.stringify({ event: { SessionStart: { session_id: "ses_target_no_extension" } } }),
+  );
   driver.emit(JSON.stringify({ event: { AgentMessage: "history replay ignored" } }));
   driver.emit(JSON.stringify({ event: { TurnEnd: { status: "Completed" } } }));
 
@@ -371,14 +415,17 @@ test("resume continues after SessionStart even when ExtensionRefreshed is not em
       kind: "chat",
       triggerSource: "chat",
       mode: "followup",
-      runtimeSessionId: "ses_target_no_extension"
-    })
+      runtimeSessionId: "ses_target_no_extension",
+    }),
   });
 });
 
 test("initial chat requests start a fresh session instead of reusing the current one", async () => {
   const transport = new FakeTransport();
-  const driver = new TestSessionDriver(() => config, () => transport);
+  const driver = new TestSessionDriver(
+    () => config,
+    () => transport,
+  );
   driver.primeSession(transport, "ses_current");
 
   driver.run(
@@ -386,12 +433,12 @@ test("initial chat requests start a fresh session instead of reusing the current
       ...request,
       kind: "chat",
       triggerSource: "chat",
-      mode: "initial"
+      mode: "initial",
     },
     {
       onEvent: () => {},
-      onExit: () => {}
-    }
+      onExit: () => {},
+    },
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -401,14 +448,17 @@ test("initial chat requests start a fresh session instead of reusing the current
       model: config.model,
       provider: config.provider,
       streaming: true,
-      thinking: null
-    }
+      thinking: null,
+    },
   });
 });
 
 test("runtime target think level is forwarded when starting a fresh session", async () => {
   const transport = new FakeTransport();
-  const driver = new TestSessionDriver(() => config, () => transport);
+  const driver = new TestSessionDriver(
+    () => config,
+    () => transport,
+  );
 
   driver.run(
     {
@@ -419,13 +469,13 @@ test("runtime target think level is forwarded when starting a fresh session", as
       runtimeTarget: {
         provider: "openai-subscription",
         model: "gpt-5.4",
-        thinking: "Max"
-      }
+        thinking: "Max",
+      },
     },
     {
       onEvent: () => {},
-      onExit: () => {}
-    }
+      onExit: () => {},
+    },
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -434,14 +484,17 @@ test("runtime target think level is forwarded when starting a fresh session", as
       model: "gpt-5.4",
       provider: "openai-subscription",
       streaming: true,
-      thinking: "Max"
-    }
+      thinking: "Max",
+    },
   });
 });
 
 test("SessionStart preferred models are surfaced on runtime session events", async () => {
   const transport = new FakeTransport();
-  const driver = new TestSessionDriver(() => config, () => transport);
+  const driver = new TestSessionDriver(
+    () => config,
+    () => transport,
+  );
   const events: Array<{
     type: string;
     sessionId?: string;
@@ -455,7 +508,7 @@ test("SessionStart preferred models are surfaced on runtime session events", asy
       ...request,
       kind: "chat",
       triggerSource: "chat",
-      mode: "initial"
+      mode: "initial",
     },
     {
       onEvent: (event) => {
@@ -463,8 +516,8 @@ test("SessionStart preferred models are surfaced on runtime session events", asy
           events.push(event);
         }
       },
-      onExit: () => {}
-    }
+      onExit: () => {},
+    },
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -476,11 +529,11 @@ test("SessionStart preferred models are surfaced on runtime session events", asy
           model: { name: "gpt-5.4" },
           provider: {
             name: "openai-subscription",
-            preferred_models: [{ name: "gpt-5.5" }, { name: "gpt-5.4" }]
-          }
-        }
-      }
-    })
+            preferred_models: [{ name: "gpt-5.5" }, { name: "gpt-5.4" }],
+          },
+        },
+      },
+    }),
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -493,7 +546,10 @@ test("SessionStart preferred models are surfaced on runtime session events", asy
 
 test("resuming a different saved session on a compatible transport does not report reuse", async () => {
   const transport = new FakeTransport();
-  const driver = new TestSessionDriver(() => config, () => transport);
+  const driver = new TestSessionDriver(
+    () => config,
+    () => transport,
+  );
   driver.primeSession(transport, "ses_current");
 
   const logs: string[] = [];
@@ -503,7 +559,7 @@ test("resuming a different saved session on a compatible transport does not repo
       kind: "chat",
       triggerSource: "chat",
       mode: "followup",
-      runtimeSessionId: "ses_other"
+      runtimeSessionId: "ses_other",
     },
     {
       onEvent: (event) => {
@@ -511,17 +567,23 @@ test("resuming a different saved session on a compatible transport does not repo
           logs.push(event.text);
         }
       },
-      onExit: () => {}
-    }
+      onExit: () => {},
+    },
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  assert.equal(logs.some((entry) => entry.includes("Reusing existing Ante session")), false);
+  assert.equal(
+    logs.some((entry) => entry.includes("Reusing existing Ante session")),
+    false,
+  );
 });
 
 test("persistActiveSession sends Shutdown and waits for transport close", async () => {
   const transport = new FakeTransport();
-  const driver = new TestSessionDriver(() => config, () => transport);
+  const driver = new TestSessionDriver(
+    () => config,
+    () => transport,
+  );
   const warmup = driver.ensureWarmSession();
   await new Promise((resolve) => setTimeout(resolve, 0));
   driver.emit(JSON.stringify({ event: { SessionStart: { session_id: "ses_current" } } }));
@@ -540,7 +602,10 @@ test("persistActiveSession sends Shutdown and waits for transport close", async 
 
 test("run waits for a pending shutdown to finish before resuming another session", async () => {
   const transport = new FakeTransport();
-  const driver = new TestSessionDriver(() => config, () => transport);
+  const driver = new TestSessionDriver(
+    () => config,
+    () => transport,
+  );
   const warmup = driver.ensureWarmSession();
   await new Promise((resolve) => setTimeout(resolve, 0));
   driver.emit(JSON.stringify({ event: { SessionStart: { session_id: "ses_current" } } }));
@@ -556,18 +621,20 @@ test("run waits for a pending shutdown to finish before resuming another session
       kind: "chat",
       triggerSource: "chat",
       mode: "followup",
-      runtimeSessionId: "ses_next"
+      runtimeSessionId: "ses_next",
     },
     {
       onEvent: () => {},
-      onExit: () => {}
-    }
+      onExit: () => {},
+    },
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(
-    transport.sentMessages.some((message) => JSON.parse(message).op?.ResumeSession?.session_id === "ses_next"),
-    false
+    transport.sentMessages.some(
+      (message) => JSON.parse(message).op?.ResumeSession?.session_id === "ses_next",
+    ),
+    false,
   );
 
   transport.closeHandler({ code: 0 });
@@ -575,14 +642,19 @@ test("run waits for a pending shutdown to finish before resuming another session
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(
-    transport.sentMessages.some((message) => JSON.parse(message).op?.ResumeSession?.session_id === "ses_next"),
-    true
+    transport.sentMessages.some(
+      (message) => JSON.parse(message).op?.ResumeSession?.session_id === "ses_next",
+    ),
+    true,
   );
 });
 
 test("persistActiveSession resolves after SessionEnd even before transport close", async () => {
   const transport = new FakeTransport();
-  const driver = new TestSessionDriver(() => config, () => transport);
+  const driver = new TestSessionDriver(
+    () => config,
+    () => transport,
+  );
   const warmup = driver.ensureWarmSession();
   await new Promise((resolve) => setTimeout(resolve, 0));
   driver.emit(JSON.stringify({ event: { SessionStart: { session_id: "ses_current" } } }));
@@ -599,15 +671,20 @@ test("persistActiveSession resolves after SessionEnd even before transport close
 
 test("stale transport close is ignored after a newer transport starts", async () => {
   const transports: FakeTransport[] = [];
-  const driver = new TestSessionDriver(() => config, () => {
-    const transport = new FakeTransport();
-    transports.push(transport);
-    return transport;
-  });
+  const driver = new TestSessionDriver(
+    () => config,
+    () => {
+      const transport = new FakeTransport();
+      transports.push(transport);
+      return transport;
+    },
+  );
 
   const warmup = driver.ensureWarmSession();
   await new Promise((resolve) => setTimeout(resolve, 0));
-  transports[0]?.messageHandler(JSON.stringify({ event: { SessionStart: { session_id: "ses_current" } } }));
+  transports[0]?.messageHandler(
+    JSON.stringify({ event: { SessionStart: { session_id: "ses_current" } } }),
+  );
   await warmup;
 
   const shutdown = driver.persistActiveSession();
@@ -622,14 +699,14 @@ test("stale transport close is ignored after a newer transport starts", async ()
       kind: "chat",
       triggerSource: "chat",
       mode: "followup",
-      runtimeSessionId: "ses_next"
+      runtimeSessionId: "ses_next",
     },
     {
       onEvent: () => {},
       onExit: (result) => {
         exits.push(result);
-      }
-    }
+      },
+    },
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
 

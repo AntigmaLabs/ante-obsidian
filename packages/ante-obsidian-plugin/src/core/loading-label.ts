@@ -6,7 +6,7 @@ const LOADING_WORDS = [
   "exploring",
   "crafting",
   "tracing",
-  "reflecting"
+  "reflecting",
 ] as const;
 
 const LOADING_FRAMES = ["*", "**", "***", "**"] as const;
@@ -32,15 +32,19 @@ export const getLoadingWord = (seed: string, timestamp: number = Date.now()): st
 };
 
 export const getLoadingFrame = (frameIndex: number): string => {
-  const normalizedIndex = ((frameIndex % LOADING_FRAMES.length) + LOADING_FRAMES.length) % LOADING_FRAMES.length;
+  const normalizedIndex =
+    ((frameIndex % LOADING_FRAMES.length) + LOADING_FRAMES.length) % LOADING_FRAMES.length;
   return LOADING_FRAMES[normalizedIndex] ?? LOADING_FRAMES[0];
 };
 
-export const formatLoadingLabel = (seed: string, frameIndex: number, timestamp: number = Date.now()): string =>
-  `${getLoadingWord(seed, timestamp)} ${getLoadingFrame(frameIndex)}`;
+export const formatLoadingLabel = (
+  seed: string,
+  frameIndex: number,
+  timestamp: number = Date.now(),
+): string => `${getLoadingWord(seed, timestamp)} ${getLoadingFrame(frameIndex)}`;
 
 export const __test__ = {
   LOADING_FRAMES,
   LOADING_WORDS,
-  hashSeed
+  hashSeed,
 };

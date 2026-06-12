@@ -6,14 +6,12 @@ export const normalizePluginVersion = (value: string): string => {
   return trimmed.replace(/^v/i, "").trim();
 };
 
-const parseVersionParts = (
-  value: string
-): { numeric: number[]; prerelease: string | null } => {
+const parseVersionParts = (value: string): { numeric: number[]; prerelease: string | null } => {
   const normalized = normalizePluginVersion(value);
   if (!normalized) {
     return {
       numeric: [],
-      prerelease: null
+      prerelease: null,
     };
   }
 
@@ -23,7 +21,7 @@ const parseVersionParts = (
       .split(".")
       .map((part) => Number.parseInt(part, 10))
       .map((part) => (Number.isFinite(part) ? part : 0)),
-    prerelease: prerelease?.trim() || null
+    prerelease: prerelease?.trim() || null,
   };
 };
 
@@ -52,7 +50,10 @@ export const comparePluginVersions = (left: string, right: string): number => {
   return leftParts.prerelease.localeCompare(rightParts.prerelease);
 };
 
-export const shouldOfferPluginUpdate = (currentVersion: string, latestVersion: string | null): boolean => {
+export const shouldOfferPluginUpdate = (
+  currentVersion: string,
+  latestVersion: string | null,
+): boolean => {
   if (!currentVersion || !latestVersion) {
     return false;
   }
@@ -62,5 +63,5 @@ export const shouldOfferPluginUpdate = (currentVersion: string, latestVersion: s
 export const __test__ = {
   normalizePluginVersion,
   comparePluginVersions,
-  shouldOfferPluginUpdate
+  shouldOfferPluginUpdate,
 };

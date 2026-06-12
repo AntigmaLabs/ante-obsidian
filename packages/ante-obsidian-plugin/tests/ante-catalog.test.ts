@@ -58,7 +58,7 @@ test("parseAnteCatalog parses providers, preserves order, and maps models", () =
   assert.ok(catalog);
   assert.deepEqual(
     catalog!.providers.map((p) => p.id),
-    ["anthropic", "openai-subscription", "local"]
+    ["anthropic", "openai-subscription", "local"],
   );
 
   const [anthropic, openai, local] = catalog!.providers;

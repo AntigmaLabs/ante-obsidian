@@ -70,7 +70,11 @@ export class AnteSessionLifecycle {
   }
 
   hasReadySession(signature: string): boolean {
-    return this.transportSignature === signature && Boolean(this.sessionId) && Boolean(this.transport?.isConnected());
+    return (
+      this.transportSignature === signature &&
+      Boolean(this.sessionId) &&
+      Boolean(this.transport?.isConnected())
+    );
   }
 
   hasCompatibleTransport(signature: string): boolean {
@@ -80,7 +84,7 @@ export class AnteSessionLifecycle {
   async ensureWarmSession(
     config: AnteRuntimeConfig,
     hooks: AnteTransportHooks,
-    beginSession: (config: AnteRuntimeConfig) => void
+    beginSession: (config: AnteRuntimeConfig) => void,
   ): Promise<void> {
     if (!config.command.trim() || !config.provider.trim()) {
       return;
@@ -109,7 +113,10 @@ export class AnteSessionLifecycle {
     return this.warmup.promise;
   }
 
-  async ensureTransportStarted(config: AnteRuntimeConfig, hooks: AnteTransportHooks): Promise<void> {
+  async ensureTransportStarted(
+    config: AnteRuntimeConfig,
+    hooks: AnteTransportHooks,
+  ): Promise<void> {
     if (this.transport) {
       return;
     }
@@ -122,7 +129,7 @@ export class AnteSessionLifecycle {
       });
       this.transportStarting = {
         signature,
-        promise
+        promise,
       };
     }
     await this.transportStarting.promise;
@@ -134,7 +141,7 @@ export class AnteSessionLifecycle {
     observer: RuntimeObserver,
     hooks: AnteTransportHooks,
     beginSession: (config: AnteRuntimeConfig) => void,
-    beginResumeSession: (targetSessionId: string) => void
+    beginResumeSession: (targetSessionId: string) => void,
   ): Promise<"launch" | "reuse" | "boot"> {
     await this.awaitPendingShutdown();
 
@@ -148,7 +155,13 @@ export class AnteSessionLifecycle {
       this.sessionId = null;
     }
 
-    const transitionAction = await this.ensureRequestSession(request, config, observer, beginSession, beginResumeSession);
+    const transitionAction = await this.ensureRequestSession(
+      request,
+      config,
+      observer,
+      beginSession,
+      beginResumeSession,
+    );
 
     if (!hasCompatibleTransport) {
       return "launch";
@@ -209,7 +222,9 @@ export class AnteSessionLifecycle {
     }
   }
 
-  flushStartupDiagnostics(emit: (event: { stream: "stdout" | "stderr"; text: string }) => void): void {
+  flushStartupDiagnostics(
+    emit: (event: { stream: "stdout" | "stderr"; text: string }) => void,
+  ): void {
     for (const entry of this.startupDiagnostics) {
       emit(entry);
     }
@@ -239,28 +254,49 @@ export class AnteSessionLifecycle {
     this.warmup = null;
   }
 
-  handleSessionStart(sessionId: string, emitDiagnostic: (observer: RuntimeObserver, text: string) => void): void {
+  handleSessionStart(
+    sessionId: string,
+    emitDiagnostic: (observer: RuntimeObserver, text: string) => void,
+  ): void {
     const transition = this.sessionTransition;
     if (!transition) {
       return;
     }
-    if (transition.kind === "resume" && transition.targetSessionId && transition.targetSessionId !== sessionId) {
+    if (
+      transition.kind === "resume" &&
+      transition.targetSessionId &&
+      transition.targetSessionId !== sessionId
+    ) {
       return;
     }
     transition.hasSeenTargetSession = true;
-    emitDiagnostic(transition.observer, `Session transition matched target · kind=${transition.kind} · session=${sessionId}`);
+    emitDiagnostic(
+      transition.observer,
+      `Session transition matched target · kind=${transition.kind} · session=${sessionId}`,
+    );
     this.scheduleSessionTransitionSettle();
   }
 
-  handleExtensionRefresh(sessionId: string | null, emitDiagnostic: (observer: RuntimeObserver, text: string) => void): void {
+  handleExtensionRefresh(
+    sessionId: string | null,
+    emitDiagnostic: (observer: RuntimeObserver, text: string) => void,
+  ): void {
     const transition = this.sessionTransition;
     if (!transition) {
       return;
     }
-    if (transition.kind === "resume" && transition.targetSessionId && sessionId && transition.targetSessionId !== sessionId) {
+    if (
+      transition.kind === "resume" &&
+      transition.targetSessionId &&
+      sessionId &&
+      transition.targetSessionId !== sessionId
+    ) {
       return;
     }
-    emitDiagnostic(transition.observer, `Session transition extension refresh · kind=${transition.kind} · session=${sessionId ?? "none"}`);
+    emitDiagnostic(
+      transition.observer,
+      `Session transition extension refresh · kind=${transition.kind} · session=${sessionId ?? "none"}`,
+    );
     this.scheduleSessionTransitionSettle();
   }
 
@@ -315,11 +351,15 @@ export class AnteSessionLifecycle {
     await this.shutdownState.promise;
   }
 
-  private async startTransport(config: AnteRuntimeConfig, hooks: AnteTransportHooks): Promise<void> {
+  private async startTransport(
+    config: AnteRuntimeConfig,
+    hooks: AnteTransportHooks,
+  ): Promise<void> {
     const transport = this.createTransport(config);
     const generation = this.transportGeneration + 1;
     this.transportGeneration = generation;
-    const isStaleTransport = (): boolean => generation !== this.transportGeneration || this.transport !== transport;
+    const isStaleTransport = (): boolean =>
+      generation !== this.transportGeneration || this.transport !== transport;
 
     transport.setMessageHandler((message) => {
       if (!isStaleTransport()) {
@@ -355,7 +395,7 @@ export class AnteSessionLifecycle {
     config: AnteRuntimeConfig,
     observer: RuntimeObserver,
     beginSession: (config: AnteRuntimeConfig) => void,
-    beginResumeSession: (targetSessionId: string) => void
+    beginResumeSession: (targetSessionId: string) => void,
   ): Promise<"none" | "start" | "resume"> {
     const requestedSessionId = request.runtimeSessionId?.trim() ?? "";
 
@@ -378,7 +418,7 @@ export class AnteSessionLifecycle {
   private async startFreshSession(
     config: AnteRuntimeConfig,
     observer: RuntimeObserver,
-    beginSession: (config: AnteRuntimeConfig) => void
+    beginSession: (config: AnteRuntimeConfig) => void,
   ): Promise<void> {
     if (this.sessionTransition) {
       await this.sessionTransition.promise;
@@ -393,7 +433,7 @@ export class AnteSessionLifecycle {
   private async resumeSession(
     targetSessionId: string,
     observer: RuntimeObserver,
-    beginResumeSession: (targetSessionId: string) => void
+    beginResumeSession: (targetSessionId: string) => void,
   ): Promise<void> {
     if (this.sessionTransition) {
       await this.sessionTransition.promise;
@@ -408,7 +448,7 @@ export class AnteSessionLifecycle {
   async updateSession(
     config: AnteRuntimeConfig,
     observer: RuntimeObserver,
-    beginUpdateSession: (config: AnteRuntimeConfig) => void
+    beginUpdateSession: (config: AnteRuntimeConfig) => void,
   ): Promise<void> {
     if (this.sessionTransition) {
       await this.sessionTransition.promise;
@@ -441,7 +481,7 @@ export class AnteSessionLifecycle {
       promise,
       resolve,
       reject,
-      timer: null
+      timer: null,
     };
     shutdown.timer = scheduleTimeout(() => {
       if (this.shutdownState !== shutdown) {
@@ -457,7 +497,7 @@ export class AnteSessionLifecycle {
   private createSessionTransition(
     kind: SessionTransitionKind,
     observer: RuntimeObserver,
-    targetSessionId?: string
+    targetSessionId?: string,
   ): SessionTransitionState {
     let resolve = () => {};
     let reject = (_error: Error) => {};
@@ -473,7 +513,7 @@ export class AnteSessionLifecycle {
       reject,
       targetSessionId,
       hasSeenTargetSession: false,
-      settleTimer: null
+      settleTimer: null,
     };
   }
 

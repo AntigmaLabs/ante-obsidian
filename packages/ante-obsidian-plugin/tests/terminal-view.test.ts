@@ -10,7 +10,7 @@ const baseTask: TaskRecord = {
     id: "default",
     label: "@ante",
     goal: "Discuss the current Markdown content before editing anything.",
-    systemInstructions: ""
+    systemInstructions: "",
   },
   triggerSource: "terminal",
   inlineInstruction: "prompt",
@@ -19,13 +19,13 @@ const baseTask: TaskRecord = {
   logs: [],
   stdoutText: "",
   artifacts: [],
-  startedAt: "2026-03-29T00:00:00.000Z"
+  startedAt: "2026-03-29T00:00:00.000Z",
 };
 
 test("terminal cancelled tasks use stopped status semantics", () => {
   const cancelledTask: TaskRecord = {
     ...baseTask,
-    status: "cancelled"
+    status: "cancelled",
   };
 
   assert.equal(terminalStatus(cancelledTask), "stopped");

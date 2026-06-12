@@ -13,7 +13,14 @@ export type TaskStatus =
   | "applied"
   | "discarded";
 export type DocumentChangeOperation = "replace-file" | "create-file";
-export type ApplyState = "pending" | "applying" | "applied" | "reverting" | "reverted" | "failed" | "discarded";
+export type ApplyState =
+  | "pending"
+  | "applying"
+  | "applied"
+  | "reverting"
+  | "reverted"
+  | "failed"
+  | "discarded";
 export type LogStream = "stdout" | "stderr" | "system" | "user";
 export type RuntimeApprovalDecision = "Accept" | "AcceptForSession" | "Skip" | "Abort";
 export type RuntimeProcessStepStatus = "pending" | "in_progress" | "completed";
@@ -218,5 +225,5 @@ export type RuntimeEvent =
 
 export const createInitialState = (): TmdState => ({
   currentTaskId: null,
-  tasks: []
+  tasks: [],
 });

@@ -18,6 +18,6 @@ declare module "diff" {
     newStr: string,
     oldHeader?: string,
     newHeader?: string,
-    options?: { context?: number }
+    options?: { context?: number },
   ): StructuredPatch;
 }

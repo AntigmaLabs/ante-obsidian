@@ -18,20 +18,15 @@ export interface PromptStopShortcutState {
   key: string;
 }
 
-export const shouldHandlePromptEnter = (
-  state: PromptKeydownState,
-): boolean =>
-  !state.isComposing &&
-  state.eventIsComposing !== true
+export const shouldHandlePromptEnter = (state: PromptKeydownState): boolean =>
+  !state.isComposing && state.eventIsComposing !== true;
 
-export const shouldStopFromPromptShortcut = (
-  state: PromptStopShortcutState,
-): boolean =>
+export const shouldStopFromPromptShortcut = (state: PromptStopShortcutState): boolean =>
   state.ctrlKey &&
   state.metaKey !== true &&
   state.shiftKey !== true &&
   state.altKey !== true &&
-  state.key.toLowerCase() === "c"
+  state.key.toLowerCase() === "c";
 
 export const navigatePromptHistory = (
   promptHistory: string[],
@@ -46,7 +41,7 @@ export const navigatePromptHistory = (
       historyIndex,
       draftPrompt,
       nextText: currentText,
-    }
+    };
   }
 
   if (direction === "up") {
@@ -56,15 +51,15 @@ export const navigatePromptHistory = (
         historyIndex: promptHistory.length - 1,
         draftPrompt: currentText,
         nextText: promptHistory[promptHistory.length - 1] ?? "",
-      }
+      };
     }
-    const nextIndex = Math.max(0, historyIndex - 1)
+    const nextIndex = Math.max(0, historyIndex - 1);
     return {
       promptHistory,
       historyIndex: nextIndex,
       draftPrompt,
       nextText: promptHistory[nextIndex] ?? "",
-    }
+    };
   }
 
   if (historyIndex === -1) {
@@ -73,17 +68,17 @@ export const navigatePromptHistory = (
       historyIndex,
       draftPrompt,
       nextText: currentText,
-    }
+    };
   }
 
   if (historyIndex < promptHistory.length - 1) {
-    const nextIndex = historyIndex + 1
+    const nextIndex = historyIndex + 1;
     return {
       promptHistory,
       historyIndex: nextIndex,
       draftPrompt,
       nextText: promptHistory[nextIndex] ?? "",
-    }
+    };
   }
 
   return {
@@ -91,5 +86,5 @@ export const navigatePromptHistory = (
     historyIndex: -1,
     draftPrompt,
     nextText: draftPrompt,
-  }
-}
+  };
+};

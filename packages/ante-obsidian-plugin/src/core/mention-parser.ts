@@ -25,6 +25,6 @@ export const parseMentionLine = (line: string): MentionMatch | null => {
     presetId,
     inlineInstruction,
     start: tokenStart,
-    end: tokenEnd
+    end: tokenEnd,
   };
 };

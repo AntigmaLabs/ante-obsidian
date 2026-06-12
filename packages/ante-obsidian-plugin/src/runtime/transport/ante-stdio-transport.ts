@@ -1,5 +1,5 @@
 export {
   AnteStdioTransport,
   resolveCommandPath,
-  type AnteStdioTransportConfig
+  type AnteStdioTransportConfig,
 } from "@antigma/ante-sdk";

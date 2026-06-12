@@ -1,8 +1,12 @@
-import type { BuiltinPresetPreference, CustomPresetConfig, PresetSettings } from "../core/preset-config";
+import type {
+  BuiltinPresetPreference,
+  CustomPresetConfig,
+  PresetSettings,
+} from "../core/preset-config";
 import {
   ANTE_DEFAULT_THINKING,
   normalizeAnteThinkingPreference,
-  type AnteThinkingPreference
+  type AnteThinkingPreference,
 } from "../core/ante-thinking";
 
 // ─── Provider metadata ─────────────────────────────────────────────────────
@@ -23,7 +27,8 @@ export const DEFAULT_ANTE_MODEL = "gemini-3.5-flash";
 /** Default provider id used when stored settings have no usable value. */
 export const DEFAULT_ANTE_PROVIDER = "gemini";
 
-export const MISSING_CATALOG_WARNING_TEXT = "⚠️ No provider catalog: run the 'ante' command once, or update Ante (the 'ante catalog' command requires a newer version), then reopen settings.";
+export const MISSING_CATALOG_WARNING_TEXT =
+  "⚠️ No provider catalog: run the 'ante' command once, or update Ante (the 'ante catalog' command requires a newer version), then reopen settings.";
 
 export const getMissingCatalogNoticeText = (sourceLabel: string): string =>
   `${sourceLabel} requires a newer Ante CLI version. Please update Ante in Settings > Runtime to populate the provider catalog.`;
@@ -99,11 +104,11 @@ export const DEFAULT_SETTINGS: TmdSettings = {
   mentionTriggerDebug: false,
   customPresets: [],
   builtinPresetPreferences: [
-    { id: "default",  enabled: true, sortOrder: 0 },
+    { id: "default", enabled: true, sortOrder: 0 },
     { id: "research", enabled: true, sortOrder: 1 },
-    { id: "plan",     enabled: true, sortOrder: 2 },
-    { id: "summary",  enabled: true, sortOrder: 3 }
-  ]
+    { id: "plan", enabled: true, sortOrder: 2 },
+    { id: "summary", enabled: true, sortOrder: 3 },
+  ],
 };
 
 // ─── Normalization helpers ─────────────────────────────────────────────────
@@ -119,7 +124,10 @@ const normalizeCustomPresets = (raw: unknown): CustomPresetConfig[] => {
       continue;
     }
     const value = entry as Record<string, unknown>;
-    const id = typeof value.id === "string" && value.id.trim() ? value.id.trim() : `custom-${crypto.randomUUID()}`;
+    const id =
+      typeof value.id === "string" && value.id.trim()
+        ? value.id.trim()
+        : `custom-${crypto.randomUUID()}`;
     const name = typeof value.name === "string" ? value.name.trim() : "";
     const instruction = typeof value.instruction === "string" ? value.instruction : "";
     if (!name || !instruction.trim()) {
@@ -135,7 +143,7 @@ const normalizeCustomPresets = (raw: unknown): CustomPresetConfig[] => {
         typeof value.sortOrder === "number"
           ? value.sortOrder
           : DEFAULT_SETTINGS.builtinPresetPreferences.length + index,
-      interactionMode: value.interactionMode === "panel" ? "panel" : "inline"
+      interactionMode: value.interactionMode === "panel" ? "panel" : "inline",
     });
   }
 
@@ -161,7 +169,7 @@ const normalizeBuiltinPresetPreferences = (raw: unknown): BuiltinPresetPreferenc
     byId.set(id, {
       id,
       enabled: value.enabled !== false,
-      sortOrder: typeof value.sortOrder === "number" ? value.sortOrder : index
+      sortOrder: typeof value.sortOrder === "number" ? value.sortOrder : index,
     });
   }
 
@@ -177,7 +185,7 @@ const normalizeProviderKeys = (
   legacyGeminiKey: string,
   legacyGeminiEnvKey: string,
   legacyAnthropicKey: string,
-  legacyAnthropicEnvKey: string
+  legacyAnthropicEnvKey: string,
 ): Record<string, ProviderKeyConfig> => {
   const result: Record<string, ProviderKeyConfig> = {};
 
@@ -244,30 +252,40 @@ const normalizeLastSelectedModelsByProvider = (raw: unknown): Record<string, str
 export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefined): TmdSettings => {
   const raw = stored ?? {};
   const rawRecord = raw as Record<string, unknown>;
-  const anteProvider = normalizeProvider(typeof raw.anteProvider === "string" ? raw.anteProvider : DEFAULT_SETTINGS.anteProvider);
-  const anteModel = typeof raw.anteModel === "string" ? raw.anteModel.trim() : DEFAULT_SETTINGS.anteModel;
+  const anteProvider = normalizeProvider(
+    typeof raw.anteProvider === "string" ? raw.anteProvider : DEFAULT_SETTINGS.anteProvider,
+  );
+  const anteModel =
+    typeof raw.anteModel === "string" ? raw.anteModel.trim() : DEFAULT_SETTINGS.anteModel;
   const anteThinking = normalizeAnteThinkingPreference(raw.anteThinking);
 
   // Legacy flat fields (for migration)
-  const legacyGeminiKey = typeof rawRecord["geminiApiKey"] === "string" ? rawRecord["geminiApiKey"] : "";
-  const legacyGeminiEnvKey = typeof rawRecord["geminiApiKeyEnvKey"] === "string" && rawRecord["geminiApiKeyEnvKey"].trim()
-    ? rawRecord["geminiApiKeyEnvKey"].trim()
-    : "GEMINI_API_KEY";
-  const legacyAnthropicKey = typeof rawRecord["anthropicApiKey"] === "string" ? rawRecord["anthropicApiKey"] : "";
-  const legacyAnthropicEnvKey = typeof rawRecord["anthropicApiKeyEnvKey"] === "string" && rawRecord["anthropicApiKeyEnvKey"].trim()
-    ? rawRecord["anthropicApiKeyEnvKey"].trim()
-    : "ANTHROPIC_API_KEY";
+  const legacyGeminiKey =
+    typeof rawRecord["geminiApiKey"] === "string" ? rawRecord["geminiApiKey"] : "";
+  const legacyGeminiEnvKey =
+    typeof rawRecord["geminiApiKeyEnvKey"] === "string" && rawRecord["geminiApiKeyEnvKey"].trim()
+      ? rawRecord["geminiApiKeyEnvKey"].trim()
+      : "GEMINI_API_KEY";
+  const legacyAnthropicKey =
+    typeof rawRecord["anthropicApiKey"] === "string" ? rawRecord["anthropicApiKey"] : "";
+  const legacyAnthropicEnvKey =
+    typeof rawRecord["anthropicApiKeyEnvKey"] === "string" &&
+    rawRecord["anthropicApiKeyEnvKey"].trim()
+      ? rawRecord["anthropicApiKeyEnvKey"].trim()
+      : "ANTHROPIC_API_KEY";
 
   const providerKeys = normalizeProviderKeys(
     raw.providerKeys,
     legacyGeminiKey,
     legacyGeminiEnvKey,
     legacyAnthropicKey,
-    legacyAnthropicEnvKey
+    legacyAnthropicEnvKey,
   );
 
   const customModels = normalizeCustomModels(raw.customModels);
-  const lastSelectedModelsByProvider = normalizeLastSelectedModelsByProvider(raw.lastSelectedModelsByProvider);
+  const lastSelectedModelsByProvider = normalizeLastSelectedModelsByProvider(
+    raw.lastSelectedModelsByProvider,
+  );
 
   return {
     connectionMode: "stdio",
@@ -293,6 +311,6 @@ export const normalizeSettings = (stored: Partial<TmdSettings> | null | undefine
     anthropicApiKeyEnvKey: providerKeys["anthropic"]?.envKey ?? legacyAnthropicEnvKey,
     mentionTriggerDebug: raw.mentionTriggerDebug === true,
     customPresets: normalizeCustomPresets(raw.customPresets),
-    builtinPresetPreferences: normalizeBuiltinPresetPreferences(raw.builtinPresetPreferences)
+    builtinPresetPreferences: normalizeBuiltinPresetPreferences(raw.builtinPresetPreferences),
   };
 };

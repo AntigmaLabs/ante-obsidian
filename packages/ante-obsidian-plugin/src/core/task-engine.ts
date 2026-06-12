@@ -10,18 +10,15 @@ import type {
   TaskRequest,
   TmdState,
   TaskTriggerSource,
-  PresetId
+  PresetId,
 } from "./types";
 import { createInitialState } from "./types";
 import { TaskStdoutBuffer } from "./task-stdout-buffer";
 import { TaskArtifactManager, deriveTaskStatusFromArtifacts } from "./task-artifact-manager";
 import { TaskEventHandler } from "./task-event-handler";
+import { logDebug } from "./debug-log";
 
 type StateListener = (state: TmdState) => void;
-
-const logDebug = (...args: unknown[]): void => {
-  void args;
-};
 
 interface StartDocumentTaskInput {
   presetId: PresetId;
@@ -44,31 +41,30 @@ export class TaskEngine {
     private readonly host: HostAdapter,
     private readonly resolvePresetById: (presetId: PresetId) => PresetDefinition,
     private readonly shouldPreserveFullStdout: () => boolean = () => false,
-    private readonly getObsidianCliPromptBlock: () => string = () => ""
+    private readonly getObsidianCliPromptBlock: () => string = () => "",
   ) {
     this.stdoutBuffer = new TaskStdoutBuffer(
       this.shouldPreserveFullStdout,
       (taskId, incomingChunksCombined) => {
         const task = this.getTask(taskId);
         this.patchTask(taskId, {
-          stdoutText: this.stdoutBuffer.appendStdoutPreview(task.stdoutText, incomingChunksCombined)
+          stdoutText: this.stdoutBuffer.appendStdoutPreview(
+            task.stdoutText,
+            incomingChunksCombined,
+          ),
         });
-      }
+      },
     );
 
-    this.artifactManager = new TaskArtifactManager(
-      this.runtime,
-      this.host,
-      {
-        getTask: (taskId) => this.getTask(taskId),
-        patchTask: (taskId, patch) => this.patchTask(taskId, patch),
-        patchArtifact: (taskId, artifactId, patch) => this.patchArtifact(taskId, artifactId, patch),
-        patchArtifacts: (taskId, updater) => this.patchArtifacts(taskId, updater),
-        respondToTaskApproval: (taskId, decision) => this.respondToTaskApproval(taskId, decision),
-        appendLog: (taskId, stream, text) => this.appendLog(taskId, stream, text),
-        logDebug: (...args) => logDebug(...args)
-      }
-    );
+    this.artifactManager = new TaskArtifactManager(this.runtime, this.host, {
+      getTask: (taskId) => this.getTask(taskId),
+      patchTask: (taskId, patch) => this.patchTask(taskId, patch),
+      patchArtifact: (taskId, artifactId, patch) => this.patchArtifact(taskId, artifactId, patch),
+      patchArtifacts: (taskId, updater) => this.patchArtifacts(taskId, updater),
+      respondToTaskApproval: (taskId, decision) => this.respondToTaskApproval(taskId, decision),
+      appendLog: (taskId, stream, text) => this.appendLog(taskId, stream, text),
+      logDebug: (...args) => logDebug(...args),
+    });
 
     this.eventHandler = new TaskEventHandler(
       this.runtime,
@@ -80,8 +76,8 @@ export class TaskEngine {
         patchTask: (taskId, patch) => this.patchTask(taskId, patch),
         patchArtifacts: (taskId, updater) => this.patchArtifacts(taskId, updater),
         updateTaskTelemetry: (taskId, updater) => this.updateTaskTelemetry(taskId, updater),
-        appendLog: (taskId, stream, text) => this.appendLog(taskId, stream, text)
-      }
+        appendLog: (taskId, stream, text) => this.appendLog(taskId, stream, text),
+      },
     );
   }
 
@@ -108,7 +104,7 @@ export class TaskEngine {
       preset: this.resolvePresetById(input.presetId),
       context,
       inlineInstruction: input.inlineInstruction?.trim() ?? "",
-      obsidianCliPromptBlock: this.getObsidianCliPromptBlock()
+      obsidianCliPromptBlock: this.getObsidianCliPromptBlock(),
     };
     await this.runTask(request);
     return request.taskId;
@@ -118,15 +114,9 @@ export class TaskEngine {
     prompt: string,
     followUp = false,
     contextOverride?: ContextSnapshot | null,
-    runtimeTarget?: TaskRequest["runtimeTarget"]
+    runtimeTarget?: TaskRequest["runtimeTarget"],
   ): Promise<string> {
-    return this.startInteractiveTask(
-      "chat",
-      prompt,
-      followUp,
-      contextOverride,
-      runtimeTarget
-    );
+    return this.startInteractiveTask("chat", prompt, followUp, contextOverride, runtimeTarget);
   }
 
   async queueChatTask(
@@ -135,15 +125,16 @@ export class TaskEngine {
     followUp = false,
     contextOverride?: ContextSnapshot | null,
     runtimeSessionId?: string | null,
-    runtimeTarget?: TaskRequest["runtimeTarget"]
+    runtimeTarget?: TaskRequest["runtimeTarget"],
   ): Promise<string> {
-    const context = contextOverride ?? (await this.host.getPreferredContext()) ?? {
-      vaultPath: null,
-      filePath: null,
-      noteTitle: null,
-      documentText: null,
-      selection: null
-    };
+    const context = contextOverride ??
+      (await this.host.getPreferredContext()) ?? {
+        vaultPath: null,
+        filePath: null,
+        noteTitle: null,
+        documentText: null,
+        selection: null,
+      };
 
     const request: TaskRequest = {
       taskId,
@@ -155,14 +146,18 @@ export class TaskEngine {
       obsidianCliPromptBlock: this.getObsidianCliPromptBlock(),
       mode: followUp ? "followup" : "initial",
       followUpPrompt: followUp ? prompt.trim() : undefined,
-      runtimeSessionId: followUp ? runtimeSessionId ?? undefined : undefined,
-      runtimeTarget
+      runtimeSessionId: followUp ? (runtimeSessionId ?? undefined) : undefined,
+      runtimeTarget,
     };
     await this.runTask(request);
     return request.taskId;
   }
 
-  async startTerminalTask(prompt: string, followUp = false, contextOverride?: ContextSnapshot | null): Promise<string> {
+  async startTerminalTask(
+    prompt: string,
+    followUp = false,
+    contextOverride?: ContextSnapshot | null,
+  ): Promise<string> {
     return this.startInteractiveTask("terminal", prompt, followUp, contextOverride);
   }
 
@@ -171,17 +166,18 @@ export class TaskEngine {
     prompt: string,
     followUp: boolean,
     contextOverride?: ContextSnapshot | null,
-    runtimeTarget?: TaskRequest["runtimeTarget"]
+    runtimeTarget?: TaskRequest["runtimeTarget"],
   ): Promise<string> {
-    const context = contextOverride ?? (await this.host.getPreferredContext()) ?? {
-      vaultPath: null,
-      filePath: null,
-      noteTitle: null,
-      documentText: null,
-      selection: null
-    };
+    const context = contextOverride ??
+      (await this.host.getPreferredContext()) ?? {
+        vaultPath: null,
+        filePath: null,
+        noteTitle: null,
+        documentText: null,
+        selection: null,
+      };
     const latestSession = this.state.tasks.find(
-      (task) => task.triggerSource === triggerSource && task.runtimeSession?.sessionId
+      (task) => task.triggerSource === triggerSource && task.runtimeSession?.sessionId,
     )?.runtimeSession;
 
     const request: TaskRequest = {
@@ -195,7 +191,7 @@ export class TaskEngine {
       mode: followUp ? "followup" : "initial",
       followUpPrompt: followUp ? prompt.trim() : undefined,
       runtimeSessionId: followUp ? latestSession?.sessionId : undefined,
-      runtimeTarget
+      runtimeTarget,
     };
     await this.runTask(request);
     return request.taskId;
@@ -227,7 +223,7 @@ export class TaskEngine {
     this.state = {
       ...this.state,
       currentTaskId,
-      tasks: remainingTasks
+      tasks: remainingTasks,
     };
     this.notify();
   }
@@ -257,7 +253,7 @@ export class TaskEngine {
     this.state = {
       ...this.state,
       currentTaskId,
-      tasks: remainingTasks
+      tasks: remainingTasks,
     };
     this.notify();
   }
@@ -276,7 +272,13 @@ export class TaskEngine {
     if (decision === "Skip" || decision === "Abort") {
       const approvalToolIds = new Set(task.pendingApproval.tools.map((tool) => tool.id));
       this.patchArtifacts(taskId, (artifact) => {
-        if (!(artifact.runtimeToolId && approvalToolIds.has(artifact.runtimeToolId) && artifact.applyState === "pending")) {
+        if (
+          !(
+            artifact.runtimeToolId &&
+            approvalToolIds.has(artifact.runtimeToolId) &&
+            artifact.applyState === "pending"
+          )
+        ) {
           return artifact;
         }
         this.artifactManager.cleanupStagedPreview(artifact);
@@ -286,7 +288,7 @@ export class TaskEngine {
           applyError: undefined,
           baselinePath: undefined,
           stagedPath: undefined,
-          stagedRoot: undefined
+          stagedRoot: undefined,
         };
       });
       this.artifactManager.reconcileTaskStatus(taskId);
@@ -294,7 +296,11 @@ export class TaskEngine {
     this.appendLog(taskId, "system", `Approval sent: ${decision}`);
   }
 
-  async applyArtifact(taskId: string, artifactId: string, options?: { skipHost?: boolean }): Promise<void> {
+  async applyArtifact(
+    taskId: string,
+    artifactId: string,
+    options?: { skipHost?: boolean },
+  ): Promise<void> {
     await this.artifactManager.applyArtifact(taskId, artifactId, options);
   }
 
@@ -331,14 +337,14 @@ export class TaskEngine {
       stdoutText: "",
       artifacts: [],
       pendingApproval: undefined,
-      startedAt: new Date().toISOString()
+      startedAt: new Date().toISOString(),
     };
 
     this.activeTaskId = request.taskId;
     this.state = {
       ...this.state,
       currentTaskId: request.taskId,
-      tasks: [task, ...this.state.tasks]
+      tasks: [task, ...this.state.tasks],
     };
     this.notify();
 
@@ -355,14 +361,14 @@ export class TaskEngine {
               processLane: undefined,
               status: "cancelled",
               error: undefined,
-              endedAt: new Date().toISOString()
+              endedAt: new Date().toISOString(),
             });
           } else if (result.status === "failed" && result.error) {
             this.patchTask(request.taskId, {
               pendingApproval: undefined,
               status: "failed",
               error: result.error,
-              endedAt: new Date().toISOString()
+              endedAt: new Date().toISOString(),
             });
           } else if (result.status === "completed") {
             const task = this.getTask(request.taskId);
@@ -370,21 +376,22 @@ export class TaskEngine {
               this.patchTask(request.taskId, {
                 pendingApproval: undefined,
                 processLane: undefined,
-                status: task.artifacts.length > 0 ? deriveTaskStatusFromArtifacts(task) : "completed",
-                endedAt: new Date().toISOString()
+                status:
+                  task.artifacts.length > 0 ? deriveTaskStatusFromArtifacts(task) : "completed",
+                endedAt: new Date().toISOString(),
               });
             }
           }
           if (this.activeTaskId === request.taskId) {
             this.activeTaskId = null;
           }
-        }
+        },
       });
     } catch (error) {
       this.patchTask(request.taskId, {
         status: "failed",
         error: error instanceof Error ? error.message : String(error),
-        endedAt: new Date().toISOString()
+        endedAt: new Date().toISOString(),
       });
       if (this.activeTaskId === request.taskId) {
         this.activeTaskId = null;
@@ -393,7 +400,11 @@ export class TaskEngine {
     }
   }
 
-  private appendLog(taskId: string, stream: TaskRecord["logs"][number]["stream"], text: string): void {
+  private appendLog(
+    taskId: string,
+    stream: TaskRecord["logs"][number]["stream"],
+    text: string,
+  ): void {
     if (stream === "stdout") {
       this.stdoutBuffer.queue(taskId, text);
       return;
@@ -406,9 +417,9 @@ export class TaskEngine {
         {
           stream,
           text,
-          timestamp: new Date().toISOString()
-        }
-      ]
+          timestamp: new Date().toISOString(),
+        },
+      ],
     });
   }
 
@@ -440,7 +451,10 @@ export class TaskEngine {
   private patchTask(taskId: string, patch: Partial<TaskRecord>): void {
     const taskIndex = this.getTaskIndex(taskId);
     const currentTask = this.state.tasks[taskIndex];
-    const patchEntries = Object.entries(patch) as [keyof TaskRecord, TaskRecord[keyof TaskRecord]][];
+    const patchEntries = Object.entries(patch) as [
+      keyof TaskRecord,
+      TaskRecord[keyof TaskRecord],
+    ][];
     if (patchEntries.every(([key, value]) => currentTask[key] === value)) {
       return;
     }
@@ -450,14 +464,14 @@ export class TaskEngine {
     nextTasks[taskIndex] = nextTask;
     this.state = {
       ...this.state,
-      tasks: nextTasks
+      tasks: nextTasks,
     };
     this.notify();
   }
 
   private updateTaskTelemetry(
     taskId: string,
-    updater: (telemetry: RuntimeTelemetryState) => RuntimeTelemetryState
+    updater: (telemetry: RuntimeTelemetryState) => RuntimeTelemetryState,
   ): void {
     const task = this.getTask(taskId);
     const currentTelemetry: RuntimeTelemetryState = task.telemetry
@@ -465,17 +479,21 @@ export class TaskEngine {
           ...task.telemetry,
           usage: task.telemetry.usage ? { ...task.telemetry.usage } : undefined,
           lastInfo: task.telemetry.lastInfo ? { ...task.telemetry.lastInfo } : undefined,
-          timeline: [...task.telemetry.timeline]
+          timeline: [...task.telemetry.timeline],
         }
       : {
-          timeline: []
+          timeline: [],
         };
     this.patchTask(taskId, {
-      telemetry: updater(currentTelemetry)
+      telemetry: updater(currentTelemetry),
     });
   }
 
-  private patchArtifact(taskId: string, artifactId: string, patch: Partial<DocumentChangeArtifact>): void {
+  private patchArtifact(
+    taskId: string,
+    artifactId: string,
+    patch: Partial<DocumentChangeArtifact>,
+  ): void {
     const task = this.getTask(taskId);
     const artifactIndex = task.artifacts.findIndex((artifact) => artifact.id === artifactId);
     if (artifactIndex === -1) {
@@ -485,17 +503,17 @@ export class TaskEngine {
     const nextArtifacts = task.artifacts.slice();
     nextArtifacts[artifactIndex] = {
       ...nextArtifacts[artifactIndex],
-      ...patch
+      ...patch,
     };
 
     this.patchTask(taskId, {
-      artifacts: nextArtifacts
+      artifacts: nextArtifacts,
     });
   }
 
   private patchArtifacts(
     taskId: string,
-    updater: (artifact: DocumentChangeArtifact) => DocumentChangeArtifact
+    updater: (artifact: DocumentChangeArtifact) => DocumentChangeArtifact,
   ): void {
     const task = this.getTask(taskId);
     const nextArtifacts = task.artifacts.map((artifact) => updater(artifact));

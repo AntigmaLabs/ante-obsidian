@@ -33,7 +33,7 @@ const createPatchMetaRows = (artifact: DocumentChangeArtifact): PatchRow[] => {
   return [
     { kind: "meta", text: `diff --git ${oldFileName} ${newFileName}` },
     { kind: "meta", text: `--- ${oldFileName}` },
-    { kind: "meta", text: `+++ ${newFileName}` }
+    { kind: "meta", text: `+++ ${newFileName}` },
   ];
 };
 
@@ -41,9 +41,17 @@ const buildFallbackPatchRows = (artifact: DocumentChangeArtifact, reason?: strin
   const fileLabel = getArtifactTargetPath(artifact);
   const oldFileName = artifact.operation === "create-file" ? "/dev/null" : `a/${fileLabel}`;
   const newFileName = `b/${fileLabel}`;
-  const patch = structuredPatch(oldFileName, newFileName, artifact.beforeText, artifact.afterText, "", "", {
-    context: 3
-  });
+  const patch = structuredPatch(
+    oldFileName,
+    newFileName,
+    artifact.beforeText,
+    artifact.afterText,
+    "",
+    "",
+    {
+      context: 3,
+    },
+  );
   const rows = createPatchMetaRows(artifact);
 
   if (reason) {
@@ -51,7 +59,10 @@ const buildFallbackPatchRows = (artifact: DocumentChangeArtifact, reason?: strin
   }
 
   for (const hunk of patch.hunks) {
-    rows.push({ kind: "hunk", text: `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@` });
+    rows.push({
+      kind: "hunk",
+      text: `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`,
+    });
 
     let oldLine = hunk.oldStart;
     let newLine = hunk.newStart;
@@ -77,9 +88,13 @@ const buildFallbackPatchRows = (artifact: DocumentChangeArtifact, reason?: strin
 };
 
 const runGitDiffNoIndex = async (oldPath: string, newPath: string): Promise<string> => {
-  const child = spawn("git", ["diff", "--no-index", "--no-color", "--text", "--unified=3", "--", oldPath, newPath], {
-    stdio: ["ignore", "pipe", "pipe"]
-  });
+  const child = spawn(
+    "git",
+    ["diff", "--no-index", "--no-color", "--text", "--unified=3", "--", oldPath, newPath],
+    {
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
 
   let stdout = "";
   let stderr = "";
@@ -155,7 +170,10 @@ export const buildPatchRows = async (artifact: DocumentChangeArtifact): Promise<
       const rawPatch = await runGitDiffNoIndex(artifact.baselinePath, artifact.stagedPath);
       return parseGitDiffRows(artifact, rawPatch);
     } catch (error) {
-      return buildFallbackPatchRows(artifact, error instanceof Error ? error.message : String(error));
+      return buildFallbackPatchRows(
+        artifact,
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 

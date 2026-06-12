@@ -1,5 +1,5 @@
 export {
   buildApprovalProcessLane,
   buildApprovalResponseOperation,
-  describeAutoApprovedTools
+  describeAutoApprovedTools,
 } from "@antigma/ante-sdk";

@@ -1,7 +1,10 @@
 import { AnteSessionDriver, type AnteRuntimeConfig } from "./ante-session-driver";
 import type { AnteRuntime } from "./ante-runtime";
 import { AnteStdioTransport } from "./transport/ante-stdio-transport";
-import { AnteWebSocketTransport, normalizeWsListenAddress } from "./transport/ante-websocket-transport";
+import {
+  AnteWebSocketTransport,
+  normalizeWsListenAddress,
+} from "./transport/ante-websocket-transport";
 
 export const DEFAULT_ANTE_ARGS_JSON = JSON.stringify(["serve", "--stdio"]);
 
@@ -59,7 +62,7 @@ export const __test__ = {
   ensureServeArgs,
   ensureWebSocketArgs,
   stripTransportArgs,
-  parseArgs
+  parseArgs,
 };
 
 export const createAnteRuntime = (getConfig: () => AnteRuntimeConfig): AnteRuntime =>
@@ -72,13 +75,13 @@ export const createAnteRuntime = (getConfig: () => AnteRuntimeConfig): AnteRunti
         args: ensureWebSocketArgs(parsedArgs, listenAddress),
         cwd: config.cwd,
         env: config.env,
-        address: config.wsAddress
+        address: config.wsAddress,
       });
     }
     return new AnteStdioTransport({
       command: config.command,
       args: ensureServeArgs(parsedArgs),
       cwd: config.cwd,
-      env: config.env
+      env: config.env,
     });
   });

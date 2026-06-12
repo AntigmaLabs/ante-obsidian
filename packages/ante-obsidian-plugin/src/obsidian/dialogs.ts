@@ -8,7 +8,10 @@ export interface ConfirmDialogOptions {
   cta?: boolean;
 }
 
-export const showConfirmDialog = (app: import("obsidian").App, options: ConfirmDialogOptions): Promise<boolean> =>
+export const showConfirmDialog = (
+  app: import("obsidian").App,
+  options: ConfirmDialogOptions,
+): Promise<boolean> =>
   new Promise((resolve) => {
     const modal = new ConfirmDialog(app, options, resolve);
     modal.open();
@@ -16,7 +19,7 @@ export const showConfirmDialog = (app: import("obsidian").App, options: ConfirmD
 
 export const showPromptDialog = (
   app: import("obsidian").App,
-  options: { title: string; initialValue?: string; placeholder?: string; submitText?: string }
+  options: { title: string; initialValue?: string; placeholder?: string; submitText?: string },
 ): Promise<string | null> =>
   new Promise((resolve) => {
     const modal = new PromptDialog(app, options, resolve);
@@ -29,7 +32,7 @@ class ConfirmDialog extends Modal {
   constructor(
     app: import("obsidian").App,
     private readonly options: ConfirmDialogOptions,
-    private readonly resolve: (value: boolean) => void
+    private readonly resolve: (value: boolean) => void,
   ) {
     super(app);
   }
@@ -41,11 +44,9 @@ class ConfirmDialog extends Modal {
 
     new Setting(contentEl)
       .addButton((button) =>
-        button
-          .setButtonText(this.options.cancelText ?? "Cancel")
-          .onClick(() => {
-            this.finish(false);
-          })
+        button.setButtonText(this.options.cancelText ?? "Cancel").onClick(() => {
+          this.finish(false);
+        }),
       )
       .addButton((button) => {
         button.setButtonText(this.options.confirmText ?? "Continue").onClick(() => {
@@ -78,8 +79,13 @@ class PromptDialog extends Modal {
 
   constructor(
     app: import("obsidian").App,
-    private readonly options: { title: string; initialValue?: string; placeholder?: string; submitText?: string },
-    private readonly resolve: (value: string | null) => void
+    private readonly options: {
+      title: string;
+      initialValue?: string;
+      placeholder?: string;
+      submitText?: string;
+    },
+    private readonly resolve: (value: string | null) => void,
   ) {
     super(app);
   }
@@ -103,7 +109,7 @@ class PromptDialog extends Modal {
       .addButton((button) =>
         button.setButtonText("Cancel").onClick(() => {
           this.finish(null);
-        })
+        }),
       )
       .addButton((button) =>
         button
@@ -111,7 +117,7 @@ class PromptDialog extends Modal {
           .setCta()
           .onClick(() => {
             this.submit();
-          })
+          }),
       );
 
     this.inputEl?.focus();

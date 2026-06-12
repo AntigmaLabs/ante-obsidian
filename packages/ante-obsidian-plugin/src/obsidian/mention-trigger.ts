@@ -33,9 +33,10 @@ function getLastNonEmptyLine(text: string): string {
   let currentIndex = text.length;
   while (currentIndex > 0) {
     const nextNewline = text.lastIndexOf("\n", currentIndex - 1);
-    const line = nextNewline === -1
-      ? text.slice(0, currentIndex).trim()
-      : text.slice(nextNewline + 1, currentIndex).trim();
+    const line =
+      nextNewline === -1
+        ? text.slice(0, currentIndex).trim()
+        : text.slice(nextNewline + 1, currentIndex).trim();
     if (line) {
       return line;
     }
@@ -63,8 +64,9 @@ function getProgressTextForRunningTask(task: TaskRecord): string {
 
   // 2. Try to get progress from processLane (high-level step labels)
   if (task.processLane?.steps) {
-    const activeStep = task.processLane.steps.find((step) => step.status === "in_progress")
-      ?? task.processLane.steps.find((step) => step.status === "pending");
+    const activeStep =
+      task.processLane.steps.find((step) => step.status === "in_progress") ??
+      task.processLane.steps.find((step) => step.status === "pending");
     if (activeStep) {
       return activeStep.activeLabel ?? activeStep.label;
     }
@@ -106,14 +108,18 @@ function buildPlaceholderBody(
   loadingSeed: string,
   loadingFrameIndex: number,
   model: string | undefined,
-  progressText: string
+  progressText: string,
 ): string {
   const lines: string[] = [];
   if (model) {
-    lines.push(`> <small style="color: var(--text-muted); opacity: 0.55; font-size: 0.75em;">model: ${escapeHtml(model)}</small>`);
+    lines.push(
+      `> <small style="color: var(--text-muted); opacity: 0.55; font-size: 0.75em;">model: ${escapeHtml(model)}</small>`,
+    );
   }
   if (progressText) {
-    lines.push(`> <small style="color: var(--text-muted); opacity: 0.7; font-style: italic;">Doing: ${escapeHtml(progressText)}</small>`);
+    lines.push(
+      `> <small style="color: var(--text-muted); opacity: 0.7; font-style: italic;">Doing: ${escapeHtml(progressText)}</small>`,
+    );
   }
   lines.push(`> ${formatLoadingLabel(loadingSeed, loadingFrameIndex)}`);
   return lines.join("\n");
@@ -132,7 +138,7 @@ export class MentionTriggerService {
   constructor(
     private readonly app: App,
     private readonly plugin: TmdPlugin,
-    private readonly isDebugEnabled: () => boolean
+    private readonly isDebugEnabled: () => boolean,
   ) {}
 
   destroy(): void {
@@ -156,7 +162,7 @@ export class MentionTriggerService {
       view.file.path,
       cursor.line,
       currentLine,
-      previousLine
+      previousLine,
     );
 
     if (!match) {
@@ -184,8 +190,8 @@ export class MentionTriggerService {
           ...paragraphSelection,
           to: {
             line: matchLine,
-            ch: matchText.length
-          }
+            ch: matchText.length,
+          },
         }
       : null;
     const activeContext = await this.plugin.hostAdapter.getActiveContext();
@@ -193,19 +199,18 @@ export class MentionTriggerService {
       return;
     }
 
-    const context =
-      activeContext.selection?.text.trim()
-        ? activeContext
-        : {
-            ...activeContext,
-            selection: mentionSelection
-              ? {
-                  text: mentionSelection.text,
-                  from: mentionSelection.from,
-                  to: mentionSelection.to
-                }
-              : null
-          };
+    const context = activeContext.selection?.text.trim()
+      ? activeContext
+      : {
+          ...activeContext,
+          selection: mentionSelection
+            ? {
+                text: mentionSelection.text,
+                from: mentionSelection.from,
+                to: mentionSelection.to,
+              }
+            : null,
+        };
 
     if (!this.plugin.ensureAnteInstalled("Inline Ante trigger")) {
       return;
@@ -222,11 +227,11 @@ export class MentionTriggerService {
       const triggerLineText = editor.getLine(matchLine);
       const replaceFrom = {
         line: matchLine,
-        ch: match.start
+        ch: match.start,
       };
       const replaceTo = {
         line: matchLine,
-        ch: triggerLineText.length
+        ch: triggerLineText.length,
       };
 
       await this.runTaskWithPlaceholder({
@@ -236,7 +241,7 @@ export class MentionTriggerService {
         context,
         presetId: match.presetId,
         inlineInstruction: match.inlineInstruction,
-        triggerSource: "mention"
+        triggerSource: "mention",
       });
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Inline Ante trigger failed");
@@ -261,7 +266,7 @@ export class MentionTriggerService {
       context,
       presetId,
       inlineInstruction,
-      triggerSource = "mention"
+      triggerSource = "mention",
     } = options;
     let loadingFrameIndex = 0;
     const loadingSeed = window.crypto.randomUUID();
@@ -270,11 +275,16 @@ export class MentionTriggerService {
     const placeholderPrefix = replaceFrom.ch > 0 ? "\n" : "";
     const placeholderSuffix = "\n";
     const resolvedTarget = this.plugin.getResolvedAnteTarget();
-    
+
     let latestProgressText = "";
     const placeholderText = `${placeholderPrefix}${this.wrapPlaceholder(
       markers,
-      buildPlaceholderBody(loadingSeed, loadingFrameIndex, resolvedTarget.model, latestProgressText)
+      buildPlaceholderBody(
+        loadingSeed,
+        loadingFrameIndex,
+        resolvedTarget.model,
+        latestProgressText,
+      ),
     )}${placeholderSuffix}`;
 
     this.performEditorReplace(editor, () => {
@@ -292,8 +302,13 @@ export class MentionTriggerService {
       this.replacePlaceholderBody(
         editor,
         markers,
-        buildPlaceholderBody(loadingSeed, loadingFrameIndex, resolvedTarget.model, latestProgressText),
-        context.filePath
+        buildPlaceholderBody(
+          loadingSeed,
+          loadingFrameIndex,
+          resolvedTarget.model,
+          latestProgressText,
+        ),
+        context.filePath,
       );
     };
     const timer = window.setInterval(updateLoading, 800);
@@ -303,7 +318,7 @@ export class MentionTriggerService {
         presetId,
         triggerSource,
         context,
-        inlineInstruction
+        inlineInstruction,
       });
       logTmdDebug(`runTaskWithPlaceholder: task started: taskId=${taskId}`);
 
@@ -318,11 +333,18 @@ export class MentionTriggerService {
           settled = true;
           window.clearInterval(timer);
           unsubscribe();
-          void this.replacePlaceholderWhole(editor, markers, `> [!warning]\n> \n> Task was cancelled or removed.`, context.filePath);
+          void this.replacePlaceholderWhole(
+            editor,
+            markers,
+            `> [!warning]\n> \n> Task was cancelled or removed.`,
+            context.filePath,
+          );
           return;
         }
 
-        logTmdDebug(`Subscriber update: taskId=${taskId} status=${task.status} artifacts=${task.artifacts.length} hasTextResult=${!!task.textResult}`);
+        logTmdDebug(
+          `Subscriber update: taskId=${taskId} status=${task.status} artifacts=${task.artifacts.length} hasTextResult=${!!task.textResult}`,
+        );
 
         if (task.status === "running") {
           latestProgressText = getProgressTextForRunningTask(task);
@@ -330,11 +352,15 @@ export class MentionTriggerService {
         }
 
         if (task.artifacts.length > 0) {
-          const pendingArtifacts = task.artifacts.filter((artifact) => artifact.applyState === "pending");
-          const activeArtifacts = task.artifacts.filter(
-            (artifact) => artifact.applyState === "applying" || artifact.applyState === "reverting"
+          const pendingArtifacts = task.artifacts.filter(
+            (artifact) => artifact.applyState === "pending",
           );
-          logTmdDebug(`Subscriber handling artifacts: pending=${pendingArtifacts.length} active=${activeArtifacts.length}`);
+          const activeArtifacts = task.artifacts.filter(
+            (artifact) => artifact.applyState === "applying" || artifact.applyState === "reverting",
+          );
+          logTmdDebug(
+            `Subscriber handling artifacts: pending=${pendingArtifacts.length} active=${activeArtifacts.length}`,
+          );
           if (pendingArtifacts.length > 0) {
             settled = true;
             window.clearInterval(timer);
@@ -343,18 +369,27 @@ export class MentionTriggerService {
             void (async () => {
               try {
                 for (const artifact of pendingArtifacts) {
-                  logTmdDebug(`Applying artifact: id=${artifact.id} target=${artifact.target.path}`);
+                  logTmdDebug(
+                    `Applying artifact: id=${artifact.id} target=${artifact.target.path}`,
+                  );
                   await this.plugin.taskEngine.applyArtifact(task.id, artifact.id);
                 }
                 logTmdDebug(`Finished applying artifacts, now replacing placeholder whole`);
-                await this.replacePlaceholderWhole(editor, markers, `> [!success]\n> \n> Applied directly.`, context.filePath);
+                await this.replacePlaceholderWhole(
+                  editor,
+                  markers,
+                  `> [!success]\n> \n> Applied directly.`,
+                  context.filePath,
+                );
               } catch (error) {
-                logTmdDebug(`Error applying artifacts: ${error instanceof Error ? error.message : String(error)}`);
+                logTmdDebug(
+                  `Error applying artifacts: ${error instanceof Error ? error.message : String(error)}`,
+                );
                 await this.replacePlaceholderWhole(
                   editor,
                   markers,
                   `> [!failure]\n> \n> ${error instanceof Error ? error.message : "Failed to apply change"}`,
-                  context.filePath
+                  context.filePath,
                 );
               }
             })();
@@ -367,24 +402,33 @@ export class MentionTriggerService {
           settled = true;
           window.clearInterval(timer);
           unsubscribe();
-          const failedArtifact = task.artifacts.find((artifact) => artifact.applyState === "failed");
-          
+          const failedArtifact = task.artifacts.find(
+            (artifact) => artifact.applyState === "failed",
+          );
+
           void (async () => {
             try {
               if (failedArtifact?.applyError) {
                 logTmdDebug(`Artifact failed error: ${failedArtifact.applyError}`);
-                await this.replacePlaceholderWhole(editor, markers, `> [!failure]\n> \n> ${failedArtifact.applyError}`, context.filePath);
+                await this.replacePlaceholderWhole(
+                  editor,
+                  markers,
+                  `> [!failure]\n> \n> ${failedArtifact.applyError}`,
+                  context.filePath,
+                );
               } else {
                 logTmdDebug(`Artifacts completed, replacing placeholder with success`);
                 await this.replacePlaceholderWhole(
                   editor,
                   markers,
                   `> [!success]\n> \n> Applied directly.`,
-                  context.filePath
+                  context.filePath,
                 );
               }
             } catch (error) {
-              logTmdDebug(`Error in artifact settled IIFE: ${error instanceof Error ? error.message : String(error)}`);
+              logTmdDebug(
+                `Error in artifact settled IIFE: ${error instanceof Error ? error.message : String(error)}`,
+              );
               console.error("[tmd] Error replacing placeholder for artifacts:", error);
             }
           })();
@@ -399,28 +443,47 @@ export class MentionTriggerService {
           try {
             if (task.textResult?.text.trim()) {
               logTmdDebug(`TextResult received, length=${task.textResult.text.trim().length}`);
-              await this.replacePlaceholderWhole(editor, markers, task.textResult.text.trim(), context.filePath);
+              await this.replacePlaceholderWhole(
+                editor,
+                markers,
+                task.textResult.text.trim(),
+                context.filePath,
+              );
             } else if (task.error) {
               logTmdDebug(`Task error: ${task.error}`);
-              await this.replacePlaceholderWhole(editor, markers, `> [!failure]\n> \n> ${task.error}`, context.filePath);
+              await this.replacePlaceholderWhole(
+                editor,
+                markers,
+                `> [!failure]\n> \n> ${task.error}`,
+                context.filePath,
+              );
             } else {
               logTmdDebug(`No textResult and no error, replacing with warning`);
-              await this.replacePlaceholderWhole(editor, markers, `> [!warning]\n> \n> Ante returned no visible result.`, context.filePath);
+              await this.replacePlaceholderWhole(
+                editor,
+                markers,
+                `> [!warning]\n> \n> Ante returned no visible result.`,
+                context.filePath,
+              );
             }
           } catch (error) {
-            logTmdDebug(`Error in textResult settled IIFE: ${error instanceof Error ? error.message : String(error)}`);
+            logTmdDebug(
+              `Error in textResult settled IIFE: ${error instanceof Error ? error.message : String(error)}`,
+            );
             console.error("[tmd] Error replacing placeholder whole:", error);
           }
         })();
       });
     } catch (error) {
-      logTmdDebug(`Error launching document task: ${error instanceof Error ? error.message : String(error)}`);
+      logTmdDebug(
+        `Error launching document task: ${error instanceof Error ? error.message : String(error)}`,
+      );
       window.clearInterval(timer);
       await this.replacePlaceholderWhole(
         editor,
         markers,
         `> [!failure]\n> \n> ${error instanceof Error ? error.message : "Failed to start Ante task"}`,
-        context.filePath
+        context.filePath,
       );
       throw error;
     }
@@ -458,7 +521,7 @@ export class MentionTriggerService {
     editor: Editor,
     markers: PlaceholderMarkers,
     replacement: string,
-    filePath: string | null
+    filePath: string | null,
   ): Promise<void> {
     logTmdDebug(`replacePlaceholderWhole: filePath=${filePath}`);
     let targetEditor = editor;
@@ -472,11 +535,15 @@ export class MentionTriggerService {
     const content = targetEditor.getValue();
     const startIndex = content.indexOf(markers.blockStart);
     const endIndex = content.indexOf(markers.blockEnd);
-    logTmdDebug(`replacePlaceholderWhole editor search: startIndex=${startIndex} endIndex=${endIndex} contentLength=${content.length}`);
+    logTmdDebug(
+      `replacePlaceholderWhole editor search: startIndex=${startIndex} endIndex=${endIndex} contentLength=${content.length}`,
+    );
     if (startIndex >= 0 && endIndex >= 0 && endIndex >= startIndex) {
       const startPosition = targetEditor.offsetToPos(startIndex);
       const endPosition = targetEditor.offsetToPos(endIndex + markers.blockEnd.length);
-      logTmdDebug(`replacePlaceholderWhole replacing editor range: startLine=${startPosition.line} startCh=${startPosition.ch} endLine=${endPosition.line} endCh=${endPosition.ch}`);
+      logTmdDebug(
+        `replacePlaceholderWhole replacing editor range: startLine=${startPosition.line} startCh=${startPosition.ch} endLine=${endPosition.line} endCh=${endPosition.ch}`,
+      );
       this.performEditorReplace(targetEditor, () => {
         targetEditor.replaceRange(replacement, startPosition, endPosition);
       });
@@ -491,7 +558,9 @@ export class MentionTriggerService {
           const fileContent = await this.app.vault.read(file);
           const fStartIndex = fileContent.indexOf(markers.blockStart);
           const fEndIndex = fileContent.indexOf(markers.blockEnd);
-          logTmdDebug(`replacePlaceholderWhole vault file search: startIndex=${fStartIndex} endIndex=${fEndIndex} fileLength=${fileContent.length}`);
+          logTmdDebug(
+            `replacePlaceholderWhole vault file search: startIndex=${fStartIndex} endIndex=${fEndIndex} fileLength=${fileContent.length}`,
+          );
           if (fStartIndex >= 0 && fEndIndex >= 0 && fEndIndex >= fStartIndex) {
             const before = fileContent.slice(0, fStartIndex);
             const after = fileContent.slice(fEndIndex + markers.blockEnd.length);
@@ -502,7 +571,9 @@ export class MentionTriggerService {
             logTmdDebug(`replacePlaceholderWhole fallback: markers not found in vault file`);
           }
         } catch (error) {
-          logTmdDebug(`replacePlaceholderWhole fallback error: ${error instanceof Error ? error.message : String(error)}`);
+          logTmdDebug(
+            `replacePlaceholderWhole fallback error: ${error instanceof Error ? error.message : String(error)}`,
+          );
           console.error("[tmd] Failed to fallback replace placeholder in vault file:", error);
         }
       } else {
@@ -515,7 +586,7 @@ export class MentionTriggerService {
     editor: Editor,
     markers: PlaceholderMarkers,
     replacement: string,
-    filePath: string | null
+    filePath: string | null,
   ): void {
     let targetEditor = editor;
     if (filePath) {
@@ -563,7 +634,7 @@ export class MentionTriggerService {
   private createPlaceholderMarkers(seed: string): PlaceholderMarkers {
     return {
       blockStart: this.encodeInvisibleMarker(`block-start:${seed}`),
-      blockEnd: this.encodeInvisibleMarker(`block-end:${seed}`)
+      blockEnd: this.encodeInvisibleMarker(`block-end:${seed}`),
     };
   }
 

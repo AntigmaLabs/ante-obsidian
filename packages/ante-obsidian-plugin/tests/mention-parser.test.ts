@@ -7,7 +7,7 @@ test("parseMentionLine detects default ante mention", () => {
     presetId: "default",
     inlineInstruction: "",
     start: 12,
-    end: 17
+    end: 17,
   });
 });
 
@@ -17,7 +17,7 @@ test("parseMentionLine ignores research and plan modifiers", () => {
     presetId: "default",
     inlineInstruction: "research look for gaps",
     start: 0,
-    end: 5
+    end: 5,
   });
 
   // 现在会将 "plan break this down" 视为内联指令，而不是预设

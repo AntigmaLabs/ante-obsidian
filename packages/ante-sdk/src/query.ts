@@ -50,7 +50,7 @@ class AnteQuery implements Query {
   constructor(
     prompt: string | AsyncIterable<SDKUserMessage>,
     options: Options = {},
-    clientFactory: (options: Options) => AnteClient = createAnteClient
+    clientFactory: (options: Options) => AnteClient = createAnteClient,
   ) {
     this.permissionMode = options.permissionMode ?? "default";
     this.model = options.model;
@@ -105,7 +105,10 @@ class AnteQuery implements Query {
     this.queue.close();
   }
 
-  private async start(prompt: string | AsyncIterable<SDKUserMessage>, options: Options): Promise<void> {
+  private async start(
+    prompt: string | AsyncIterable<SDKUserMessage>,
+    options: Options,
+  ): Promise<void> {
     try {
       await this.client.connect();
       if (options.resume?.trim()) {
@@ -124,7 +127,7 @@ class AnteQuery implements Query {
       this.queue.push({
         type: "result",
         subtype: "error",
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
       this.queue.close();
     }
@@ -133,7 +136,7 @@ class AnteQuery implements Query {
 
 export function query({
   prompt,
-  options
+  options,
 }: {
   prompt: string | AsyncIterable<SDKUserMessage>;
   options?: Options;
@@ -142,5 +145,5 @@ export function query({
 }
 
 export const __test__ = {
-  AnteQuery
+  AnteQuery,
 };

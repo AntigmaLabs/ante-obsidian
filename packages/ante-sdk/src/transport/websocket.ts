@@ -51,7 +51,7 @@ export const parseSocketAddress = (address: string): { host: string; port: numbe
   }
   return {
     host: url.hostname,
-    port
+    port,
   };
 };
 
@@ -91,9 +91,9 @@ export class AnteWebSocketTransport implements AnteTransport {
       cwd: this.config.cwd.trim() || undefined,
       env: {
         ...process.env,
-        ...this.config.env
+        ...this.config.env,
       },
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
     });
     this.child = child;
     this.stdoutBuffer = "";
@@ -126,7 +126,7 @@ export class AnteWebSocketTransport implements AnteTransport {
       this.socket = null;
       this.onClose({
         code: code ?? undefined,
-        reason: signal === "SIGTERM" ? "SIGTERM" : undefined
+        reason: signal === "SIGTERM" ? "SIGTERM" : undefined,
       });
     });
 
@@ -171,7 +171,9 @@ export class AnteWebSocketTransport implements AnteTransport {
     this.onClose = handler;
   }
 
-  setDiagnosticHandler(handler: (event: { stream: "stdout" | "stderr"; text: string }) => void): void {
+  setDiagnosticHandler(
+    handler: (event: { stream: "stdout" | "stderr"; text: string }) => void,
+  ): void {
     this.onDiagnostic = handler;
   }
 
@@ -243,7 +245,7 @@ export class AnteWebSocketTransport implements AnteTransport {
       }
       this.onClose({
         code: event.code,
-        reason: event.reason || undefined
+        reason: event.reason || undefined,
       });
     };
   }
@@ -277,6 +279,9 @@ export class AnteWebSocketTransport implements AnteTransport {
       }
     }
 
-    throw lastError ?? new Error(`Timed out waiting for Ante WebSocket server at ${this.config.address}`);
+    throw (
+      lastError ??
+      new Error(`Timed out waiting for Ante WebSocket server at ${this.config.address}`)
+    );
   }
 }

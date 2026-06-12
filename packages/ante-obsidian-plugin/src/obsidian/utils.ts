@@ -18,7 +18,7 @@ export const handleError = (error: unknown, defaultMessage: string): void => {
 export const appendErrorReportLink = (
   containerEl: HTMLElement,
   errorText: string,
-  plugin?: TmdPlugin
+  plugin?: TmdPlugin,
 ): void => {
   if (!errorText.trim()) return;
 
@@ -32,8 +32,8 @@ export const appendErrorReportLink = (
     attr: {
       "aria-label": "Report this issue to GitHub",
       title: "Report this issue to GitHub",
-      type: "button"
-    }
+      type: "button",
+    },
   });
   setIcon(reportBtn, "bug");
 

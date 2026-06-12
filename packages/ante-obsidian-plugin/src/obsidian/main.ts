@@ -10,7 +10,12 @@ import type { HostAdapter } from "../core/host-adapter";
 import { ObsidianHostAdapter } from "./host-adapter";
 import { populateEditorMenu } from "./editor-menu";
 import { TmdSettingTab } from "./settings-tab";
-import { DEFAULT_SETTINGS, getMissingCatalogNoticeText, normalizeSettings, type TmdSettings } from "./settings";
+import {
+  DEFAULT_SETTINGS,
+  getMissingCatalogNoticeText,
+  normalizeSettings,
+  type TmdSettings,
+} from "./settings";
 import { readAnteCatalog, type AnteCatalog, type AnteCatalogProvider } from "./ante-catalog";
 import type { AnteRuntime } from "../runtime/ante-runtime";
 import { createAnteRuntime } from "../runtime/create-ante-runtime";
@@ -20,7 +25,12 @@ import { TMD_TERMINAL_VIEW_TYPE, TmdTerminalView } from "./terminal-view";
 import type { TaskRecord } from "../core/types";
 import type { ChatConversationRecord } from "../core/chat-types";
 import { readAnteDefaults, type AnteDefaults } from "./ante-defaults";
-import { normalizeEnvVarName, readCommandPathFromLoginShell, readFullEnvFromLoginShell, selectResolvedCommandPath } from "./shell-env";
+import {
+  normalizeEnvVarName,
+  readCommandPathFromLoginShell,
+  readFullEnvFromLoginShell,
+  selectResolvedCommandPath,
+} from "./shell-env";
 import { ChatSessionManager } from "../core/chat-session-manager";
 import type { ChatPersistenceState } from "../core/chat-types";
 import { getResolvedPreset, listResolvedPresets } from "../core/presets";
@@ -28,6 +38,7 @@ import { AnteUpdater } from "./ante-updater";
 import { PluginUpdater } from "./plugin-updater";
 import { buildAnteRuntimeConfig } from "./main-runtime-config";
 import { ObsidianCliService, type ObsidianCliStatus } from "./obsidian-cli-service";
+import { setDebugLogging } from "../core/debug-log";
 
 const ANTE_COMMAND = "ante";
 
@@ -43,7 +54,7 @@ export default class TmdPlugin extends Plugin {
   settings: TmdSettings = DEFAULT_SETTINGS;
   anteDefaults: AnteDefaults = {
     provider: DEFAULT_SETTINGS.anteProvider,
-    model: DEFAULT_SETTINGS.anteModel
+    model: DEFAULT_SETTINGS.anteModel,
   };
   shellEnv: Record<string, string> = {};
   /** Provider/model catalog read from `ante catalog`; null until loaded (or if Ante is too old/missing). */
@@ -64,7 +75,7 @@ export default class TmdPlugin extends Plugin {
   private runtime!: AnteRuntime;
   private pluginData: TmdPluginData = {};
   private pluginUpdateState: { lastNotifiedVersion: string | null } = {
-    lastNotifiedVersion: null
+    lastNotifiedVersion: null,
   };
   // Serializes concurrent conversation switches to prevent race conditions.
   private conversationSwitchLock: Promise<void> = Promise.resolve();
@@ -74,6 +85,9 @@ export default class TmdPlugin extends Plugin {
   private unsubscribeTaskEngine: (() => void) | null = null;
 
   async onload(): Promise<void> {
+    // Opt-in diagnostics: run `window.localStorage.setItem("ante-debug", "1")` and reload.
+    setDebugLogging(window.localStorage.getItem("ante-debug") === "1");
+
     // Load settings first; defer slow shell/defaults reads to background.
     await this.loadSettings();
 
@@ -93,13 +107,20 @@ export default class TmdPlugin extends Plugin {
       this.hostAdapter,
       (presetId) => this.getPresetById(presetId),
       () => this.shouldShowFullProcessLogs(),
-      () => this.getObsidianCliPromptBlock()
+      () => this.getObsidianCliPromptBlock(),
     );
-    this.chatManager = new ChatSessionManager({ saveChatState: (chatState) => this.saveChatState(chatState) }, this.pluginData.chatState);
+    this.chatManager = new ChatSessionManager(
+      { saveChatState: (chatState) => this.saveChatState(chatState) },
+      this.pluginData.chatState,
+    );
     this.unsubscribeTaskEngine = this.taskEngine.subscribe((state) => {
       this.chatManager.syncFromTaskState(state);
     });
-    this.mentionTrigger = new MentionTriggerService(this.app, this, () => this.settings.mentionTriggerDebug);
+    this.mentionTrigger = new MentionTriggerService(
+      this.app,
+      this,
+      () => this.settings.mentionTriggerDebug,
+    );
 
     this.registerView(TMD_CHAT_VIEW_TYPE, (leaf) => new TmdChatView(leaf, this));
     this.registerView(TMD_TERMINAL_VIEW_TYPE, (leaf) => new TmdTerminalView(leaf, this));
@@ -152,7 +173,7 @@ export default class TmdPlugin extends Plugin {
     this.pluginData = {
       ...this.pluginData,
       settings: this.settings,
-      pluginUpdateState: this.pluginUpdateState
+      pluginUpdateState: this.pluginUpdateState,
     };
     await this.saveData(this.pluginData);
   }
@@ -168,7 +189,7 @@ export default class TmdPlugin extends Plugin {
       lastNotifiedVersion:
         typeof this.pluginData.pluginUpdateState?.lastNotifiedVersion === "string"
           ? this.pluginData.pluginUpdateState.lastNotifiedVersion
-          : null
+          : null,
     };
   }
 
@@ -177,7 +198,7 @@ export default class TmdPlugin extends Plugin {
       ...this.pluginData,
       settings: this.settings,
       chatState,
-      pluginUpdateState: this.pluginUpdateState
+      pluginUpdateState: this.pluginUpdateState,
     };
     await this.saveData(this.pluginData);
   }
@@ -187,18 +208,23 @@ export default class TmdPlugin extends Plugin {
   }
 
   async openPluginSettings(): Promise<void> {
-    const setting = (this.app as App & {
-      setting?: {
-        open?: () => void;
-        openTabById?: (id: string) => void;
-      };
-    }).setting;
+    const setting = (
+      this.app as App & {
+        setting?: {
+          open?: () => void;
+          openTabById?: (id: string) => void;
+        };
+      }
+    ).setting;
     setting?.open?.();
     setting?.openTabById?.(this.manifest.id);
   }
 
   notifyAnteMissing(sourceLabel: string): void {
-    new Notice(`${sourceLabel} needs the local Ante CLI. Open Ante Obsidian Settings to install Ante.`, 9000);
+    new Notice(
+      `${sourceLabel} needs the local Ante CLI. Open Ante Obsidian Settings to install Ante.`,
+      9000,
+    );
   }
 
   ensureAnteInstalled(sourceLabel: string): boolean {
@@ -217,7 +243,10 @@ export default class TmdPlugin extends Plugin {
     return true;
   }
 
-  private async handoffAnteSession(action: () => void | Promise<void>, reason: string): Promise<void> {
+  private async handoffAnteSession(
+    action: () => void | Promise<void>,
+    reason: string,
+  ): Promise<void> {
     void reason;
     await this.persistIdleAnteSession();
     await action();
@@ -228,12 +257,9 @@ export default class TmdPlugin extends Plugin {
       if (this.chatManager.getActiveConversation().id === conversationId) {
         return;
       }
-      await this.handoffAnteSession(
-        () => {
-          this.chatManager.setActiveConversation(conversationId);
-        },
-        `Switching chat conversation · next=${conversationId}`
-      );
+      await this.handoffAnteSession(() => {
+        this.chatManager.setActiveConversation(conversationId);
+      }, `Switching chat conversation · next=${conversationId}`);
     });
     // Swallow errors at the lock level so a failed switch doesn't break the chain.
     this.conversationSwitchLock = work.catch((error) => {
@@ -243,18 +269,18 @@ export default class TmdPlugin extends Plugin {
     return work;
   }
 
-  async createChatConversation(context?: ContextSnapshot | null, options?: { forceNew?: boolean }): Promise<ChatConversationRecord> {
+  async createChatConversation(
+    context?: ContextSnapshot | null,
+    options?: { forceNew?: boolean },
+  ): Promise<ChatConversationRecord> {
     let conversation: ChatConversationRecord | null = null;
     const work = this.conversationSwitchLock.then(async () => {
-      await this.handoffAnteSession(
-        () => {
-          conversation = this.chatManager.createConversation({
-            context: context ?? undefined,
-            forceNew: options?.forceNew
-          });
-        },
-        "Creating new chat conversation"
-      );
+      await this.handoffAnteSession(() => {
+        conversation = this.chatManager.createConversation({
+          context: context ?? undefined,
+          forceNew: options?.forceNew,
+        });
+      }, "Creating new chat conversation");
     });
     this.conversationSwitchLock = work.catch((error) => {
       console.error("[tmd] Failed to create conversation:", error);
@@ -291,12 +317,12 @@ export default class TmdPlugin extends Plugin {
   async loadShellEnv(): Promise<void> {
     const [shellAnteCommand, fullEnv] = await Promise.all([
       readCommandPathFromLoginShell("ante"),
-      readFullEnvFromLoginShell()
+      readFullEnvFromLoginShell(),
     ]);
     this.resolvedAnteCommand = selectResolvedCommandPath(
       shellAnteCommand,
       resolveCommandPath(ANTE_COMMAND, fullEnv),
-      ANTE_COMMAND
+      ANTE_COMMAND,
     );
     this.fullShellEnv = fullEnv;
     this.shellEnv = this.buildProviderEnv(fullEnv);
@@ -355,7 +381,9 @@ export default class TmdPlugin extends Plugin {
         // Now that catalog env keys are known, re-harvest provider credentials.
         this.shellEnv = this.buildProviderEnv(this.fullShellEnv);
       } else {
-        console.warn("[tmd] `ante catalog` unavailable — update Ante to populate the provider list");
+        console.warn(
+          "[tmd] `ante catalog` unavailable — update Ante to populate the provider list",
+        );
       }
     })();
     this.catalogLoadInFlight = run.finally(() => {
@@ -396,7 +424,7 @@ export default class TmdPlugin extends Plugin {
           replaceTo: context.selection.to,
           context,
           presetId,
-          triggerSource: "context-menu"
+          triggerSource: "context-menu",
         });
         return;
       }
@@ -404,7 +432,7 @@ export default class TmdPlugin extends Plugin {
       const taskId = await this.taskEngine.startDocumentTask({
         presetId,
         triggerSource: "context-menu",
-        context
+        context,
       });
       this.watchTaskForAutoApply(taskId, "Context menu");
     } catch (error) {
@@ -442,9 +470,11 @@ export default class TmdPlugin extends Plugin {
         return;
       }
 
-      const pendingArtifacts = task.artifacts.filter((artifact) => artifact.applyState === "pending");
+      const pendingArtifacts = task.artifacts.filter(
+        (artifact) => artifact.applyState === "pending",
+      );
       const activeArtifacts = task.artifacts.filter(
-        (artifact) => artifact.applyState === "applying" || artifact.applyState === "reverting"
+        (artifact) => artifact.applyState === "applying" || artifact.applyState === "reverting",
       );
       if (pendingArtifacts.length > 0) {
         void (async () => {
@@ -498,7 +528,7 @@ export default class TmdPlugin extends Plugin {
     }
     return {
       provider: this.settings.anteProvider,
-      model: this.settings.anteModel
+      model: this.settings.anteModel,
     };
   }
 
@@ -534,7 +564,7 @@ export default class TmdPlugin extends Plugin {
     }
     this.settings.lastSelectedModelsByProvider = {
       ...this.settings.lastSelectedModelsByProvider,
-      [providerId]: modelId
+      [providerId]: modelId,
     };
     void this.saveSettings().catch((error) => {
       console.error("[tmd] Failed to save last selected model:", error);
@@ -574,7 +604,8 @@ export default class TmdPlugin extends Plugin {
    * Empty when the catalog hasn't loaded (Ante missing or too old).
    */
   getConfiguredProviders(): AnteCatalogProvider[] {
-    const anteHome = (typeof process !== "undefined" && process.env?.ANTE_HOME) || join(homedir(), ".ante");
+    const anteHome =
+      (typeof process !== "undefined" && process.env?.ANTE_HOME) || join(homedir(), ".ante");
 
     return this.getAllProviders().filter((p) => {
       if (p.authType === "none") {
@@ -601,7 +632,7 @@ export default class TmdPlugin extends Plugin {
   getObsidianCliStatus(): ObsidianCliStatus & { enabled: boolean } {
     return {
       ...this.obsidianCliStatus,
-      enabled: this.settings.allowObsidianCli
+      enabled: this.settings.allowObsidianCli,
     };
   }
 
@@ -614,7 +645,7 @@ export default class TmdPlugin extends Plugin {
       "Obsidian CLI is available in this session.",
       "If needed, you may use the `obsidian` command for vault-aware operations.",
       "Reference: https://obsidian.md/zh/cli",
-      "Prefer the current note/selection first. For Markdown edits, prefer returning Ante Obsidian JSON changes instead of modifying files directly through shell."
+      "Prefer the current note/selection first. For Markdown edits, prefer returning Ante Obsidian JSON changes instead of modifying files directly through shell.",
     ].join("\n");
   }
 
@@ -654,37 +685,37 @@ export default class TmdPlugin extends Plugin {
     this.addCommand({
       id: "open-chat",
       name: "Chat",
-      callback: async () => this.openChatView()
+      callback: async () => this.openChatView(),
     });
 
     this.addCommand({
       id: "open-terminal",
       name: "Open terminal",
-      callback: async () => this.openTerminalView()
+      callback: async () => this.openTerminalView(),
     });
 
     this.addCommand({
       id: "run-default",
       name: "Run on current note",
-      callback: async () => this.runPresetFromContextMenu("default")
+      callback: async () => this.runPresetFromContextMenu("default"),
     });
 
     this.addCommand({
       id: "run-research",
       name: "Run research on current note",
-      callback: async () => this.runPresetFromContextMenu("research")
+      callback: async () => this.runPresetFromContextMenu("research"),
     });
 
     this.addCommand({
       id: "run-plan",
       name: "Run plan on current note",
-      callback: async () => this.runPresetFromContextMenu("plan")
+      callback: async () => this.runPresetFromContextMenu("plan"),
     });
 
     this.addCommand({
       id: "run-summary",
       name: "Run summary on current note",
-      callback: async () => this.runPresetFromContextMenu("summary")
+      callback: async () => this.runPresetFromContextMenu("summary"),
     });
   }
 
@@ -696,7 +727,7 @@ export default class TmdPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu, editor) => {
         populateEditorMenu(menu, editor, this);
-      })
+      }),
     );
   }
 
@@ -711,7 +742,7 @@ export default class TmdPlugin extends Plugin {
           void this.mentionTrigger.handleEditorChange(editor);
           this.editorChangeDebounceTimer = null;
         }, 150);
-      })
+      }),
     );
   }
 
@@ -736,9 +767,12 @@ export default class TmdPlugin extends Plugin {
     this.pluginData = {
       ...this.pluginData,
       settings: this.settings,
-      pluginUpdateState: this.pluginUpdateState
+      pluginUpdateState: this.pluginUpdateState,
     };
     await this.saveData(this.pluginData);
-    new Notice(`Ante Obsidian ${result.latestVersion} is available. Open settings to review the update.`, 9000);
+    new Notice(
+      `Ante Obsidian ${result.latestVersion} is available. Open settings to review the update.`,
+      9000,
+    );
   }
 }

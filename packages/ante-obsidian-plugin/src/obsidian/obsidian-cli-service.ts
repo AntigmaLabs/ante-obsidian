@@ -9,9 +9,10 @@ export interface ObsidianCliStatus {
 
 const runShellCommand = (command: string): Promise<void> =>
   new Promise((resolve, reject) => {
-    const shellPath = (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
+    const shellPath =
+      (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
     const child = spawn(shellPath, ["-lc", command], {
-      stdio: ["ignore", "ignore", "pipe"]
+      stdio: ["ignore", "ignore", "pipe"],
     });
 
     let stderr = "";
@@ -38,7 +39,7 @@ export class ObsidianCliService {
     } catch (error) {
       return {
         available: false,
-        error: error instanceof Error ? error.message : "Failed to check Obsidian CLI"
+        error: error instanceof Error ? error.message : "Failed to check Obsidian CLI",
       };
     }
   }

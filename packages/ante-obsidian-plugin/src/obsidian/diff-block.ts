@@ -36,7 +36,10 @@ type InlineSegment = {
   kind: "common" | "remove" | "add";
 };
 
-const buildInlineDiffSegments = (before: string, after: string): { before: InlineSegment[]; after: InlineSegment[] } => {
+const buildInlineDiffSegments = (
+  before: string,
+  after: string,
+): { before: InlineSegment[]; after: InlineSegment[] } => {
   let prefix = 0;
   const maxPrefix = Math.min(before.length, after.length);
   while (prefix < maxPrefix && before[prefix] === after[prefix]) {
@@ -63,13 +66,13 @@ const buildInlineDiffSegments = (before: string, after: string): { before: Inlin
     before: [
       beforePrefix ? { text: beforePrefix, kind: "common" } : null,
       beforeChanged ? { text: beforeChanged, kind: "remove" } : null,
-      beforeSuffix ? { text: beforeSuffix, kind: "common" } : null
+      beforeSuffix ? { text: beforeSuffix, kind: "common" } : null,
     ].filter(Boolean) as InlineSegment[],
     after: [
       afterPrefix ? { text: afterPrefix, kind: "common" } : null,
       afterChanged ? { text: afterChanged, kind: "add" } : null,
-      afterSuffix ? { text: afterSuffix, kind: "common" } : null
-    ].filter(Boolean) as InlineSegment[]
+      afterSuffix ? { text: afterSuffix, kind: "common" } : null,
+    ].filter(Boolean) as InlineSegment[],
   };
 };
 
@@ -82,7 +85,7 @@ const renderInlineSegments = (container: HTMLElement, segments: InlineSegment[])
   for (const segment of segments) {
     container.createSpan({
       cls: segment.kind === "common" ? "tmd-diff-inline-common" : `tmd-diff-inline-${segment.kind}`,
-      text: segment.text || " "
+      text: segment.text || " ",
     });
   }
 };
@@ -90,12 +93,16 @@ const renderInlineSegments = (container: HTMLElement, segments: InlineSegment[])
 const renderDiffLine = (
   container: HTMLElement,
   row: RenderableDiffRow,
-  pairedSegments?: InlineSegment[]
+  pairedSegments?: InlineSegment[],
 ): void => {
   const line = container.createDiv({ cls: `tmd-diff-line is-${row.kind}` });
   line.createDiv({ cls: "tmd-diff-gutter" });
-  line.createDiv({ cls: "tmd-diff-line-number" }).setText(row.oldLine === null ? "" : String(row.oldLine));
-  line.createDiv({ cls: "tmd-diff-line-number" }).setText(row.newLine === null ? "" : String(row.newLine));
+  line
+    .createDiv({ cls: "tmd-diff-line-number" })
+    .setText(row.oldLine === null ? "" : String(row.oldLine));
+  line
+    .createDiv({ cls: "tmd-diff-line-number" })
+    .setText(row.newLine === null ? "" : String(row.newLine));
   line.createDiv({ cls: "tmd-diff-line-marker", text: row.marker });
   const text = line.createDiv({ cls: "tmd-diff-line-text" });
   if (pairedSegments) {
@@ -115,7 +122,7 @@ const collectDiffStats = (rows: PatchRow[]): DiffStats =>
       }
       return stats;
     },
-    { additions: 0, removals: 0 }
+    { additions: 0, removals: 0 },
   );
 
 const normalizeRenderableRows = (rows: PatchRow[]): PatchRow[] => {
@@ -131,7 +138,7 @@ const normalizeRenderableRows = (rows: PatchRow[]): PatchRow[] => {
         text: current.text,
         oldLine: current.oldLine,
         newLine: next.newLine,
-        marker: " "
+        marker: " ",
       });
       index += 1;
       continue;
@@ -168,7 +175,9 @@ const collectDiffHunks = (rows: PatchRow[]): DiffHunk[] => {
 export const resolveArtifactDiffs = async (task: TaskRecord): Promise<ResolvedArtifactDiff[]> =>
   resolveArtifactsToDiffs(task.artifacts);
 
-export const resolveArtifactsToDiffs = async (artifacts: DocumentChangeArtifact[]): Promise<ResolvedArtifactDiff[]> =>
+export const resolveArtifactsToDiffs = async (
+  artifacts: DocumentChangeArtifact[],
+): Promise<ResolvedArtifactDiff[]> =>
   Promise.all(
     artifacts.map(async (artifact) => {
       const rows = normalizeRenderableRows(await buildPatchRows(artifact));
@@ -176,17 +185,23 @@ export const resolveArtifactsToDiffs = async (artifacts: DocumentChangeArtifact[
         artifact,
         rows,
         stats: collectDiffStats(rows),
-        hunks: collectDiffHunks(rows)
+        hunks: collectDiffHunks(rows),
       } satisfies ResolvedArtifactDiff;
-    })
+    }),
   );
 
 export const renderStatPills = (container: HTMLElement, stats: DiffStats): void => {
   if (stats.additions > 0) {
-    container.createSpan({ cls: "tmd-diff-stat is-add", text: formatDiffCount(stats.additions, "+") });
+    container.createSpan({
+      cls: "tmd-diff-stat is-add",
+      text: formatDiffCount(stats.additions, "+"),
+    });
   }
   if (stats.removals > 0) {
-    container.createSpan({ cls: "tmd-diff-stat is-remove", text: formatDiffCount(stats.removals, "-") });
+    container.createSpan({
+      cls: "tmd-diff-stat is-remove",
+      text: formatDiffCount(stats.removals, "-"),
+    });
   }
   if (stats.additions === 0 && stats.removals === 0) {
     container.createSpan({ cls: "tmd-diff-stat is-neutral", text: "No text changes" });
@@ -200,7 +215,7 @@ export const collectAggregateDiffStats = (artifacts: ResolvedArtifactDiff[]): Di
       stats.removals += artifact.stats.removals;
       return stats;
     },
-    { additions: 0, removals: 0 }
+    { additions: 0, removals: 0 },
   );
 
 export const countChangedFiles = (artifacts: ResolvedArtifactDiff[]): number =>
@@ -215,21 +230,21 @@ export interface RenderDiffSummaryOptions {
 export const renderDiffSummary = (
   container: HTMLElement,
   artifacts: ResolvedArtifactDiff[],
-  options?: RenderDiffSummaryOptions
+  options?: RenderDiffSummaryOptions,
 ): HTMLElement => {
   const card = container.createDiv({ cls: "tmd-diff-card" });
   const summary = card.createDiv({ cls: "tmd-diff-summary" });
   const title = summary.createDiv({ cls: "tmd-diff-summary-title" });
   title.createSpan({
     cls: "tmd-diff-summary-count",
-    text: formatFileCountLabel(countChangedFiles(artifacts), artifacts.length)
+    text: formatFileCountLabel(countChangedFiles(artifacts), artifacts.length),
   });
   renderStatPills(title, collectAggregateDiffStats(artifacts));
 
   if (options?.onAction) {
     const actionButton = summary.createEl("button", {
       cls: "tmd-diff-summary-action",
-      text: options.actionLabel ?? "Apply all"
+      text: options.actionLabel ?? "Apply all",
     });
     actionButton.type = "button";
     actionButton.disabled = Boolean(options.isActionDisabled);
@@ -245,7 +260,7 @@ export const renderArtifactDiff = (
   task: TaskRecord | null,
   resolved: ResolvedArtifactDiff,
   expandedArtifactIds: Set<string>,
-  onToggleExpanded: () => void
+  onToggleExpanded: () => void,
 ): void => {
   const { artifact, stats, hunks } = resolved;
   const isExpanded = expandedArtifactIds.has(artifact.id);
@@ -263,7 +278,7 @@ export const renderArtifactDiff = (
   const headerAside = header.createDiv({ cls: "tmd-diff-file-aside" });
   renderStatPills(headerAside, stats);
   const chevronButton = headerAside.createEl("button", {
-    cls: "tmd-diff-file-chevron clickable-icon"
+    cls: "tmd-diff-file-chevron clickable-icon",
   });
   chevronButton.type = "button";
   chevronButton.setAttr("aria-expanded", String(isExpanded));
@@ -280,7 +295,9 @@ export const renderArtifactDiff = (
 
   const body = section.createDiv({ cls: "tmd-diff-file-body" });
   const actions = body.createDiv({ cls: "tmd-diff-file-actions" });
-  const applyButton = actions.createEl("button", { text: artifact.applyState === "applied" ? "Applied" : "Apply" });
+  const applyButton = actions.createEl("button", {
+    text: artifact.applyState === "applied" ? "Applied" : "Apply",
+  });
   applyButton.disabled =
     !task ||
     artifact.applyState === "applying" ||
@@ -319,7 +336,7 @@ export const renderArtifactDiff = (
   const patchToolbar = patch.createDiv({ cls: "tmd-diff-patch-toolbar" });
   patchToolbar.createDiv({
     cls: "tmd-diff-patch-title",
-    text: hunks[0]?.header ?? "@@"
+    text: hunks[0]?.header ?? "@@",
   });
   const toolbarActions = patchToolbar.createDiv({ cls: "tmd-diff-file-actions" });
   toolbarActions.appendChild(applyButton);

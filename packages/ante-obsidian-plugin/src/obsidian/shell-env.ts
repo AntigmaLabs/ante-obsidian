@@ -13,7 +13,7 @@ export const normalizeEnvVarName = (variableName: string): string => {
 const readFromShell = (shellPath: string, variableName: string): Promise<string> =>
   new Promise((resolve, reject) => {
     const child = spawn(shellPath, ["-lc", "env"], {
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
     });
 
     let stdout = "";
@@ -42,10 +42,14 @@ const readFromShell = (shellPath: string, variableName: string): Promise<string>
     });
   });
 
-const runShellCommand = (shellPath: string, shellArgs: string[], command: string): Promise<string> =>
+const runShellCommand = (
+  shellPath: string,
+  shellArgs: string[],
+  command: string,
+): Promise<string> =>
   new Promise((resolve, reject) => {
     const child = spawn(shellPath, [...shellArgs, command], {
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
     });
 
     let stdout = "";
@@ -74,7 +78,8 @@ export const readEnvVarFromLoginShell = async (variableName: string): Promise<st
   if (!normalized) {
     return "";
   }
-  const shellPath = (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
+  const shellPath =
+    (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
   try {
     return await readFromShell(shellPath, normalized);
   } catch {
@@ -86,14 +91,14 @@ export const readEnvVarFromLoginShell = async (variableName: string): Promise<st
 };
 
 export const readFullEnvFromLoginShell = async (): Promise<Record<string, string>> => {
-  const shellPath = (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
+  const shellPath =
+    (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
   const shellName = basename(shellPath).toLowerCase();
-  
+
   // Try interactive login shell first (-lic) to ensure ~/.zshrc is loaded,
   // then fallback to login shell (-lc) or interactive shell (-ic)
-  const argCandidates = (shellName === "zsh" || shellName === "bash")
-    ? [["-lic"], ["-lc"], ["-ic"]]
-    : [["-lc"]];
+  const argCandidates =
+    shellName === "zsh" || shellName === "bash" ? [["-lic"], ["-lc"], ["-ic"]] : [["-lc"]];
 
   const runForShell = async (path: string, args: string[]): Promise<Record<string, string>> => {
     const stdout = await runShellCommand(path, args, "env");
@@ -179,9 +184,10 @@ export const readCommandPathFromLoginShell = async (commandName: string): Promis
     return "";
   }
 
-  const shellCandidates = [(typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL, DEFAULT_SHELL].filter(
-    (shellPath, index, shells) => shellPath && shells.indexOf(shellPath) === index
-  );
+  const shellCandidates = [
+    (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL,
+    DEFAULT_SHELL,
+  ].filter((shellPath, index, shells) => shellPath && shells.indexOf(shellPath) === index);
   const command = `command -v -- ${normalized}`;
 
   for (const shellPath of shellCandidates) {
@@ -204,7 +210,7 @@ export const readCommandPathFromLoginShell = async (commandName: string): Promis
 export const selectResolvedCommandPath = (
   shellLookupResult: string,
   fallbackLookupResult: string,
-  commandName: string
+  commandName: string,
 ): string => {
   const normalized = normalizeCommandName(commandName);
   if (!normalized) {
@@ -227,5 +233,5 @@ export const __test__ = {
   getCommandLookupShellArgs,
   extractCommandLookupResult,
   isValidCommandLookupResult,
-  selectResolvedCommandPath
+  selectResolvedCommandPath,
 };

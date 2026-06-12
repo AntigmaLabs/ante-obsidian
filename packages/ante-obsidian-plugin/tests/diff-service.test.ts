@@ -1,10 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildPatchRows } from "../src/core/diff-service";
-import {
-  getArtifactTargetKey,
-  mergeDocumentChangeArtifacts
-} from "../src/core/artifacts";
+import { getArtifactTargetKey, mergeDocumentChangeArtifacts } from "../src/core/artifacts";
 import type { DocumentChangeArtifact } from "../src/core/types";
 
 const artifact = (overrides: Partial<DocumentChangeArtifact> = {}): DocumentChangeArtifact => ({
@@ -13,12 +10,12 @@ const artifact = (overrides: Partial<DocumentChangeArtifact> = {}): DocumentChan
   operation: "replace-file",
   target: {
     type: "file",
-    path: "Notes/example.md"
+    path: "Notes/example.md",
   },
   beforeText: "alpha\nbeta\n",
   afterText: "alpha\ngamma\n",
   applyState: "pending",
-  ...overrides
+  ...overrides,
 });
 
 test("buildPatchRows returns a unified diff for file changes", async () => {
@@ -37,9 +34,9 @@ test("buildPatchRows uses /dev/null for create-file", async () => {
       afterText: "# New note\n",
       target: {
         type: "file",
-        path: "Notes/new-note.md"
-      }
-    })
+        path: "Notes/new-note.md",
+      },
+    }),
   );
   const meta = rows.filter((row) => row.kind === "meta").map((row) => row.text);
   assert.ok(meta.some((line) => line.includes("/dev/null")));
@@ -52,14 +49,14 @@ test("mergeDocumentChangeArtifacts keeps the first baseline and latest result", 
       id: "first",
       beforeText: "alpha\n",
       afterText: "alpha\nbeta\n",
-      runtimeToolId: "tool-1"
+      runtimeToolId: "tool-1",
     }),
     artifact({
       id: "second",
       beforeText: "alpha\nbeta\n",
       afterText: "alpha\nbeta\ngamma\n",
-      runtimeToolId: "tool-2"
-    })
+      runtimeToolId: "tool-2",
+    }),
   );
 
   assert.equal(merged.id, "first");
@@ -71,6 +68,6 @@ test("mergeDocumentChangeArtifacts keeps the first baseline and latest result", 
 test("getArtifactTargetKey normalizes equivalent file path spellings", () => {
   assert.equal(
     getArtifactTargetKey(artifact({ target: { type: "file", path: "Notes//today\\Plan.md" } })),
-    "Notes/today/Plan.md"
+    "Notes/today/Plan.md",
   );
 });

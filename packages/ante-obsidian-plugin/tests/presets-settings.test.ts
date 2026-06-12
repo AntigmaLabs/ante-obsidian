@@ -11,15 +11,18 @@ test("normalizeSettings appends valid custom presets after builtin presets by de
       {
         id: "custom-a",
         name: "My Preset",
-        instruction: "Write a sharper version."
-      }
-    ]
+        instruction: "Write a sharper version.",
+      },
+    ],
   });
 
   assert.equal(settings.customPresets.length, 1);
   assert.equal(settings.connectionMode, "stdio");
   assert.equal(settings.wsAddress, "127.0.0.1:9000");
-  assert.equal(settings.customPresets[0]?.sortOrder, DEFAULT_SETTINGS.builtinPresetPreferences.length);
+  assert.equal(
+    settings.customPresets[0]?.sortOrder,
+    DEFAULT_SETTINGS.builtinPresetPreferences.length,
+  );
   assert.equal(settings.customPresets[0]?.enabled, true);
 });
 
@@ -30,7 +33,7 @@ test("listResolvedPresets applies builtin visibility and mixed ordering", () => 
         { id: "default", enabled: true, sortOrder: 2 },
         { id: "research", enabled: false, sortOrder: 1 },
         { id: "plan", enabled: true, sortOrder: 3 },
-        { id: "summary", enabled: true, sortOrder: 4 }
+        { id: "summary", enabled: true, sortOrder: 4 },
       ],
       customPresets: [
         {
@@ -38,10 +41,10 @@ test("listResolvedPresets applies builtin visibility and mixed ordering", () => 
           name: "Custom A",
           instruction: "Do the custom thing.",
           enabled: true,
-          sortOrder: 0
-        }
-      ]
-    })
+          sortOrder: 0,
+        },
+      ],
+    }),
   );
 
   assert.deepEqual(
@@ -51,8 +54,8 @@ test("listResolvedPresets applies builtin visibility and mixed ordering", () => 
       ["research", false],
       ["default", true],
       ["plan", true],
-      ["summary", true]
-    ]
+      ["summary", true],
+    ],
   );
 });
 

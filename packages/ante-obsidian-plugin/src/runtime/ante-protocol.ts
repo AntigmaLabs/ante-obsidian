@@ -3,5 +3,5 @@ export {
   parseEnvelope,
   serializeOperation,
   type AnteEventEnvelope,
-  type AnteOperation
+  type AnteOperation,
 } from "@antigma/ante-sdk";

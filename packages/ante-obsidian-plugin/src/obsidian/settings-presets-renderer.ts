@@ -10,13 +10,13 @@ export class SettingsPresetsRenderer {
 
   constructor(
     private readonly pluginRef: TmdPlugin,
-    private readonly onStateChanged: () => void
+    private readonly onStateChanged: () => void,
   ) {}
 
   render(containerEl: HTMLElement): HTMLDivElement {
     const sectionEl = renderSettingsSection(containerEl, {
       title: "Presets",
-      summary: "Manage reusable actions, visibility, and the order shown in the editor menu."
+      summary: "Manage reusable actions, visibility, and the order shown in the editor menu.",
     });
     sectionEl.addClass("tmd-preset-section");
 
@@ -99,7 +99,7 @@ export class SettingsPresetsRenderer {
       toggleSetting.addToggle((toggle) =>
         toggle.setValue(preset.enabled !== false).onChange(async (value) => {
           await this.setPresetEnabled(preset.id, value, isBuiltin);
-        })
+        }),
       );
 
       const editButton = controlsEl.createEl("button", { cls: "clickable-icon" });
@@ -115,7 +115,7 @@ export class SettingsPresetsRenderer {
           new CustomPresetModal(
             this.pluginRef,
             () => this.onStateChanged(),
-            this.pluginRef.settings.customPresets.find((entry) => entry.id === preset.id) ?? null
+            this.pluginRef.settings.customPresets.find((entry) => entry.id === preset.id) ?? null,
           ).open();
         });
       }
@@ -137,9 +137,15 @@ export class SettingsPresetsRenderer {
     return sectionEl;
   }
 
-  private async setPresetEnabled(presetId: string, enabled: boolean, isBuiltin: boolean): Promise<void> {
+  private async setPresetEnabled(
+    presetId: string,
+    enabled: boolean,
+    isBuiltin: boolean,
+  ): Promise<void> {
     if (isBuiltin) {
-      const preset = this.pluginRef.settings.builtinPresetPreferences.find((entry) => entry.id === presetId);
+      const preset = this.pluginRef.settings.builtinPresetPreferences.find(
+        (entry) => entry.id === presetId,
+      );
       if (preset) {
         preset.enabled = enabled;
       }
@@ -153,7 +159,11 @@ export class SettingsPresetsRenderer {
     this.onStateChanged();
   }
 
-  private async reorderPreset(sourcePresetId: string, targetPresetId: string, insertAfter: boolean): Promise<void> {
+  private async reorderPreset(
+    sourcePresetId: string,
+    targetPresetId: string,
+    insertAfter: boolean,
+  ): Promise<void> {
     const ordered = listResolvedPresets(this.pluginRef.settings);
     const sourceIndex = ordered.findIndex((preset) => preset.id === sourcePresetId);
     const targetIndex = ordered.findIndex((preset) => preset.id === targetPresetId);
@@ -183,11 +193,13 @@ export class SettingsPresetsRenderer {
       (await showConfirmDialog(this.pluginRef.app, {
         title: "Delete preset",
         message: `Delete custom preset "${preset.name}"?`,
-        confirmText: "Delete"
+        confirmText: "Delete",
       }));
 
     if (confirmed) {
-      this.pluginRef.settings.customPresets = this.pluginRef.settings.customPresets.filter((entry) => entry.id !== presetId);
+      this.pluginRef.settings.customPresets = this.pluginRef.settings.customPresets.filter(
+        (entry) => entry.id !== presetId,
+      );
       this.applyPresetOrder();
       await this.pluginRef.saveSettings();
       this.onStateChanged();
@@ -200,18 +212,24 @@ export class SettingsPresetsRenderer {
   private applyPresetOrder(ordered = listResolvedPresets(this.pluginRef.settings)): void {
     ordered.forEach((preset, sortOrder) => {
       if (preset.source === "builtin") {
-        const builtin = this.pluginRef.settings.builtinPresetPreferences.find((entry) => entry.id === preset.id);
+        const builtin = this.pluginRef.settings.builtinPresetPreferences.find(
+          (entry) => entry.id === preset.id,
+        );
         if (builtin) {
           builtin.sortOrder = sortOrder;
         }
       } else {
-        const custom = this.pluginRef.settings.customPresets.find((entry) => entry.id === preset.id);
+        const custom = this.pluginRef.settings.customPresets.find(
+          (entry) => entry.id === preset.id,
+        );
         if (custom) {
           custom.sortOrder = sortOrder;
         }
       }
     });
-    this.pluginRef.settings.builtinPresetPreferences.sort((left, right) => left.sortOrder - right.sortOrder);
+    this.pluginRef.settings.builtinPresetPreferences.sort(
+      (left, right) => left.sortOrder - right.sortOrder,
+    );
     this.pluginRef.settings.customPresets.sort((left, right) => left.sortOrder - right.sortOrder);
   }
 

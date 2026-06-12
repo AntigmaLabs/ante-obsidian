@@ -8,15 +8,13 @@ const context: ContextSnapshot = {
   filePath: "Note.md",
   noteTitle: "Note",
   documentText: "alpha\n",
-  selection: null
+  selection: null,
 };
 
 const createWindowStub = () => ({
   setTimeout,
-  clearTimeout
+  clearTimeout,
 });
-
-
 
 test("streaming structured text payloads show inner text without the JSON envelope", () => {
   const originalWindow = (globalThis as { window?: unknown }).window;
@@ -24,7 +22,7 @@ test("streaming structured text payloads show inner text without the JSON envelo
 
   try {
     const pluginStub = {
-      saveChatState: async () => {}
+      saveChatState: async () => {},
     };
 
     const manager = new ChatSessionManager(pluginStub as never);
@@ -41,7 +39,7 @@ test("streaming structured text payloads show inner text without the JSON envelo
             id: "default",
             label: "@ante",
             goal: "Discuss the current Markdown content before editing anything.",
-            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+            systemInstructions: "Prefer answering directly unless the user asks for file changes.",
           },
           triggerSource: "chat",
           inlineInstruction: "继续写",
@@ -50,9 +48,9 @@ test("streaming structured text payloads show inner text without the JSON envelo
           logs: [],
           stdoutText: '{"type":"text","text":"第一行\\n第二',
           artifacts: [],
-          startedAt: "2026-03-29T00:00:00.000Z"
-        }
-      ]
+          startedAt: "2026-03-29T00:00:00.000Z",
+        },
+      ],
     });
 
     const snapshot = manager.getSnapshot();
@@ -74,7 +72,7 @@ test("full process logs mode does not break structured text extraction in chat",
   try {
     const pluginStub = {
       saveChatState: async () => {},
-      shouldShowFullProcessLogs: () => true
+      shouldShowFullProcessLogs: () => true,
     };
 
     const manager = new ChatSessionManager(pluginStub as never);
@@ -91,7 +89,7 @@ test("full process logs mode does not break structured text extraction in chat",
             id: "default",
             label: "@ante",
             goal: "Discuss the current Markdown content before editing anything.",
-            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+            systemInstructions: "Prefer answering directly unless the user asks for file changes.",
           },
           triggerSource: "chat",
           inlineInstruction: "继续写",
@@ -100,9 +98,9 @@ test("full process logs mode does not break structured text extraction in chat",
           logs: [],
           stdoutText: '{"type":"text","text":"第一行\\n第二"}',
           artifacts: [],
-          startedAt: "2026-03-29T00:00:00.000Z"
-        }
-      ]
+          startedAt: "2026-03-29T00:00:00.000Z",
+        },
+      ],
     });
 
     const snapshot = manager.getSnapshot();
@@ -117,15 +115,13 @@ test("full process logs mode does not break structured text extraction in chat",
   }
 });
 
-
-
 test("persisted chat state retains artifact snapshots for old conversations", () => {
   const originalWindow = (globalThis as { window?: unknown }).window;
   (globalThis as { window?: unknown }).window = createWindowStub();
 
   try {
     const pluginStub = {
-      saveChatState: async () => {}
+      saveChatState: async () => {},
     };
 
     const manager = new ChatSessionManager(pluginStub as never);
@@ -142,7 +138,7 @@ test("persisted chat state retains artifact snapshots for old conversations", ()
             id: "default",
             label: "@ante",
             goal: "Discuss the current Markdown content before editing anything.",
-            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+            systemInstructions: "Prefer answering directly unless the user asks for file changes.",
           },
           triggerSource: "chat",
           inlineInstruction: "加到文档开头",
@@ -157,17 +153,17 @@ test("persisted chat state retains artifact snapshots for old conversations", ()
               operation: "replace-file",
               target: {
                 type: "file",
-                path: "Note.md"
+                path: "Note.md",
               },
               beforeText: "alpha\n",
               afterText: "beta\nalpha\n",
-              applyState: "pending"
-            }
+              applyState: "pending",
+            },
           ],
           startedAt: "2026-03-29T00:00:00.000Z",
-          endedAt: "2026-03-29T00:00:01.000Z"
-        }
-      ]
+          endedAt: "2026-03-29T00:00:01.000Z",
+        },
+      ],
     });
 
     const persisted = (manager as any).serialize();
@@ -191,19 +187,19 @@ test("reusing an empty draft updates pinned context to the latest note context",
 
   try {
     const pluginStub = {
-      saveChatState: async () => {}
+      saveChatState: async () => {},
     };
 
     const manager = new ChatSessionManager(pluginStub as never);
     const firstContext: ContextSnapshot = {
       ...context,
       filePath: "First.md",
-      noteTitle: "First"
+      noteTitle: "First",
     };
     const secondContext: ContextSnapshot = {
       ...context,
       filePath: "Second.md",
-      noteTitle: "Second"
+      noteTitle: "Second",
     };
 
     const firstDraft = manager.createConversation({ context: firstContext });
@@ -223,7 +219,7 @@ test("forceNew creates a separate chat even when an empty draft exists", () => {
 
   try {
     const pluginStub = {
-      saveChatState: async () => {}
+      saveChatState: async () => {},
     };
 
     const manager = new ChatSessionManager(pluginStub as never);
@@ -243,7 +239,7 @@ test("conversation runtime session is only persisted after the task completes", 
 
   try {
     const pluginStub = {
-      saveChatState: async () => {}
+      saveChatState: async () => {},
     };
 
     const manager = new ChatSessionManager(pluginStub as never);
@@ -260,7 +256,7 @@ test("conversation runtime session is only persisted after the task completes", 
             id: "default",
             label: "@ante",
             goal: "Discuss the current Markdown content before editing anything.",
-            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+            systemInstructions: "Prefer answering directly unless the user asks for file changes.",
           },
           triggerSource: "chat",
           inlineInstruction: "继续",
@@ -272,11 +268,11 @@ test("conversation runtime session is only persisted after the task completes", 
           runtimeSession: {
             type: "runtime.session",
             provider: "ante",
-            sessionId: "ses_running"
+            sessionId: "ses_running",
           },
-          startedAt: "2026-03-29T00:00:00.000Z"
-        }
-      ]
+          startedAt: "2026-03-29T00:00:00.000Z",
+        },
+      ],
     });
 
     assert.equal(manager.getConversationRuntimeSessionId(conversation.id), null);
@@ -291,7 +287,7 @@ test("conversation runtime session is only persisted after the task completes", 
             id: "default",
             label: "@ante",
             goal: "Discuss the current Markdown content before editing anything.",
-            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+            systemInstructions: "Prefer answering directly unless the user asks for file changes.",
           },
           triggerSource: "chat",
           inlineInstruction: "继续",
@@ -303,12 +299,12 @@ test("conversation runtime session is only persisted after the task completes", 
           runtimeSession: {
             type: "runtime.session",
             provider: "ante",
-            sessionId: "ses_completed"
+            sessionId: "ses_completed",
           },
           startedAt: "2026-03-29T00:00:00.000Z",
-          endedAt: "2026-03-29T00:00:01.000Z"
-        }
-      ]
+          endedAt: "2026-03-29T00:00:01.000Z",
+        },
+      ],
     });
 
     assert.equal(manager.getConversationRuntimeSessionId(conversation.id), "ses_completed");
@@ -323,7 +319,7 @@ test("streaming assistant messages keep the live runtime session for loading sta
 
   try {
     const pluginStub = {
-      saveChatState: async () => {}
+      saveChatState: async () => {},
     };
 
     const manager = new ChatSessionManager(pluginStub as never);
@@ -340,7 +336,7 @@ test("streaming assistant messages keep the live runtime session for loading sta
             id: "default",
             label: "@ante",
             goal: "Discuss the current Markdown content before editing anything.",
-            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+            systemInstructions: "Prefer answering directly unless the user asks for file changes.",
           },
           triggerSource: "chat",
           inlineInstruction: "first",
@@ -351,11 +347,11 @@ test("streaming assistant messages keep the live runtime session for loading sta
           artifacts: [],
           runtimeSession: {
             provider: "ante",
-            sessionId: "ses_live"
+            sessionId: "ses_live",
           },
-          startedAt: "2026-03-29T00:00:00.000Z"
-        }
-      ]
+          startedAt: "2026-03-29T00:00:00.000Z",
+        },
+      ],
     });
 
     const snapshot = manager.getSnapshot();
@@ -375,14 +371,14 @@ test("rollbackPendingSend removes extra assistant notices inserted before the tu
 
   try {
     const pluginStub = {
-      saveChatState: async () => {}
+      saveChatState: async () => {},
     };
 
     const manager = new ChatSessionManager(pluginStub as never);
     const { conversation, userMessageId } = manager.appendUserPrompt("继续", context);
     const noticeId = manager.appendAssistantNotice(
       conversation.id,
-      "Provider changed to antix. Starting a new session for this turn."
+      "Provider changed to antix. Starting a new session for this turn.",
     );
     manager.createAssistantTurn(conversation.id, "task-1");
 
@@ -391,7 +387,7 @@ test("rollbackPendingSend removes extra assistant notices inserted before the tu
       userMessageId,
       "task-1",
       false,
-      noticeId ? [noticeId] : []
+      noticeId ? [noticeId] : [],
     );
 
     const snapshot = manager.getSnapshot();
@@ -409,7 +405,7 @@ test("chat runtime state preserves telemetry for high-signal observability", () 
 
   try {
     const pluginStub = {
-      saveChatState: async () => {}
+      saveChatState: async () => {},
     };
 
     const manager = new ChatSessionManager(pluginStub as never);
@@ -426,7 +422,7 @@ test("chat runtime state preserves telemetry for high-signal observability", () 
             id: "default",
             label: "@ante",
             goal: "Discuss the current Markdown content before editing anything.",
-            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+            systemInstructions: "Prefer answering directly unless the user asks for file changes.",
           },
           triggerSource: "chat",
           inlineInstruction: "继续",
@@ -441,23 +437,23 @@ test("chat runtime state preserves telemetry for high-signal observability", () 
             usage: {
               promptTokens: 120,
               completionTokens: 80,
-              totalTokens: 200
+              totalTokens: 200,
             },
             lastInfo: {
               level: "info",
               message: "compacting history",
-              timestamp: "2026-03-29T00:00:00.500Z"
+              timestamp: "2026-03-29T00:00:00.500Z",
             },
             timeline: [
               {
                 kind: "compaction-start",
-                timestamp: "2026-03-29T00:00:00.500Z"
-              }
-            ]
+                timestamp: "2026-03-29T00:00:00.500Z",
+              },
+            ],
           },
-          startedAt: "2026-03-29T00:00:00.000Z"
-        }
-      ]
+          startedAt: "2026-03-29T00:00:00.000Z",
+        },
+      ],
     });
 
     const snapshot = manager.getSnapshot();
@@ -479,7 +475,7 @@ test("cancelled chat tasks stay cancelled instead of being mapped to failed", ()
 
   try {
     const pluginStub = {
-      saveChatState: async () => {}
+      saveChatState: async () => {},
     };
 
     const manager = new ChatSessionManager(pluginStub as never);
@@ -496,7 +492,7 @@ test("cancelled chat tasks stay cancelled instead of being mapped to failed", ()
             id: "default",
             label: "@ante",
             goal: "Discuss the current Markdown content before editing anything.",
-            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+            systemInstructions: "Prefer answering directly unless the user asks for file changes.",
           },
           triggerSource: "chat",
           inlineInstruction: "停掉",
@@ -506,9 +502,9 @@ test("cancelled chat tasks stay cancelled instead of being mapped to failed", ()
           stdoutText: "partial output",
           artifacts: [],
           startedAt: "2026-03-29T00:00:00.000Z",
-          endedAt: "2026-03-29T00:00:01.000Z"
-        }
-      ]
+          endedAt: "2026-03-29T00:00:01.000Z",
+        },
+      ],
     });
 
     const snapshot = manager.getSnapshot();
@@ -528,7 +524,7 @@ test("missing session resume errors clear the stored conversation binding", () =
 
   try {
     const pluginStub = {
-      saveChatState: async () => {}
+      saveChatState: async () => {},
     };
 
     const manager = new ChatSessionManager(pluginStub as never);
@@ -545,7 +541,7 @@ test("missing session resume errors clear the stored conversation binding", () =
             id: "default",
             label: "@ante",
             goal: "Discuss the current Markdown content before editing anything.",
-            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+            systemInstructions: "Prefer answering directly unless the user asks for file changes.",
           },
           triggerSource: "chat",
           inlineInstruction: "第一轮",
@@ -557,12 +553,12 @@ test("missing session resume errors clear the stored conversation binding", () =
           runtimeSession: {
             type: "runtime.session",
             provider: "ante",
-            sessionId: "ses_broken"
+            sessionId: "ses_broken",
           },
           startedAt: "2026-03-29T00:00:00.000Z",
-          endedAt: "2026-03-29T00:00:01.000Z"
-        }
-      ]
+          endedAt: "2026-03-29T00:00:01.000Z",
+        },
+      ],
     });
 
     assert.equal(manager.getConversationRuntimeSessionId(conversation.id), "ses_broken");
@@ -579,7 +575,7 @@ test("missing session resume errors clear the stored conversation binding", () =
             id: "default",
             label: "@ante",
             goal: "Discuss the current Markdown content before editing anything.",
-            systemInstructions: "Prefer answering directly unless the user asks for file changes."
+            systemInstructions: "Prefer answering directly unless the user asks for file changes.",
           },
           triggerSource: "chat",
           inlineInstruction: "继续",
@@ -588,11 +584,12 @@ test("missing session resume errors clear the stored conversation binding", () =
           logs: [],
           stdoutText: "",
           artifacts: [],
-          error: "Ante could not restore this chat because its saved session files are missing. Start a new chat to continue.",
+          error:
+            "Ante could not restore this chat because its saved session files are missing. Start a new chat to continue.",
           startedAt: "2026-03-29T00:01:00.000Z",
-          endedAt: "2026-03-29T00:01:01.000Z"
-        }
-      ]
+          endedAt: "2026-03-29T00:01:01.000Z",
+        },
+      ],
     });
 
     assert.equal(manager.getConversationRuntimeSessionId(conversation.id), null);

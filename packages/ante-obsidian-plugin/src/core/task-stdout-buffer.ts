@@ -11,7 +11,7 @@ export class TaskStdoutBuffer {
 
   constructor(
     private readonly shouldPreserveFullStdout: () => boolean,
-    private readonly onFlush: (taskId: string, incomingChunksCombined: string) => void
+    private readonly onFlush: (taskId: string, incomingChunksCombined: string) => void,
   ) {}
 
   queue(taskId: string, text: string): void {

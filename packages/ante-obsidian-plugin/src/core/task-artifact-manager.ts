@@ -17,10 +17,16 @@ export const isNativeFileEditingToolName = (name: string | null | undefined): bo
   return normalized === "write" || normalized === "edit";
 };
 
-export const approvalHasOnlyFileEditingTools = (approval: NonNullable<TaskRecord["pendingApproval"]>): boolean =>
-  approval.tools.length > 0 && approval.tools.every((tool) => isNativeFileEditingToolName(tool.name));
+export const approvalHasOnlyFileEditingTools = (
+  approval: NonNullable<TaskRecord["pendingApproval"]>,
+): boolean =>
+  approval.tools.length > 0 &&
+  approval.tools.every((tool) => isNativeFileEditingToolName(tool.name));
 
-export const matchesContextFilePath = (targetPath: string | null | undefined, context: ContextSnapshot): boolean => {
+export const matchesContextFilePath = (
+  targetPath: string | null | undefined,
+  context: ContextSnapshot,
+): boolean => {
   const candidate = targetPath?.trim();
   const contextPath = context.filePath?.trim();
   if (!candidate || !contextPath) {
@@ -31,7 +37,10 @@ export const matchesContextFilePath = (targetPath: string | null | undefined, co
   }
   const normalizedCandidate = candidate.replace(/\\/g, "/");
   const normalizedContext = contextPath.replace(/\\/g, "/");
-  return normalizedCandidate.endsWith(`/${normalizedContext}`) || normalizedCandidate.endsWith(normalizedContext);
+  return (
+    normalizedCandidate.endsWith(`/${normalizedContext}`) ||
+    normalizedCandidate.endsWith(normalizedContext)
+  );
 };
 
 export const isUserSkippedToolMessage = (value: string | null | undefined): boolean =>
@@ -47,7 +56,9 @@ export const deriveTaskStatusFromArtifacts = (task: TaskRecord): TaskRecord["sta
   if (states.some((state) => state === "failed")) {
     return "failed";
   }
-  if (states.some((state) => state === "pending" || state === "applying" || state === "reverting")) {
+  if (
+    states.some((state) => state === "pending" || state === "applying" || state === "reverting")
+  ) {
     return "awaiting-apply";
   }
   if (states.every((state) => state === "applied")) {
@@ -76,19 +87,29 @@ export class TaskArtifactManager {
     private readonly callbacks: {
       getTask: (taskId: string) => TaskRecord;
       patchTask: (taskId: string, patch: Partial<TaskRecord>) => void;
-      patchArtifact: (taskId: string, artifactId: string, patch: Partial<DocumentChangeArtifact>) => void;
+      patchArtifact: (
+        taskId: string,
+        artifactId: string,
+        patch: Partial<DocumentChangeArtifact>,
+      ) => void;
       patchArtifacts: (
         taskId: string,
-        updater: (artifact: DocumentChangeArtifact) => DocumentChangeArtifact
+        updater: (artifact: DocumentChangeArtifact) => DocumentChangeArtifact,
       ) => void;
       respondToTaskApproval: (taskId: string, decision: RuntimeApprovalDecision) => void;
-      appendLog: (taskId: string, stream: TaskRecord["logs"][number]["stream"], text: string) => void;
+      appendLog: (
+        taskId: string,
+        stream: TaskRecord["logs"][number]["stream"],
+        text: string,
+      ) => void;
       logDebug: (...args: unknown[]) => void;
-    }
+    },
   ) {}
 
   private getArtifact(taskId: string, artifactId: string): DocumentChangeArtifact {
-    const artifact = this.callbacks.getTask(taskId).artifacts.find((entry) => entry.id === artifactId);
+    const artifact = this.callbacks
+      .getTask(taskId)
+      .artifacts.find((entry) => entry.id === artifactId);
     if (!artifact) {
       throw new Error(`Artifact not found: ${artifactId}`);
     }
@@ -109,7 +130,7 @@ export class TaskArtifactManager {
       rmSync(stagedRoot, { recursive: true, force: true });
     } catch (error) {
       this.callbacks.logDebug(
-        `staged preview cleanup failed root=${stagedRoot} error=${error instanceof Error ? error.message : String(error)}`
+        `staged preview cleanup failed root=${stagedRoot} error=${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -124,7 +145,7 @@ export class TaskArtifactManager {
 
   resolveApprovalToolTargetPath(
     tool: NonNullable<TaskRecord["pendingApproval"]>["tools"][number],
-    context: ContextSnapshot
+    context: ContextSnapshot,
   ): string | null {
     if (!tool.argsText?.trim()) {
       return context.filePath;
@@ -132,27 +153,34 @@ export class TaskArtifactManager {
     try {
       const parsed = JSON.parse(tool.argsText) as Record<string, unknown>;
       const pathCandidate = parsed.file_path ?? parsed.path ?? parsed.targetPath;
-      return typeof pathCandidate === "string" && pathCandidate.trim() ? pathCandidate.trim() : context.filePath;
+      return typeof pathCandidate === "string" && pathCandidate.trim()
+        ? pathCandidate.trim()
+        : context.filePath;
     } catch {
       return context.filePath;
     }
   }
 
-  resolveRuntimeToolTargetPath(tool: { argsText?: string }, context: ContextSnapshot): string | null {
+  resolveRuntimeToolTargetPath(
+    tool: { argsText?: string },
+    context: ContextSnapshot,
+  ): string | null {
     if (!tool.argsText?.trim()) {
       return context.filePath;
     }
     try {
       const parsed = JSON.parse(tool.argsText) as Record<string, unknown>;
       const candidate = parsed.file_path ?? parsed.path ?? parsed.targetPath;
-      return typeof candidate === "string" && candidate.trim() ? candidate.trim() : context.filePath;
+      return typeof candidate === "string" && candidate.trim()
+        ? candidate.trim()
+        : context.filePath;
     } catch {
       return context.filePath;
     }
   }
 
   async materializeStagedPreviewArtifact(
-    artifact: DocumentChangeArtifact
+    artifact: DocumentChangeArtifact,
   ): Promise<DocumentChangeArtifact> {
     const stageRoot = mkdtempSync(join(tmpdir(), STAGED_PREVIEW_PREFIX));
     const relativePath = sanitizeStagePath(artifact.target.path);
@@ -167,22 +195,27 @@ export class TaskArtifactManager {
       stagedRoot: stageRoot,
       baselinePath,
       stagedPath,
-      runtimeMode: "staged-preview"
+      runtimeMode: "staged-preview",
     };
   }
 
-  async applyArtifact(taskId: string, artifactId: string, options?: { skipHost?: boolean }): Promise<void> {
+  async applyArtifact(
+    taskId: string,
+    artifactId: string,
+    options?: { skipHost?: boolean },
+  ): Promise<void> {
     const artifact = this.getArtifact(taskId, artifactId);
     const task = this.callbacks.getTask(taskId);
     const approvalBackedTool =
-      artifact.runtimeToolId && task.pendingApproval?.tools.some((tool) => tool.id === artifact.runtimeToolId)
+      artifact.runtimeToolId &&
+      task.pendingApproval?.tools.some((tool) => tool.id === artifact.runtimeToolId)
         ? task.pendingApproval.tools.find((tool) => tool.id === artifact.runtimeToolId)
         : undefined;
 
     if (approvalBackedTool && isNativeFileEditingToolName(approvalBackedTool.name)) {
       this.callbacks.patchArtifact(taskId, artifactId, {
         applyState: "applying",
-        applyError: undefined
+        applyError: undefined,
       });
       this.reconcileTaskStatus(taskId);
       try {
@@ -194,7 +227,7 @@ export class TaskArtifactManager {
           applyState: "applied",
           baselinePath: undefined,
           stagedPath: undefined,
-          stagedRoot: undefined
+          stagedRoot: undefined,
         });
         this.runtime.respondToApproval(task.pendingApproval!, "Skip");
         this.callbacks.patchTask(taskId, { pendingApproval: undefined });
@@ -204,7 +237,7 @@ export class TaskArtifactManager {
       } catch (error) {
         this.callbacks.patchArtifact(taskId, artifactId, {
           applyState: "failed",
-          applyError: error instanceof Error ? error.message : String(error)
+          applyError: error instanceof Error ? error.message : String(error),
         });
         this.reconcileTaskStatus(taskId);
         throw error;
@@ -213,7 +246,7 @@ export class TaskArtifactManager {
 
     this.callbacks.patchArtifact(taskId, artifactId, {
       applyState: "applying",
-      applyError: undefined
+      applyError: undefined,
     });
     this.reconcileTaskStatus(taskId);
 
@@ -226,13 +259,13 @@ export class TaskArtifactManager {
         applyState: "applied",
         baselinePath: undefined,
         stagedPath: undefined,
-        stagedRoot: undefined
+        stagedRoot: undefined,
       });
       this.reconcileTaskStatus(taskId);
     } catch (error) {
       this.callbacks.patchArtifact(taskId, artifactId, {
         applyState: "failed",
-        applyError: error instanceof Error ? error.message : String(error)
+        applyError: error instanceof Error ? error.message : String(error),
       });
       this.reconcileTaskStatus(taskId);
       throw error;
@@ -243,7 +276,8 @@ export class TaskArtifactManager {
     const artifact = this.getArtifact(taskId, artifactId);
     const task = this.callbacks.getTask(taskId);
     const approvalBackedTool =
-      artifact.runtimeToolId && task.pendingApproval?.tools.some((tool) => tool.id === artifact.runtimeToolId)
+      artifact.runtimeToolId &&
+      task.pendingApproval?.tools.some((tool) => tool.id === artifact.runtimeToolId)
         ? task.pendingApproval.tools.find((tool) => tool.id === artifact.runtimeToolId)
         : undefined;
 
@@ -255,7 +289,7 @@ export class TaskArtifactManager {
     if (artifact.applyState === "applied") {
       this.callbacks.patchArtifact(taskId, artifactId, {
         applyState: "reverting",
-        applyError: undefined
+        applyError: undefined,
       });
       this.reconcileTaskStatus(taskId);
 
@@ -264,7 +298,7 @@ export class TaskArtifactManager {
       } catch (error) {
         this.callbacks.patchArtifact(taskId, artifactId, {
           applyState: "failed",
-          applyError: error instanceof Error ? error.message : String(error)
+          applyError: error instanceof Error ? error.message : String(error),
         });
         this.reconcileTaskStatus(taskId);
         throw error;
@@ -272,13 +306,13 @@ export class TaskArtifactManager {
 
       this.callbacks.patchArtifact(taskId, artifactId, {
         applyState: "pending",
-        applyError: undefined
+        applyError: undefined,
       });
       this.cleanupStagedPreview(artifact);
       this.callbacks.patchArtifact(taskId, artifactId, {
         baselinePath: undefined,
         stagedPath: undefined,
-        stagedRoot: undefined
+        stagedRoot: undefined,
       });
       this.reconcileTaskStatus(taskId);
       return;
@@ -290,7 +324,7 @@ export class TaskArtifactManager {
       applyError: undefined,
       baselinePath: undefined,
       stagedPath: undefined,
-      stagedRoot: undefined
+      stagedRoot: undefined,
     });
     this.reconcileTaskStatus(taskId);
   }
@@ -298,7 +332,7 @@ export class TaskArtifactManager {
   async applyAllArtifacts(taskId: string): Promise<void> {
     const task = this.callbacks.getTask(taskId);
     const pendingArtifacts = task.artifacts.filter(
-      (artifact) => artifact.applyState !== "applied" && artifact.applyState !== "discarded"
+      (artifact) => artifact.applyState !== "applied" && artifact.applyState !== "discarded",
     );
 
     for (const artifact of pendingArtifacts) {
@@ -310,7 +344,7 @@ export class TaskArtifactManager {
     const artifact = this.getArtifact(taskId, artifactId);
     this.callbacks.patchArtifact(taskId, artifactId, {
       applyState: "reverting",
-      applyError: undefined
+      applyError: undefined,
     });
     this.reconcileTaskStatus(taskId);
 
@@ -321,13 +355,13 @@ export class TaskArtifactManager {
         applyState: "reverted",
         baselinePath: undefined,
         stagedPath: undefined,
-        stagedRoot: undefined
+        stagedRoot: undefined,
       });
       this.reconcileTaskStatus(taskId);
     } catch (error) {
       this.callbacks.patchArtifact(taskId, artifactId, {
         applyState: "failed",
-        applyError: error instanceof Error ? error.message : String(error)
+        applyError: error instanceof Error ? error.message : String(error),
       });
       this.reconcileTaskStatus(taskId);
       throw error;

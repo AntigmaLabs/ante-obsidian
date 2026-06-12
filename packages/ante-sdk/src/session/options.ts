@@ -69,10 +69,12 @@ export const resolveOptions = (options: Options = {}): ResolvedOptions => ({
   systemPrompt: typeof options.systemPrompt === "string" ? options.systemPrompt : undefined,
   appendSystemPrompt:
     options.appendSystemPrompt ??
-    (typeof options.systemPrompt === "object" && options.systemPrompt.type === "preset" ? options.systemPrompt.append : undefined),
+    (typeof options.systemPrompt === "object" && options.systemPrompt.type === "preset"
+      ? options.systemPrompt.append
+      : undefined),
   thinking: normalizeThinking(options.thinking),
   transport: options.transport ?? "stdio",
-  wsAddress: options.wsAddress ?? "127.0.0.1:17361"
+  wsAddress: options.wsAddress ?? "127.0.0.1:17361",
 });
 
 export const permissionModeToPolicy = (mode: PermissionMode): "Auto" | "Ask" | "Deny" => {

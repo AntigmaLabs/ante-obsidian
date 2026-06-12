@@ -13,7 +13,7 @@ export const BUILTIN_PRESETS: Record<PresetId, PresetDefinition> = {
     source: "builtin",
     enabled: true,
     sortOrder: 0,
-    interactionMode: "inline"
+    interactionMode: "inline",
   },
   research: {
     id: "research",
@@ -24,7 +24,7 @@ export const BUILTIN_PRESETS: Record<PresetId, PresetDefinition> = {
     source: "builtin",
     enabled: true,
     sortOrder: 1,
-    interactionMode: "inline"
+    interactionMode: "inline",
   },
   plan: {
     id: "plan",
@@ -35,7 +35,7 @@ export const BUILTIN_PRESETS: Record<PresetId, PresetDefinition> = {
     source: "builtin",
     enabled: true,
     sortOrder: 2,
-    interactionMode: "inline"
+    interactionMode: "inline",
   },
   summary: {
     id: "summary",
@@ -46,20 +46,22 @@ export const BUILTIN_PRESETS: Record<PresetId, PresetDefinition> = {
     source: "builtin",
     enabled: true,
     sortOrder: 3,
-    interactionMode: "inline"
-  }
+    interactionMode: "inline",
+  },
 };
 
 export const listBuiltinPresets = (): PresetDefinition[] => Object.values(BUILTIN_PRESETS);
 
 export const listResolvedPresets = (settings: PresetSettings): PresetDefinition[] => {
-  const builtinPreferences = new Map(settings.builtinPresetPreferences.map((preset) => [preset.id, preset]));
+  const builtinPreferences = new Map(
+    settings.builtinPresetPreferences.map((preset) => [preset.id, preset]),
+  );
   const builtin = listBuiltinPresets().map((preset, index) => {
     const preference = builtinPreferences.get(preset.id);
     return {
       ...preset,
       enabled: preference?.enabled ?? true,
-      sortOrder: preference?.sortOrder ?? index
+      sortOrder: preference?.sortOrder ?? index,
     };
   });
 
@@ -71,7 +73,7 @@ export const listResolvedPresets = (settings: PresetSettings): PresetDefinition[
     source: "custom" as const,
     enabled: preset.enabled,
     sortOrder: typeof preset.sortOrder === "number" ? preset.sortOrder : builtin.length + index,
-    interactionMode: preset.interactionMode ?? "inline"
+    interactionMode: preset.interactionMode ?? "inline",
   }));
 
   return [...builtin, ...custom].sort((left, right) => {
@@ -83,7 +85,10 @@ export const listResolvedPresets = (settings: PresetSettings): PresetDefinition[
   });
 };
 
-export const getResolvedPreset = (settings: PresetSettings, presetId: PresetId): PresetDefinition => {
+export const getResolvedPreset = (
+  settings: PresetSettings,
+  presetId: PresetId,
+): PresetDefinition => {
   const preset = listResolvedPresets(settings).find((entry) => entry.id === presetId);
   if (!preset) {
     throw new Error(`Unknown preset: ${presetId}`);

@@ -11,17 +11,17 @@ const terminalRequest = (overrides: Partial<TaskRequest> = {}): TaskRequest => (
     id: "default",
     label: "@ante",
     goal: "Handle the current Markdown content directly and choose the lightest useful operation.",
-    systemInstructions: "Prefer a direct document edit when the requested outcome is concrete."
+    systemInstructions: "Prefer a direct document edit when the requested outcome is concrete.",
   },
   context: {
     vaultPath: "/vaults/workspace",
     filePath: "20260321 list.md",
     noteTitle: "20260321 list",
     documentText: "# Tasks\n\n- clean desk\n- empty trash\n",
-    selection: null
+    selection: null,
   },
   inlineInstruction: "在文档最后添加一句话总结",
-  ...overrides
+  ...overrides,
 });
 
 const chatRequest = (overrides: Partial<TaskRequest> = {}): TaskRequest => ({
@@ -32,17 +32,17 @@ const chatRequest = (overrides: Partial<TaskRequest> = {}): TaskRequest => ({
     id: "default",
     label: "@ante",
     goal: "Discuss the current Markdown content before editing anything.",
-    systemInstructions: "Prefer answering directly unless the user asks for file changes."
+    systemInstructions: "Prefer answering directly unless the user asks for file changes.",
   },
   context: {
     vaultPath: "/vaults/personal",
     filePath: "Inbox.md",
     noteTitle: "Inbox",
     documentText: "# Inbox\n\n- follow up with design team\n",
-    selection: null
+    selection: null,
   },
   inlineInstruction: "What should I do next?",
-  ...overrides
+  ...overrides,
 });
 
 test("terminal prompt prioritizes provided note context over workspace search", () => {
@@ -59,7 +59,9 @@ test("terminal prompt prioritizes provided note context over workspace search", 
 });
 
 test("terminal prompt requires native file-editing tools for multiple markdown file edits", () => {
-  const prompt = buildInteractivePrompt(terminalRequest({ inlineInstruction: "Create two markdown files." }));
+  const prompt = buildInteractivePrompt(
+    terminalRequest({ inlineInstruction: "Create two markdown files." }),
+  );
 
   assert.match(prompt, /prefer native file-editing tools/i);
   assert.match(prompt, /multiple native file-editing tool calls/i);
@@ -71,8 +73,8 @@ test("terminal prompt includes Obsidian CLI guidance when available", () => {
   const prompt = buildInteractivePrompt(
     terminalRequest({
       obsidianCliPromptBlock:
-        "Obsidian CLI is available in this session.\nReference: https://obsidian.md/zh/cli"
-    })
+        "Obsidian CLI is available in this session.\nReference: https://obsidian.md/zh/cli",
+    }),
   );
 
   assert.match(prompt, /Obsidian CLI is available in this session\./);
@@ -104,10 +106,10 @@ test("chat follow-up prompt still includes the latest note context", () => {
         selection: {
           text: "sync plugin chat context",
           from: { line: 2, ch: 2 },
-          to: { line: 2, ch: 26 }
-        }
-      }
-    })
+          to: { line: 2, ch: 26 },
+        },
+      },
+    }),
   );
 
   assert.match(prompt, /Chat with Ante in an Obsidian vault/i);
@@ -118,8 +120,17 @@ test("chat follow-up prompt still includes the latest note context", () => {
   assert.match(prompt, /Current note path: Projects\/Today\.md/);
   assert.match(prompt, /Selected text:\nsync plugin chat context/);
   assert.match(prompt, /Current note content:\n# Today/);
-  assert.match(prompt, /Never copy the prompt instructions, schema text, or context labels into file content\./);
-  assert.match(prompt, /Use native file-editing tools when the user asks to create or modify Markdown files\./);
+  assert.match(
+    prompt,
+    /Never copy the prompt instructions, schema text, or context labels into file content\./,
+  );
+  assert.match(
+    prompt,
+    /Use native file-editing tools when the user asks to create or modify Markdown files\./,
+  );
   assert.doesNotMatch(prompt, /fallback JSON object/i);
-  assert.match(prompt, /Do not emit JSON envelopes such as type=text, type=change, or type=changes\./);
+  assert.match(
+    prompt,
+    /Do not emit JSON envelopes such as type=text, type=change, or type=changes\./,
+  );
 });

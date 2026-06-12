@@ -6,16 +6,13 @@ import {
   Notice,
   TFile,
   TFolder,
-  normalizePath
+  normalizePath,
 } from "obsidian";
 import { readFile as readFsFile } from "node:fs/promises";
 import type { HostAdapter } from "../core/host-adapter";
 import type { ContextSnapshot, DocumentChangeArtifact } from "../core/types";
 import { getArtifactTargetPath } from "../core/artifacts";
-import {
-  normalizeVaultRelativePath,
-  toVaultRelativePath
-} from "./vault-path";
+import { normalizeVaultRelativePath, toVaultRelativePath } from "./vault-path";
 
 export class ObsidianHostAdapter implements HostAdapter {
   private lastKnownContext: ContextSnapshot | null = null;
@@ -61,14 +58,12 @@ export class ObsidianHostAdapter implements HostAdapter {
     // Pre-read all content before any vault mutations so we never fail mid-operation.
     let nextText: string;
     try {
-      nextText = change.stagedPath
-        ? await readFsFile(change.stagedPath, "utf8")
-        : change.afterText;
+      nextText = change.stagedPath ? await readFsFile(change.stagedPath, "utf8") : change.afterText;
     } catch (error) {
       throw new Error(
         `Failed to read staged content: ${
           error instanceof Error ? error.message : "unknown error"
-        }`
+        }`,
       );
     }
 
@@ -77,7 +72,7 @@ export class ObsidianHostAdapter implements HostAdapter {
       const existing = this.app.vault.getAbstractFileByPath(relativePath);
       if (existing) {
         throw new Error(
-          `File already exists: ${targetPath}. Please choose a different name or delete the existing file.`
+          `File already exists: ${targetPath}. Please choose a different name or delete the existing file.`,
         );
       }
       try {
@@ -86,9 +81,7 @@ export class ObsidianHostAdapter implements HostAdapter {
         new Notice(`Created ${targetPath}`);
       } catch (error) {
         throw new Error(
-          `Failed to create file: ${
-            error instanceof Error ? error.message : "unknown error"
-          }`
+          `Failed to create file: ${error instanceof Error ? error.message : "unknown error"}`,
         );
       }
       return;
@@ -105,7 +98,7 @@ export class ObsidianHostAdapter implements HostAdapter {
       throw new Error(
         `Failed to read original file content: ${
           error instanceof Error ? error.message : "unknown error"
-        }`
+        }`,
       );
     }
 
@@ -121,13 +114,13 @@ export class ObsidianHostAdapter implements HostAdapter {
         throw new Error(
           `Failed to update file: ${
             error instanceof Error ? error.message : "unknown error"
-          }. Restoration also failed. Please manually restore from backup.`
+          }. Restoration also failed. Please manually restore from backup.`,
         );
       }
       throw new Error(
         `Failed to update file: ${
           error instanceof Error ? error.message : "unknown error"
-        }. Original content has been restored.`
+        }. Original content has been restored.`,
       );
     }
   }
@@ -142,9 +135,7 @@ export class ObsidianHostAdapter implements HostAdapter {
           new Notice(`Deleted ${targetPath}`);
         } catch (error) {
           throw new Error(
-            `Failed to delete file: ${
-              error instanceof Error ? error.message : "unknown error"
-            }`
+            `Failed to delete file: ${error instanceof Error ? error.message : "unknown error"}`,
           );
         }
       }
@@ -152,15 +143,13 @@ export class ObsidianHostAdapter implements HostAdapter {
     }
 
     const file = this.requireFile(targetPath);
-    
+
     try {
       await this.app.vault.modify(file, change.beforeText);
       new Notice(`Reverted ${targetPath}`);
     } catch (error) {
       throw new Error(
-        `Failed to revert file: ${
-          error instanceof Error ? error.message : "unknown error"
-        }`
+        `Failed to revert file: ${error instanceof Error ? error.message : "unknown error"}`,
       );
     }
   }
@@ -207,8 +196,8 @@ export class ObsidianHostAdapter implements HostAdapter {
       selection: {
         text: selectionText,
         from,
-        to
-      }
+        to,
+      },
     };
 
     this.lastKnownContext = context;

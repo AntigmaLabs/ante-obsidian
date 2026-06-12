@@ -1,6 +1,10 @@
 import { requestUrl } from "obsidian";
 import { spawn } from "node:child_process";
-import { normalizeAnteVersion, parseAnteVersionOutput, shouldOfferAnteUpdate } from "./ante-version";
+import {
+  normalizeAnteVersion,
+  parseAnteVersionOutput,
+  shouldOfferAnteUpdate,
+} from "./ante-version";
 import { resolveCommandPath } from "../runtime/transport/ante-stdio-transport";
 import { DEFAULT_UPDATE_CONFIG } from "./update-config";
 
@@ -21,9 +25,10 @@ export interface AnteVersionCheckResult {
 
 const runShellCommand = (command: string): Promise<string> =>
   new Promise((resolve, reject) => {
-    const shellPath = (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
+    const shellPath =
+      (typeof process !== "undefined" ? process.env?.SHELL : undefined)?.trim() || DEFAULT_SHELL;
     const child = spawn(shellPath, ["-lc", command], {
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
     });
 
     let stdout = "";
@@ -50,7 +55,10 @@ const runShellCommand = (command: string): Promise<string> =>
 export class AnteUpdater {
   async checkForUpdate(): Promise<AnteVersionCheckResult> {
     const checkedAt = new Date().toISOString();
-    const [localResult, remoteResult] = await Promise.allSettled([this.getLocalVersion(), this.getRemoteManifest()]);
+    const [localResult, remoteResult] = await Promise.allSettled([
+      this.getLocalVersion(),
+      this.getRemoteManifest(),
+    ]);
 
     const localVersion = localResult.status === "fulfilled" ? localResult.value : null;
     const latestVersion =
@@ -59,7 +67,7 @@ export class AnteUpdater {
         : null;
     const errorMessages = [
       localResult.status === "rejected" ? this.getErrorMessage(localResult.reason) : "",
-      remoteResult.status === "rejected" ? this.getErrorMessage(remoteResult.reason) : ""
+      remoteResult.status === "rejected" ? this.getErrorMessage(remoteResult.reason) : "",
     ].filter(Boolean);
 
     return {
@@ -67,7 +75,7 @@ export class AnteUpdater {
       latestVersion,
       updateAvailable: shouldOfferAnteUpdate(localVersion, latestVersion),
       checkedAt,
-      error: errorMessages.length > 0 ? errorMessages.join(" | ") : undefined
+      error: errorMessages.length > 0 ? errorMessages.join(" | ") : undefined,
     };
   }
 
@@ -80,11 +88,13 @@ export class AnteUpdater {
     return parseAnteVersionOutput(output);
   }
 
-  async getRemoteManifest(manifestUrl = DEFAULT_UPDATE_CONFIG.anteManifestUrl): Promise<AnteRemoteManifest> {
+  async getRemoteManifest(
+    manifestUrl = DEFAULT_UPDATE_CONFIG.anteManifestUrl,
+  ): Promise<AnteRemoteManifest> {
     const response = await requestUrl({
       url: manifestUrl,
       method: "GET",
-      throw: false
+      throw: false,
     });
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`Failed to fetch Ante manifest (${response.status})`);
@@ -98,7 +108,7 @@ export class AnteUpdater {
 
     return {
       version,
-      generatedAt: typeof body.generated_at === "string" ? body.generated_at : ""
+      generatedAt: typeof body.generated_at === "string" ? body.generated_at : "",
     };
   }
 

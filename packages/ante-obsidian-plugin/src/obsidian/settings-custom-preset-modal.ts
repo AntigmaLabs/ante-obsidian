@@ -16,7 +16,7 @@ export class CustomPresetModal extends Modal {
       enabled: boolean;
       sortOrder: number;
       interactionMode?: "inline" | "panel";
-    } | null = null
+    } | null = null,
   ) {
     super(pluginRef.app);
     this.nameValue = existingPreset?.name ?? "";
@@ -50,24 +50,29 @@ export class CustomPresetModal extends Modal {
       .setDesc("Used as the preset execution instructions.")
       .addTextArea((text) =>
         text
-          .setPlaceholder("Describe how this preset should operate on the current Markdown context.")
+          .setPlaceholder(
+            "Describe how this preset should operate on the current Markdown context.",
+          )
           .setValue(this.instructionValue)
           .onChange((value) => {
             this.instructionValue = value;
-          })
+          }),
       );
     instructionSetting.settingEl.addClass("tmd-preset-modal-setting", "is-textarea");
 
     const actionSetting = new Setting(contentEl)
       .addButton((button) =>
-        button.setButtonText("Confirm").setCta().onClick(async () => {
-          await this.savePreset();
-        })
+        button
+          .setButtonText("Confirm")
+          .setCta()
+          .onClick(async () => {
+            await this.savePreset();
+          }),
       )
       .addButton((button) =>
         button.setButtonText("Cancel").onClick(() => {
           this.close();
-        })
+        }),
       );
     actionSetting.settingEl.addClass("tmd-preset-modal-actions");
   }
@@ -91,7 +96,9 @@ export class CustomPresetModal extends Modal {
     }
 
     if (this.existingPreset) {
-      const preset = this.pluginRef.settings.customPresets.find((entry) => entry.id === this.existingPreset?.id);
+      const preset = this.pluginRef.settings.customPresets.find(
+        (entry) => entry.id === this.existingPreset?.id,
+      );
       if (!preset) {
         new Notice("Custom preset no longer exists");
         return;
@@ -105,7 +112,7 @@ export class CustomPresetModal extends Modal {
         instruction,
         enabled: true,
         sortOrder: listResolvedPresets(this.pluginRef.settings).length,
-        interactionMode: "inline"
+        interactionMode: "inline",
       });
     }
     this.pluginRef.settings.customPresets.sort((left, right) => left.sortOrder - right.sortOrder);

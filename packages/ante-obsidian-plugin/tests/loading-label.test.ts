@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { __test__, formatLoadingLabel, getLoadingFrame, getLoadingWord } from "../src/core/loading-label";
+import {
+  __test__,
+  formatLoadingLabel,
+  getLoadingFrame,
+  getLoadingWord,
+} from "../src/core/loading-label";
 
 test("getLoadingWord is deterministic for the same seed", () => {
   assert.equal(getLoadingWord("task-123"), getLoadingWord("task-123"));

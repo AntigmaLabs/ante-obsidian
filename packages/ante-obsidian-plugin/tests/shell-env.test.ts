@@ -29,7 +29,10 @@ test("normalizeCommandName rejects unsafe executable names", () => {
 
 test("command lookup tries interactive fallback for zsh and bash", () => {
   assert.deepEqual(__test__.getCommandLookupShellArgs("/bin/zsh"), [["-lc"], ["-ic"]]);
-  assert.deepEqual(__test__.getCommandLookupShellArgs("/opt/homebrew/bin/bash"), [["-lc"], ["-ic"]]);
+  assert.deepEqual(__test__.getCommandLookupShellArgs("/opt/homebrew/bin/bash"), [
+    ["-lc"],
+    ["-ic"],
+  ]);
 });
 
 test("command lookup keeps login-only mode for other shells", () => {
@@ -49,7 +52,10 @@ test("command lookup result validation accepts only safe path-like outputs", () 
   assert.equal(__test__.isValidCommandLookupResult("/Users/test/.local/bin/ante", "ante"), true);
   assert.equal(__test__.isValidCommandLookupResult("ante", "ante"), true);
   assert.equal(__test__.isValidCommandLookupResult("alias ante='ante --stdio'", "ante"), false);
-  assert.equal(__test__.isValidCommandLookupResult("ante is /Users/test/.local/bin/ante", "ante"), false);
+  assert.equal(
+    __test__.isValidCommandLookupResult("ante is /Users/test/.local/bin/ante", "ante"),
+    false,
+  );
   assert.equal(__test__.isValidCommandLookupResult("Welcome to zsh", "ante"), false);
   assert.equal(__test__.isValidCommandLookupResult("other-command", "ante"), false);
 });
@@ -60,7 +66,11 @@ test("selectResolvedCommandPath falls back to SDK-resolved executable paths", ()
     "/Users/test/.ante/bin/ante",
   );
   assert.equal(
-    __test__.selectResolvedCommandPath("/opt/homebrew/bin/ante", "/Users/test/.ante/bin/ante", "ante"),
+    __test__.selectResolvedCommandPath(
+      "/opt/homebrew/bin/ante",
+      "/Users/test/.ante/bin/ante",
+      "ante",
+    ),
     "/opt/homebrew/bin/ante",
   );
   assert.equal(__test__.selectResolvedCommandPath("", "ante", "ante"), "");

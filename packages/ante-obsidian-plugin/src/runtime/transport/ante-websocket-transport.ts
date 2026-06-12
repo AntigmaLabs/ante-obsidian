@@ -2,5 +2,5 @@ export {
   AnteWebSocketTransport,
   normalizeWsListenAddress,
   parseSocketAddress,
-  type AnteWebSocketTransportConfig
+  type AnteWebSocketTransportConfig,
 } from "@antigma/ante-sdk";

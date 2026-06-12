@@ -1,9 +1,5 @@
 const normalizeFileSystemPath = (path: string): string => {
-  const normalized = path
-    .trim()
-    .replace(/\\/g, "/")
-    .replace(/\/+/g, "/")
-    .normalize("NFC");
+  const normalized = path.trim().replace(/\\/g, "/").replace(/\/+/g, "/").normalize("NFC");
 
   if (normalized.length > 1 && normalized.endsWith("/")) {
     return normalized.slice(0, -1);
@@ -16,7 +12,7 @@ export const normalizeVaultRelativePath = (path: string): string =>
 
 export const toVaultRelativePath = (
   path: string,
-  vaultPath: string | null | undefined
+  vaultPath: string | null | undefined,
 ): string | null => {
   const normalizedPath = normalizeFileSystemPath(path);
   if (!normalizedPath) {

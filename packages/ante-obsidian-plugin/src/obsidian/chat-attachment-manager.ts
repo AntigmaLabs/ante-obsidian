@@ -1,15 +1,15 @@
-import { Notice, setIcon } from "obsidian"
+import { Notice, setIcon } from "obsidian";
 import {
   logAttachmentDebug,
   getElectronDialog,
   getElectronWebUtils,
   getAttachmentFileName,
   formatAttachmentLabel,
-} from "./chat-view-helpers"
+} from "./chat-view-helpers";
 
 export class ChatAttachmentManager {
-  private selectedAttachmentPaths: string[] = []
-  private isAttachmentDragActive = false
+  private selectedAttachmentPaths: string[] = [];
+  private isAttachmentDragActive = false;
 
   constructor(
     private readonly fileInputEl: HTMLInputElement,
@@ -26,318 +26,300 @@ export class ChatAttachmentManager {
       logAttachmentDebug("file input change fired", {
         fileCount: this.fileInputEl.files?.length ?? 0,
         inputValue: this.fileInputEl.value,
-      })
-      this.captureSelectedAttachments()
-    })
+      });
+      this.captureSelectedAttachments();
+    });
 
     this.attachmentButtonEl.addEventListener("click", () => {
-      logAttachmentDebug("attachment button clicked")
-      void this.openAttachmentPicker()
-    })
+      logAttachmentDebug("attachment button clicked");
+      void this.openAttachmentPicker();
+    });
 
     this.composerContainerEl.addEventListener("dragover", (event) => {
       if (!isCrossWindowInstance(event, DragEvent)) {
-        return
+        return;
       }
       if (!event.dataTransfer?.files?.length) {
-        return
+        return;
       }
-      event.preventDefault()
-      event.dataTransfer.dropEffect = "copy"
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
       if (!this.isAttachmentDragActive) {
-        this.isAttachmentDragActive = true
-        this.syncAttachmentDropState()
+        this.isAttachmentDragActive = true;
+        this.syncAttachmentDropState();
       }
-    })
+    });
 
     this.composerContainerEl.addEventListener("dragleave", (event) => {
       if (!isCrossWindowInstance(event, DragEvent)) {
-        return
+        return;
       }
-      const relatedTarget = event.relatedTarget
+      const relatedTarget = event.relatedTarget;
       if (
         isCrossWindowInstance(relatedTarget, Node) &&
         this.composerContainerEl.contains(relatedTarget)
       ) {
-        return
+        return;
       }
-      this.isAttachmentDragActive = false
-      this.syncAttachmentDropState()
-    })
+      this.isAttachmentDragActive = false;
+      this.syncAttachmentDropState();
+    });
 
     this.composerContainerEl.addEventListener("drop", (event) => {
       if (!isCrossWindowInstance(event, DragEvent)) {
-        return
+        return;
       }
-      event.preventDefault()
-      this.isAttachmentDragActive = false
-      this.syncAttachmentDropState()
-      const files = event.dataTransfer?.files
+      event.preventDefault();
+      this.isAttachmentDragActive = false;
+      this.syncAttachmentDropState();
+      const files = event.dataTransfer?.files;
       logAttachmentDebug("attachment files dropped", {
         fileCount: files?.length ?? 0,
-      })
+      });
       if (!files?.length) {
-        return
+        return;
       }
-      const paths = this.extractFilePaths(files)
+      const paths = this.extractFilePaths(files);
       if (paths.length === 0) {
-        logAttachmentDebug("no attachment paths extracted from drop")
-        return
+        logAttachmentDebug("no attachment paths extracted from drop");
+        return;
       }
-      this.applySelectedAttachmentPaths(paths)
-    })
+      this.applySelectedAttachmentPaths(paths);
+    });
   }
 
   getSelectedAttachmentPaths(): string[] {
-    return this.selectedAttachmentPaths
+    return this.selectedAttachmentPaths;
   }
 
   captureSelectedAttachments(): void {
-    logAttachmentDebug("capturing selected attachments")
-    const nextPaths = this.extractSelectedFilePaths()
+    logAttachmentDebug("capturing selected attachments");
+    const nextPaths = this.extractSelectedFilePaths();
     if (nextPaths.length === 0) {
-      logAttachmentDebug("no attachment paths extracted")
-      return
+      logAttachmentDebug("no attachment paths extracted");
+      return;
     }
-    this.applySelectedAttachmentPaths(nextPaths)
+    this.applySelectedAttachmentPaths(nextPaths);
   }
 
   async openAttachmentPicker(): Promise<void> {
-    const { dialog, source } = getElectronDialog()
+    const { dialog, source } = getElectronDialog();
     if (!dialog) {
-      logAttachmentDebug(
-        "native electron dialog unavailable, falling back to input[type=file]",
-      )
-      this.fileInputEl.click()
-      return
+      logAttachmentDebug("native electron dialog unavailable, falling back to input[type=file]");
+      this.fileInputEl.click();
+      return;
     }
 
     logAttachmentDebug("opening native attachment picker", {
       source,
-    })
+    });
 
     try {
       const result = await dialog.showOpenDialog({
         title: "Select files for Ante",
         buttonLabel: "Attach",
         properties: ["openFile", "multiSelections"],
-      })
+      });
       logAttachmentDebug("native attachment picker resolved", {
         source,
         canceled: result.canceled,
         fileCount: result.filePaths.length,
         filePaths: result.filePaths,
-      })
+      });
       if (result.canceled || result.filePaths.length === 0) {
-        return
+        return;
       }
-      this.applySelectedAttachmentPaths(result.filePaths)
+      this.applySelectedAttachmentPaths(result.filePaths);
     } catch (error) {
-      console.error(
-        "[tmd chat attachments]",
-        "native attachment picker failed",
-        error,
-      )
-      new Notice(
-        error instanceof Error
-          ? error.message
-          : "Failed to open native file picker",
-      )
+      console.error("[tmd chat attachments]", "native attachment picker failed", error);
+      new Notice(error instanceof Error ? error.message : "Failed to open native file picker");
     }
   }
 
   applySelectedAttachmentPaths(filePaths: string[]): void {
-    const dedupedPaths = filePaths
-      .map((filePath) => filePath.trim())
-      .filter(Boolean)
+    const dedupedPaths = filePaths.map((filePath) => filePath.trim()).filter(Boolean);
     if (dedupedPaths.length === 0) {
-      logAttachmentDebug("applySelectedAttachmentPaths received no usable paths")
-      return
+      logAttachmentDebug("applySelectedAttachmentPaths received no usable paths");
+      return;
     }
-    this.selectedAttachmentPaths = [
-      ...this.selectedAttachmentPaths,
-      ...dedupedPaths,
-    ].filter((value, index, values) => values.indexOf(value) === index)
+    this.selectedAttachmentPaths = [...this.selectedAttachmentPaths, ...dedupedPaths].filter(
+      (value, index, values) => values.indexOf(value) === index,
+    );
     logAttachmentDebug("attachment paths applied", {
       addedCount: dedupedPaths.length,
       totalCount: this.selectedAttachmentPaths.length,
       paths: this.selectedAttachmentPaths,
-    })
-    this.fileInputEl.value = ""
-    this.syncAttachmentList()
-    this.syncComposerActionButton()
+    });
+    this.fileInputEl.value = "";
+    this.syncAttachmentList();
+    this.syncComposerActionButton();
   }
 
   extractSelectedFilePaths(): string[] {
-    const files = this.fileInputEl.files
+    const files = this.fileInputEl.files;
     if (!files || files.length === 0) {
-      logAttachmentDebug("extractSelectedFilePaths found no files on input")
-      return []
+      logAttachmentDebug("extractSelectedFilePaths found no files on input");
+      return [];
     }
 
-    return this.extractFilePaths(files)
+    return this.extractFilePaths(files);
   }
 
   extractFilePaths(files: FileList | File[]): string[] {
-    const fileEntries = Array.from(files)
-    const { webUtils, source: webUtilsSource } = getElectronWebUtils()
+    const fileEntries = Array.from(files);
+    const { webUtils, source: webUtilsSource } = getElectronWebUtils();
 
     logAttachmentDebug("extracting file paths", {
       fileCount: fileEntries.length,
       webUtilsSource,
       files: fileEntries.map((file) => {
         const candidate = file as File & {
-          path?: string
-          webkitRelativePath?: string
-        }
+          path?: string;
+          webkitRelativePath?: string;
+        };
         return {
           name: file.name,
           size: file.size,
           type: file.type,
           path: candidate.path ?? null,
           webkitRelativePath: candidate.webkitRelativePath ?? null,
-        }
+        };
       }),
-    })
+    });
 
-    const paths: string[] = []
+    const paths: string[] = [];
     for (const file of fileEntries) {
-      const webUtilsPath = webUtils?.getPathForFile(file)?.trim()
+      const webUtilsPath = webUtils?.getPathForFile(file)?.trim();
       if (webUtilsPath) {
-        paths.push(webUtilsPath)
-        continue
+        paths.push(webUtilsPath);
+        continue;
       }
       const candidate = (
         file as File & { path?: string; webkitRelativePath?: string }
-      ).path?.trim()
+      ).path?.trim();
       if (candidate) {
-        paths.push(candidate)
-        continue
+        paths.push(candidate);
+        continue;
       }
-      const relativePath = file.webkitRelativePath?.trim()
+      const relativePath = file.webkitRelativePath?.trim();
       if (relativePath) {
-        paths.push(relativePath)
+        paths.push(relativePath);
       }
     }
 
     logAttachmentDebug("extracted attachment paths", {
       count: paths.length,
       paths,
-    })
+    });
 
     if (paths.length === 0) {
-      new Notice(
-        "This environment could not read local file paths from the selected files.",
-      )
+      new Notice("This environment could not read local file paths from the selected files.");
       console.warn(
         "[tmd chat attachments]",
         "selected files did not expose a readable local path",
         fileEntries.map((file) => {
           const candidate = file as File & {
-            path?: string
-            webkitRelativePath?: string
-          }
+            path?: string;
+            webkitRelativePath?: string;
+          };
           return {
             name: file.name,
             size: file.size,
             type: file.type,
             path: candidate.path ?? null,
             webkitRelativePath: candidate.webkitRelativePath ?? null,
-          }
+          };
         }),
-      )
+      );
     }
 
-    return paths
+    return paths;
   }
 
   clearSelectedAttachments(): void {
     logAttachmentDebug("clearing selected attachments", {
       previousCount: this.selectedAttachmentPaths.length,
-    })
-    this.selectedAttachmentPaths = []
-    this.fileInputEl.value = ""
-    this.syncAttachmentList()
+    });
+    this.selectedAttachmentPaths = [];
+    this.fileInputEl.value = "";
+    this.syncAttachmentList();
   }
 
   syncAttachmentList(): void {
     if (!this.attachmentListEl) {
-      return
+      return;
     }
-    this.attachmentListEl.empty()
-    const useCompactAttachmentList = this.selectedAttachmentPaths.length > 2
+    this.attachmentListEl.empty();
+    const useCompactAttachmentList = this.selectedAttachmentPaths.length > 2;
     const visibleAttachmentPaths = useCompactAttachmentList
       ? this.selectedAttachmentPaths.slice(0, 2)
-      : this.selectedAttachmentPaths
+      : this.selectedAttachmentPaths;
     const hiddenAttachmentPaths = useCompactAttachmentList
       ? this.selectedAttachmentPaths.slice(2)
-      : []
+      : [];
     this.attachmentListEl.classList.toggle(
       "tmd-has-attachments",
       this.selectedAttachmentPaths.length > 0,
-    )
-    this.attachmentListEl.classList.toggle(
-      "tmd-is-compact",
-      useCompactAttachmentList,
-    )
+    );
+    this.attachmentListEl.classList.toggle("tmd-is-compact", useCompactAttachmentList);
     if (this.selectedAttachmentPaths.length === 0) {
-      this.syncComposerOffset()
-      return
+      this.syncComposerOffset();
+      return;
     }
 
     for (const filePath of visibleAttachmentPaths) {
-      const fileName = getAttachmentFileName(filePath)
+      const fileName = getAttachmentFileName(filePath);
       const chipEl = this.attachmentListEl.createDiv({
         cls: "tmd-chat-attachment-chip",
-      })
+      });
       if (useCompactAttachmentList) {
         const iconEl = chipEl.createSpan({
           cls: "tmd-chat-attachment-icon",
-        })
-        iconEl.setAttribute("title", fileName)
-        setIcon(iconEl, "file")
+        });
+        iconEl.setAttribute("title", fileName);
+        setIcon(iconEl, "file");
       } else {
         const labelEl = chipEl.createSpan({
           cls: "tmd-chat-attachment-label",
           text: formatAttachmentLabel(filePath),
-        })
-        labelEl.setAttribute("title", fileName)
+        });
+        labelEl.setAttribute("title", fileName);
       }
       const removeButtonEl = chipEl.createEl("button", {
         cls: "tmd-chat-attachment-remove",
-      })
-      removeButtonEl.setAttribute("aria-label", `Remove ${fileName}`)
-      removeButtonEl.setAttribute("title", `Remove ${fileName}`)
-      setIcon(removeButtonEl, "x")
+      });
+      removeButtonEl.setAttribute("aria-label", `Remove ${fileName}`);
+      removeButtonEl.setAttribute("title", `Remove ${fileName}`);
+      setIcon(removeButtonEl, "x");
       removeButtonEl.addEventListener("click", () => {
-        logAttachmentDebug("removing attachment path", { filePath })
+        logAttachmentDebug("removing attachment path", { filePath });
         this.selectedAttachmentPaths = this.selectedAttachmentPaths.filter(
           (candidate) => candidate !== filePath,
-        )
-        this.syncAttachmentList()
-        this.syncComposerActionButton()
-      })
+        );
+        this.syncAttachmentList();
+        this.syncComposerActionButton();
+      });
     }
 
     if (hiddenAttachmentPaths.length > 0) {
       const summaryEl = this.attachmentListEl.createDiv({
         cls: "tmd-chat-attachment-chip tmd-chat-attachment-summary",
         text: `+${hiddenAttachmentPaths.length}`,
-      })
+      });
       summaryEl.setAttribute(
         "title",
         hiddenAttachmentPaths.map((filePath) => getAttachmentFileName(filePath)).join("\n"),
-      )
+      );
     }
 
-    this.syncComposerOffset()
+    this.syncComposerOffset();
   }
 
   syncAttachmentDropState(): void {
     this.composerContainerEl?.classList.toggle(
       "tmd-is-attachment-dragover",
       this.isAttachmentDragActive,
-    )
+    );
   }
 }
 
@@ -345,9 +327,11 @@ const isCrossWindowInstance = <T>(
   value: unknown,
   type: abstract new (...args: never[]) => T,
 ): value is T => {
-  const candidate = value as { instanceOf?: (target: abstract new (...args: never[]) => T) => boolean } | null
+  const candidate = value as {
+    instanceOf?: (target: abstract new (...args: never[]) => T) => boolean;
+  } | null;
   if (candidate?.instanceOf) {
-    return candidate.instanceOf(type)
+    return candidate.instanceOf(type);
   }
-  return value instanceof type
-}
+  return value instanceof type;
+};

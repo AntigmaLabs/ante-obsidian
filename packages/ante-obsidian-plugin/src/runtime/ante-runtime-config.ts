@@ -25,7 +25,7 @@ export const configSignature = (config: AnteRuntimeConfig): string =>
     thinking: config.thinking,
     env: Object.entries(config.env)
       .filter(([, value]) => value.trim())
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => left.localeCompare(right)),
   });
 
 export const sessionTargetSignature = (

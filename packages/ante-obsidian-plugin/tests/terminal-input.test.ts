@@ -31,13 +31,7 @@ test("shouldHandlePromptEnter blocks IME composition enter events", () => {
 });
 
 test("navigatePromptHistory enters history from the current draft", () => {
-  const next = navigatePromptHistory(
-    ["first", "second"],
-    -1,
-    "",
-    "draft",
-    "up",
-  );
+  const next = navigatePromptHistory(["first", "second"], -1, "", "draft", "up");
 
   assert.equal(next.historyIndex, 1);
   assert.equal(next.draftPrompt, "draft");
@@ -45,13 +39,7 @@ test("navigatePromptHistory enters history from the current draft", () => {
 });
 
 test("navigatePromptHistory moves forward and restores the draft", () => {
-  const next = navigatePromptHistory(
-    ["first", "second"],
-    1,
-    "draft",
-    "second",
-    "down",
-  );
+  const next = navigatePromptHistory(["first", "second"], 1, "draft", "second", "down");
 
   assert.equal(next.historyIndex, -1);
   assert.equal(next.draftPrompt, "draft");
@@ -59,23 +47,11 @@ test("navigatePromptHistory moves forward and restores the draft", () => {
 });
 
 test("navigatePromptHistory clamps at both ends", () => {
-  const up = navigatePromptHistory(
-    ["first", "second"],
-    0,
-    "draft",
-    "first",
-    "up",
-  );
+  const up = navigatePromptHistory(["first", "second"], 0, "draft", "first", "up");
   assert.equal(up.historyIndex, 0);
   assert.equal(up.nextText, "first");
 
-  const down = navigatePromptHistory(
-    ["first", "second"],
-    -1,
-    "draft",
-    "draft",
-    "down",
-  );
+  const down = navigatePromptHistory(["first", "second"], -1, "draft", "draft", "down");
   assert.equal(down.historyIndex, -1);
   assert.equal(down.nextText, "draft");
 });

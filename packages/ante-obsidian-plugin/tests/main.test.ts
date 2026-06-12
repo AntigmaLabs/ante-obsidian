@@ -1,7 +1,7 @@
-import test from "node:test"
-import assert from "node:assert/strict"
-import { buildAnteRuntimeConfig } from "../src/obsidian/main-runtime-config"
-import type { AnteCatalogProvider } from "../src/obsidian/ante-catalog"
+import test from "node:test";
+import assert from "node:assert/strict";
+import { buildAnteRuntimeConfig } from "../src/obsidian/main-runtime-config";
+import type { AnteCatalogProvider } from "../src/obsidian/ante-catalog";
 
 const apiKeyProvider = (id: string, envKey: string): AnteCatalogProvider => ({
   id,
@@ -9,12 +9,12 @@ const apiKeyProvider = (id: string, envKey: string): AnteCatalogProvider => ({
   authType: "api-key",
   envKey,
   models: [],
-})
+});
 
 const GEMINI_AND_ANTHROPIC: AnteCatalogProvider[] = [
   apiKeyProvider("gemini", "GEMINI_API_KEY"),
   apiKeyProvider("anthropic", "ANTHROPIC_API_KEY"),
-]
+];
 
 test("buildAnteRuntimeConfig prefers explicit gemini key and emits only selected provider env", () => {
   const config = buildAnteRuntimeConfig({
@@ -41,18 +41,18 @@ test("buildAnteRuntimeConfig prefers explicit gemini key and emits only selected
       GEMINI_API_KEY: "gemini-process",
       ANTHROPIC_API_KEY: "anthropic-process",
     },
-  })
+  });
 
-  assert.equal(config.connectionMode, "stdio")
-  assert.equal(config.provider, "gemini")
-  assert.equal(config.model, "gemini-3-flash-preview")
-  assert.equal(config.thinking, "Deep")
+  assert.equal(config.connectionMode, "stdio");
+  assert.equal(config.provider, "gemini");
+  assert.equal(config.model, "gemini-3-flash-preview");
+  assert.equal(config.thinking, "Deep");
   assert.deepEqual(config.env, {
     ANTE_ENV: "obsidian",
     GEMINI_API_KEY: "gemini-inline",
     ANTHROPIC_API_KEY: "anthropic-inline",
-  })
-})
+  });
+});
 
 test("buildAnteRuntimeConfig falls back from shell env to process env for anthropic", () => {
   const config = buildAnteRuntimeConfig({
@@ -75,10 +75,10 @@ test("buildAnteRuntimeConfig falls back from shell env to process env for anthro
     processEnv: {
       ANTHROPIC_API_KEY: "anthropic-process",
     },
-  })
+  });
 
-  assert.equal(config.connectionMode, "stdio")
-  assert.equal(config.autoApproveTools, false)
-  assert.equal(config.thinking, null)
-  assert.deepEqual(config.env, { ANTE_ENV: "obsidian", ANTHROPIC_API_KEY: "anthropic-process" })
-})
+  assert.equal(config.connectionMode, "stdio");
+  assert.equal(config.autoApproveTools, false);
+  assert.equal(config.thinking, null);
+  assert.deepEqual(config.env, { ANTE_ENV: "obsidian", ANTHROPIC_API_KEY: "anthropic-process" });
+});

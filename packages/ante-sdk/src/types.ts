@@ -1,9 +1,4 @@
-export const ANTE_THINKING_LEVELS = [
-  "Disabled",
-  "Enabled",
-  "Deep",
-  "Max"
-] as const;
+export const ANTE_THINKING_LEVELS = ["Disabled", "Enabled", "Deep", "Max"] as const;
 
 export type AnteThinkingLevel = (typeof ANTE_THINKING_LEVELS)[number];
 
@@ -89,14 +84,34 @@ export type SDKMessage =
       modelSpec?: ModelSpec;
       providerSpec?: ProviderSpec;
     }
-  | { type: "assistant"; message: { content: Array<{ type: "text"; text: string }> }; session_id?: string }
-  | { type: "stream_event"; event: { type: "text_delta" | "thinking_delta"; text: string }; session_id?: string }
+  | {
+      type: "assistant";
+      message: { content: Array<{ type: "text"; text: string }> };
+      session_id?: string;
+    }
+  | {
+      type: "stream_event";
+      event: { type: "text_delta" | "thinking_delta"; text: string };
+      session_id?: string;
+    }
   | { type: "tool"; phase: "start" | "end"; tool: ToolCall; session_id?: string }
   | { type: "approval"; approval: ApprovalRequest; session_id?: string }
   | { type: "usage"; usage: Usage; session_id?: string }
   | { type: "system"; subtype: "status"; status: "compacting" | null; session_id?: string }
-  | { type: "system"; subtype: "diagnostic"; stream: "stdout" | "stderr" | "system"; text: string; session_id?: string }
-  | { type: "result"; subtype: "success" | "error" | "cancelled"; result?: string; error?: string; session_id?: string };
+  | {
+      type: "system";
+      subtype: "diagnostic";
+      stream: "stdout" | "stderr" | "system";
+      text: string;
+      session_id?: string;
+    }
+  | {
+      type: "result";
+      subtype: "success" | "error" | "cancelled";
+      result?: string;
+      error?: string;
+      session_id?: string;
+    };
 
 export type CanUseTool = (
   toolName: string,
@@ -104,7 +119,7 @@ export type CanUseTool = (
   options: {
     signal: AbortSignal;
     toolUseID: string;
-  }
+  },
 ) => Promise<{ behavior: "allow" | "deny"; message?: string }>;
 
 export interface Options {

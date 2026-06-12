@@ -1,24 +1,22 @@
 import type { DocumentChangeArtifact, RuntimeApprovalTool } from "./types";
 
-export const getArtifactTargetPath = (artifact: DocumentChangeArtifact): string => artifact.target.path;
+export const getArtifactTargetPath = (artifact: DocumentChangeArtifact): string =>
+  artifact.target.path;
 
-export const getArtifactLocationLabel = (artifact: DocumentChangeArtifact): string => artifact.target.path;
+export const getArtifactLocationLabel = (artifact: DocumentChangeArtifact): string =>
+  artifact.target.path;
 
 export const getArtifactTargetKey = (artifact: DocumentChangeArtifact): string =>
-  getArtifactTargetPath(artifact)
-    .trim()
-    .replace(/\\/g, "/")
-    .replace(/\/+/g, "/")
-    .normalize("NFC");
+  getArtifactTargetPath(artifact).trim().replace(/\\/g, "/").replace(/\/+/g, "/").normalize("NFC");
 
 export const mergeDocumentChangeArtifacts = (
   earlier: DocumentChangeArtifact,
-  later: DocumentChangeArtifact
+  later: DocumentChangeArtifact,
 ): DocumentChangeArtifact => ({
   ...later,
   id: earlier.id,
   operation: earlier.operation === "create-file" ? "create-file" : later.operation,
-  beforeText: earlier.beforeText
+  beforeText: earlier.beforeText,
 });
 
 const parseApprovalToolArgs = (tool: RuntimeApprovalTool): Record<string, unknown> | null => {
@@ -66,7 +64,11 @@ const getBooleanArg = (args: Record<string, unknown>, keys: string[]): boolean |
   return null;
 };
 
-const replaceFirstOccurrence = (text: string, search: string, replacement: string): string | null => {
+const replaceFirstOccurrence = (
+  text: string,
+  search: string,
+  replacement: string,
+): string | null => {
   const index = text.indexOf(search);
   if (index < 0) {
     return null;
@@ -74,7 +76,11 @@ const replaceFirstOccurrence = (text: string, search: string, replacement: strin
   return `${text.slice(0, index)}${replacement}${text.slice(index + search.length)}`;
 };
 
-const replaceAllOccurrences = (text: string, search: string, replacement: string): string | null => {
+const replaceAllOccurrences = (
+  text: string,
+  search: string,
+  replacement: string,
+): string | null => {
   if (!search || !text.includes(search)) {
     return null;
   }
@@ -87,7 +93,7 @@ export const createRuntimeFileArtifact = ({
   targetPath,
   beforeText,
   afterText,
-  runtimeMode = "approval"
+  runtimeMode = "approval",
 }: {
   toolId: string;
   title: string;
@@ -101,19 +107,19 @@ export const createRuntimeFileArtifact = ({
   operation: beforeText.length === 0 ? "create-file" : "replace-file",
   target: {
     type: "file",
-    path: targetPath
+    path: targetPath,
   },
   beforeText,
   afterText,
   applyState: "pending",
   runtimeToolId: toolId,
-  runtimeMode
+  runtimeMode,
 });
 
 export const toDocumentChangeArtifactFromApprovalTool = (
   tool: RuntimeApprovalTool,
   beforeText: string,
-  resolvedTargetPath?: string | null
+  resolvedTargetPath?: string | null,
 ): DocumentChangeArtifact | null => {
   const args = parseApprovalToolArgs(tool);
   if (!args) {
@@ -121,7 +127,8 @@ export const toDocumentChangeArtifactFromApprovalTool = (
   }
 
   const normalizedName = tool.name.trim().toLowerCase();
-  const targetPath = resolvedTargetPath?.trim() || getStringArg(args, ["file_path", "path", "targetPath"]);
+  const targetPath =
+    resolvedTargetPath?.trim() || getStringArg(args, ["file_path", "path", "targetPath"]);
   if (!targetPath) {
     return null;
   }
@@ -136,7 +143,7 @@ export const toDocumentChangeArtifactFromApprovalTool = (
       title: "Write file",
       targetPath,
       beforeText,
-      afterText
+      afterText,
     });
   }
 
@@ -160,7 +167,7 @@ export const toDocumentChangeArtifactFromApprovalTool = (
       title: "Edit file",
       targetPath,
       beforeText,
-      afterText
+      afterText,
     });
   }
 

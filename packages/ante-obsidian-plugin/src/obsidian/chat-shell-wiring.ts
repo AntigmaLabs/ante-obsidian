@@ -1,45 +1,41 @@
-import { shouldHandlePromptEnter } from "../core/terminal-input"
+import { shouldHandlePromptEnter } from "../core/terminal-input";
 
 export interface ChatSidebarWiringOptions {
-  sidebarToggleEl: HTMLButtonElement
-  newChatButtonEl: HTMLButtonElement
-  onToggleSidebar: () => void
-  onCreateChat: () => void
+  sidebarToggleEl: HTMLButtonElement;
+  newChatButtonEl: HTMLButtonElement;
+  onToggleSidebar: () => void;
+  onCreateChat: () => void;
 }
 
-export const wireChatSidebar = (
-  options: ChatSidebarWiringOptions,
-): void => {
+export const wireChatSidebar = (options: ChatSidebarWiringOptions): void => {
   options.sidebarToggleEl.addEventListener("click", () => {
-    options.onToggleSidebar()
-  })
+    options.onToggleSidebar();
+  });
   options.newChatButtonEl.addEventListener("click", () => {
-    options.onCreateChat()
-  })
-}
+    options.onCreateChat();
+  });
+};
 
 export interface ChatComposerWiringOptions {
-  composerEl: HTMLTextAreaElement
-  composerActionButtonEl: HTMLButtonElement
-  getIsComposing: () => boolean
-  setIsComposing: (value: boolean) => void
-  onInput: () => void
-  onSubmit: () => void
-  onStop: () => void
+  composerEl: HTMLTextAreaElement;
+  composerActionButtonEl: HTMLButtonElement;
+  getIsComposing: () => boolean;
+  setIsComposing: (value: boolean) => void;
+  onInput: () => void;
+  onSubmit: () => void;
+  onStop: () => void;
 }
 
-export const wireChatComposer = (
-  options: ChatComposerWiringOptions,
-): void => {
+export const wireChatComposer = (options: ChatComposerWiringOptions): void => {
   options.composerEl.addEventListener("compositionstart", () => {
-    options.setIsComposing(true)
-  })
+    options.setIsComposing(true);
+  });
   options.composerEl.addEventListener("compositionend", () => {
-    options.setIsComposing(false)
-  })
+    options.setIsComposing(false);
+  });
   options.composerEl.addEventListener("input", () => {
-    options.onInput()
-  })
+    options.onInput();
+  });
   options.composerEl.addEventListener("keydown", (event) => {
     if (
       !shouldHandlePromptEnter({
@@ -47,19 +43,19 @@ export const wireChatComposer = (
         eventIsComposing: event.isComposing,
       })
     ) {
-      return
+      return;
     }
     if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault()
-      options.onSubmit()
+      event.preventDefault();
+      options.onSubmit();
     }
-  })
+  });
 
   options.composerActionButtonEl.addEventListener("click", () => {
     if (options.composerActionButtonEl.dataset.action === "stop") {
-      options.onStop()
-      return
+      options.onStop();
+      return;
     }
-    options.onSubmit()
-  })
-}
+    options.onSubmit();
+  });
+};

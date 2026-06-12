@@ -3,18 +3,15 @@ import type {
   ChatConversationRecord,
   ChatMessageRecord,
   ChatPersistenceState,
-  ChatStateSnapshot
+  ChatStateSnapshot,
 } from "./chat-types";
 import type { AnteThinkingPreference } from "./ante-thinking";
 import type { ContextSnapshot, DocumentChangeArtifact, TaskRecord, TmdState } from "./types";
+import { logDebug } from "./debug-log";
 
 type ChatListener = (state: ChatStateSnapshot) => void;
 
 const MAX_CONVERSATION_TITLE_CHARS = 60;
-
-const logDebug = (...args: unknown[]): void => {
-  void args;
-};
 
 const previewText = (value: string, maxChars = 240): string =>
   value.length <= maxChars ? value : `${value.slice(0, maxChars)}...`;
@@ -24,11 +21,11 @@ const approvalHasOnlyFileEditingTools = (
 ): boolean =>
   Boolean(
     approval &&
-      approval.tools.length > 0 &&
-      approval.tools.every((tool) => {
-        const normalized = tool.name.trim().toLowerCase();
-        return normalized === "write" || normalized === "edit";
-      }),
+    approval.tools.length > 0 &&
+    approval.tools.every((tool) => {
+      const normalized = tool.name.trim().toLowerCase();
+      return normalized === "write" || normalized === "edit";
+    }),
   );
 
 const shouldHideFileEditingApproval = (
@@ -47,9 +44,9 @@ const cloneContext = (context: ContextSnapshot | null | undefined): ContextSnaps
           ? {
               text: context.selection.text,
               from: { ...context.selection.from },
-              to: { ...context.selection.to }
+              to: { ...context.selection.to },
             }
-          : null
+          : null,
       }
     : null;
 
@@ -64,9 +61,9 @@ const contextSignature = (context: ContextSnapshot | null | undefined): string =
           ? {
               text: context.selection.text,
               from: context.selection.from,
-              to: context.selection.to
+              to: context.selection.to,
             }
-          : null
+          : null,
       })
     : "";
 
@@ -74,12 +71,12 @@ const cloneArtifact = (artifact: DocumentChangeArtifact): DocumentChangeArtifact
   ...artifact,
   target: {
     type: "file",
-    path: artifact.target.path
+    path: artifact.target.path,
   },
   baselinePath: artifact.baselinePath,
   stagedPath: artifact.stagedPath,
   stagedRoot: artifact.stagedRoot,
-  runtimeMode: artifact.runtimeMode
+  runtimeMode: artifact.runtimeMode,
 });
 
 const defaultConversationTitle = (prompt: string): string => {
@@ -96,7 +93,9 @@ const isEmptyDraftConversation = (conversation: ChatConversationRecord): boolean
   conversation.title === "New chat";
 
 const sortConversations = (conversations: ChatConversationRecord[]): ChatConversationRecord[] =>
-  [...conversations].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+  [...conversations].sort(
+    (left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt),
+  );
 
 const cloneMessage = (message: ChatMessageRecord): ChatMessageRecord => ({
   ...message,
@@ -109,13 +108,13 @@ const cloneMessage = (message: ChatMessageRecord): ChatMessageRecord => ({
           ? {
               turnId: message.runtime.approval.turnId,
               message: message.runtime.approval.message,
-              tools: message.runtime.approval.tools.map((tool) => ({ ...tool }))
+              tools: message.runtime.approval.tools.map((tool) => ({ ...tool })),
             }
           : undefined,
         processLane: message.runtime.processLane
           ? {
               ...message.runtime.processLane,
-              steps: message.runtime.processLane.steps.map((step) => ({ ...step }))
+              steps: message.runtime.processLane.steps.map((step) => ({ ...step })),
             }
           : undefined,
         telemetry: message.runtime.telemetry
@@ -127,14 +126,14 @@ const cloneMessage = (message: ChatMessageRecord): ChatMessageRecord => ({
               lastInfo: message.runtime.telemetry.lastInfo
                 ? { ...message.runtime.telemetry.lastInfo }
                 : undefined,
-              timeline: message.runtime.telemetry.timeline.map((entry) => ({ ...entry }))
+              timeline: message.runtime.telemetry.timeline.map((entry) => ({ ...entry })),
             }
           : undefined,
         error: message.runtime.error,
         artifactIds: [...message.runtime.artifactIds],
-        artifacts: message.runtime.artifacts?.map((artifact) => cloneArtifact(artifact))
+        artifacts: message.runtime.artifacts?.map((artifact) => cloneArtifact(artifact)),
       }
-    : undefined
+    : undefined,
 });
 
 const emptyRuntime = () => ({
@@ -142,7 +141,7 @@ const emptyRuntime = () => ({
   processLane: undefined,
   telemetry: undefined,
   error: undefined,
-  artifactIds: [] as string[]
+  artifactIds: [] as string[],
 });
 
 const STRUCTURED_JSON_TYPE_PATTERN = /"type"\s*:\s*"text"/;
@@ -271,18 +270,19 @@ const extractStructuredStreamingText = (text: string): string | null => {
   return null;
 };
 
-const isRecoverableConversationSession = (task: TaskRecord): boolean => Boolean(task.runtimeSession?.sessionId && task.endedAt);
+const isRecoverableConversationSession = (task: TaskRecord): boolean =>
+  Boolean(task.runtimeSession?.sessionId && task.endedAt);
 
 const isRecoverableConversationMessage = (
-  message: ChatMessageRecord | undefined
+  message: ChatMessageRecord | undefined,
 ): message is ChatMessageRecord & { turn: NonNullable<ChatMessageRecord["turn"]> } =>
   Boolean(message?.turn?.runtimeSessionId && message.status !== "streaming");
 
 const isMissingAnteSessionError = (error: string | undefined): boolean =>
   Boolean(
     error &&
-      (error.includes("saved session files are missing") ||
-        error.includes("Failed to resume session: No such file or directory"))
+    (error.includes("saved session files are missing") ||
+      error.includes("Failed to resume session: No such file or directory")),
   );
 
 export class ChatSessionManager {
@@ -294,13 +294,16 @@ export class ChatSessionManager {
   private saveTimer: number | null = null;
   private lastTaskState = new Map<string, string>();
 
-  constructor(private readonly persistence: ChatStatePersistence, persisted?: ChatPersistenceState | null) {
+  constructor(
+    private readonly persistence: ChatStatePersistence,
+    persisted?: ChatPersistenceState | null,
+  ) {
     for (const conversation of persisted?.conversations ?? []) {
       this.conversations.set(conversation.id, {
         ...conversation,
         pinnedContext: cloneContext(conversation.pinnedContext),
         runtimeTarget: conversation.runtimeTarget ? { ...conversation.runtimeTarget } : undefined,
-        messageIds: [...conversation.messageIds]
+        messageIds: [...conversation.messageIds],
       });
     }
     for (const message of persisted?.messages ?? []) {
@@ -340,15 +343,19 @@ export class ChatSessionManager {
     return {
       conversations,
       messagesByConversation,
-      activeConversationId: this.activeConversationId
+      activeConversationId: this.activeConversationId,
     };
   }
 
-  createConversation(options?: { title?: string; context?: ContextSnapshot | null; forceNew?: boolean }): ChatConversationRecord {
+  createConversation(options?: {
+    title?: string;
+    context?: ContextSnapshot | null;
+    forceNew?: boolean;
+  }): ChatConversationRecord {
     const requestedTitle = options?.title?.trim() || "New chat";
     if (requestedTitle === "New chat" && !options?.forceNew) {
-      const existingDraft = sortConversations([...this.conversations.values()]).find((conversation) =>
-        isEmptyDraftConversation(conversation)
+      const existingDraft = sortConversations([...this.conversations.values()]).find(
+        (conversation) => isEmptyDraftConversation(conversation),
       );
       if (existingDraft) {
         if (
@@ -373,7 +380,7 @@ export class ChatSessionManager {
       pinnedContext: cloneContext(options?.context),
       runtimeTarget: undefined,
       messageIds: [],
-      archived: false
+      archived: false,
     };
     this.conversations.set(conversation.id, conversation);
     this.activeConversationId = conversation.id;
@@ -416,7 +423,8 @@ export class ChatSessionManager {
     }
     this.conversations.delete(conversationId);
     if (this.activeConversationId === conversationId) {
-      this.activeConversationId = sortConversations([...this.conversations.values()])[0]?.id ?? null;
+      this.activeConversationId =
+        sortConversations([...this.conversations.values()])[0]?.id ?? null;
     }
     if (!this.activeConversationId) {
       this.activeConversationId = this.ensureConversation().id;
@@ -452,9 +460,7 @@ export class ChatSessionManager {
     return null;
   }
 
-  getConversationRuntimeTarget(
-    conversationId: string
-  ): {
+  getConversationRuntimeTarget(conversationId: string): {
     provider: string;
     model: string;
     thinking: AnteThinkingPreference;
@@ -469,7 +475,7 @@ export class ChatSessionManager {
       provider: string;
       model: string;
       thinking: AnteThinkingPreference;
-    }
+    },
   ): void {
     const conversation = this.conversations.get(conversationId);
     if (!conversation) {
@@ -497,7 +503,7 @@ export class ChatSessionManager {
       role: "assistant",
       status: "completed",
       text: trimmed,
-      context: null
+      context: null,
     });
     this.persistAndNotify();
     return message.id;
@@ -517,7 +523,7 @@ export class ChatSessionManager {
       }
       message.turn = {
         ...message.turn,
-        runtimeSessionId: undefined
+        runtimeSessionId: undefined,
       };
       changed = true;
     }
@@ -532,11 +538,15 @@ export class ChatSessionManager {
     prompt: string,
     context: ContextSnapshot | null,
     submissionText?: string,
-    attachmentPaths?: string[]
+    attachmentPaths?: string[],
   ): { conversation: ChatConversationRecord; userMessageId: string; createdConversation: boolean } {
     const hadActiveConversation =
-      Boolean(this.activeConversationId) && Boolean(this.activeConversationId && this.conversations.get(this.activeConversationId));
-    const conversation = this.ensureConversation({ title: defaultConversationTitle(prompt), context });
+      Boolean(this.activeConversationId) &&
+      Boolean(this.activeConversationId && this.conversations.get(this.activeConversationId));
+    const conversation = this.ensureConversation({
+      title: defaultConversationTitle(prompt),
+      context,
+    });
     if (conversation.messageIds.length === 0 && conversation.title === "New chat") {
       conversation.title = defaultConversationTitle(prompt);
     }
@@ -549,13 +559,13 @@ export class ChatSessionManager {
       text: prompt,
       submissionText,
       attachmentPaths,
-      context
+      context,
     });
     this.persistAndNotify();
     return {
       conversation,
       userMessageId: message.id,
-      createdConversation: !hadActiveConversation || conversation.messageIds.length === 1
+      createdConversation: !hadActiveConversation || conversation.messageIds.length === 1,
     };
   }
 
@@ -574,7 +584,7 @@ export class ChatSessionManager {
       createdAt: timestamp,
       updatedAt: timestamp,
       turn: { taskId },
-      runtime: emptyRuntime()
+      runtime: emptyRuntime(),
     };
     conversation.messageIds.push(message.id);
     conversation.updatedAt = timestamp;
@@ -592,7 +602,7 @@ export class ChatSessionManager {
     userMessageId: string,
     taskId: string,
     removeConversationIfEmpty = false,
-    extraMessageIds: string[] = []
+    extraMessageIds: string[] = [],
   ): string[] {
     const conversation = this.conversations.get(conversationId);
     if (!conversation) {
@@ -600,13 +610,17 @@ export class ChatSessionManager {
     }
     const assistantMessageId = this.taskToMessageId.get(taskId);
     const messageIdsToRemove = new Set(
-      [userMessageId, assistantMessageId, ...extraMessageIds].filter((value): value is string => Boolean(value))
+      [userMessageId, assistantMessageId, ...extraMessageIds].filter((value): value is string =>
+        Boolean(value),
+      ),
     );
     if (messageIdsToRemove.size === 0) {
       return [];
     }
     const removedTaskIds: string[] = [];
-    conversation.messageIds = conversation.messageIds.filter((messageId) => !messageIdsToRemove.has(messageId));
+    conversation.messageIds = conversation.messageIds.filter(
+      (messageId) => !messageIdsToRemove.has(messageId),
+    );
     for (const messageId of messageIdsToRemove) {
       const message = this.messages.get(messageId);
       if (message?.turn?.taskId) {
@@ -630,7 +644,8 @@ export class ChatSessionManager {
     }
     this.conversations.delete(conversationId);
     if (this.activeConversationId === conversationId) {
-      this.activeConversationId = sortConversations([...this.conversations.values()])[0]?.id ?? null;
+      this.activeConversationId =
+        sortConversations([...this.conversations.values()])[0]?.id ?? null;
       if (!this.activeConversationId) {
         this.activeConversationId = this.ensureConversation().id;
       }
@@ -677,8 +692,10 @@ export class ChatSessionManager {
 
     const hasStructuredResult = Boolean(task.textResult?.text.trim()) || task.artifacts.length > 0;
     const extractedStreamingText = extractStructuredStreamingText(task.stdoutText);
-    const hideStructuredStreamingText = extractedStreamingText == null && task.stdoutText.trimStart().startsWith("{");
-    const streamingText = extractedStreamingText ?? (hideStructuredStreamingText ? "" : task.stdoutText);
+    const hideStructuredStreamingText =
+      extractedStreamingText == null && task.stdoutText.trimStart().startsWith("{");
+    const streamingText =
+      extractedStreamingText ?? (hideStructuredStreamingText ? "" : task.stdoutText);
     const nextText =
       task.status === "running"
         ? streamingText
@@ -700,7 +717,7 @@ export class ChatSessionManager {
       processLane: task.processLane
         ? {
             ...task.processLane,
-            steps: task.processLane.steps.map((step) => ({ ...step }))
+            steps: task.processLane.steps.map((step) => ({ ...step })),
           }
         : undefined,
       telemetry: task.telemetry
@@ -708,26 +725,30 @@ export class ChatSessionManager {
             ...task.telemetry,
             usage: task.telemetry.usage ? { ...task.telemetry.usage } : undefined,
             lastInfo: task.telemetry.lastInfo ? { ...task.telemetry.lastInfo } : undefined,
-            timeline: task.telemetry.timeline.map((entry) => ({ ...entry }))
+            timeline: task.telemetry.timeline.map((entry) => ({ ...entry })),
           }
         : undefined,
       error: task.error,
       artifactIds: task.artifacts.map((artifact) => artifact.id),
-      artifacts: task.artifacts.map((artifact) => cloneArtifact(artifact))
+      artifacts: task.artifacts.map((artifact) => cloneArtifact(artifact)),
     };
     const nextTurn = {
       taskId: task.id,
-      runtimeSessionId: task.runtimeSession?.sessionId
+      runtimeSessionId: task.runtimeSession?.sessionId,
     };
 
-    const runtimeArtifactCount = task.artifacts.filter((artifact) => Boolean(artifact.runtimeToolId)).length;
+    const runtimeArtifactCount = task.artifacts.filter((artifact) =>
+      Boolean(artifact.runtimeToolId),
+    ).length;
     const fallbackArtifactCount = task.artifacts.length - runtimeArtifactCount;
     if (runtimeArtifactCount > 0 || fallbackArtifactCount > 0 || extractedStreamingText != null) {
       logDebug(
         `syncTask id=${task.id} status=${task.status} runtimeArtifacts=${runtimeArtifactCount} fallbackArtifacts=${fallbackArtifactCount} structuredStreaming=${extractedStreamingText != null}`,
       );
       if (extractedStreamingText != null && task.stdoutText.trim()) {
-        logDebug(`syncTask structured preview=${JSON.stringify(previewText(task.stdoutText, 400))}`);
+        logDebug(
+          `syncTask structured preview=${JSON.stringify(previewText(task.stdoutText, 400))}`,
+        );
       }
     }
 
@@ -759,7 +780,10 @@ export class ChatSessionManager {
 
   private pushMessage(
     conversation: ChatConversationRecord,
-    input: Pick<ChatMessageRecord, "role" | "status" | "text" | "submissionText" | "attachmentPaths" | "context">
+    input: Pick<
+      ChatMessageRecord,
+      "role" | "status" | "text" | "submissionText" | "attachmentPaths" | "context"
+    >,
   ): ChatMessageRecord {
     const timestamp = new Date().toISOString();
     const message: ChatMessageRecord = {
@@ -772,7 +796,7 @@ export class ChatSessionManager {
       attachmentPaths: input.attachmentPaths ? [...input.attachmentPaths] : undefined,
       createdAt: timestamp,
       updatedAt: timestamp,
-      context: cloneContext(input.context)
+      context: cloneContext(input.context),
     };
     conversation.messageIds.push(message.id);
     conversation.updatedAt = timestamp;
@@ -780,8 +804,13 @@ export class ChatSessionManager {
     return message;
   }
 
-  private ensureConversation(defaults?: { title?: string; context?: ContextSnapshot | null }): ChatConversationRecord {
-    const active = this.activeConversationId ? this.conversations.get(this.activeConversationId) : null;
+  private ensureConversation(defaults?: {
+    title?: string;
+    context?: ContextSnapshot | null;
+  }): ChatConversationRecord {
+    const active = this.activeConversationId
+      ? this.conversations.get(this.activeConversationId)
+      : null;
     if (active) {
       return active;
     }
@@ -796,16 +825,18 @@ export class ChatSessionManager {
       textResult: task.textResult?.text ?? "",
       error: task.error ?? "",
       runtimeSessionId: task.runtimeSession?.sessionId ?? "",
-      persistedRuntimeSessionId: isRecoverableConversationSession(task) ? task.runtimeSession?.sessionId ?? "" : "",
+      persistedRuntimeSessionId: isRecoverableConversationSession(task)
+        ? (task.runtimeSession?.sessionId ?? "")
+        : "",
       approval: task.pendingApproval,
       processLane: task.processLane,
       telemetry: task.telemetry,
       artifacts: task.artifacts.map((artifact) => ({
         id: artifact.id,
         applyState: artifact.applyState,
-        applyError: artifact.applyError ?? ""
+        applyError: artifact.applyError ?? "",
       })),
-      endedAt: task.endedAt ?? ""
+      endedAt: task.endedAt ?? "",
     });
   }
 
@@ -833,10 +864,10 @@ export class ChatSessionManager {
         ...conversation,
         pinnedContext: cloneContext(conversation.pinnedContext),
         runtimeTarget: conversation.runtimeTarget ? { ...conversation.runtimeTarget } : undefined,
-        messageIds: [...conversation.messageIds]
+        messageIds: [...conversation.messageIds],
       })),
       messages: [...this.messages.values()].map((message) => cloneMessage(message)),
-      activeConversationId: this.activeConversationId
+      activeConversationId: this.activeConversationId,
     };
   }
 }

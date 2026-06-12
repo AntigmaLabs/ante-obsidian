@@ -9,7 +9,7 @@ import {
   extractTurnPauseApproval,
   extractTurnStatus,
   extractUsage,
-  parseAssistantMessage
+  parseAssistantMessage,
 } from "../src/runtime/ante-event-parser";
 import { resolveCommandPath } from "../src/runtime/transport/ante-stdio-transport";
 
@@ -18,9 +18,9 @@ test("nested TurnEnd error status is parsed as failed with message", () => {
     turn_id: "op_123",
     status: {
       Error: {
-        message: "failed to apply auth"
-      }
-    }
+        message: "failed to apply auth",
+      },
+    },
   };
 
   assert.equal(extractTurnStatus(payload), "Error");
@@ -38,13 +38,13 @@ test("TurnPause approval payload is parsed into tools and turn id", () => {
             name: "WebFetch",
             args: {
               url: "https://example.com",
-              prompt: "What is the title?"
-            }
-          }
+              prompt: "What is the title?",
+            },
+          },
         ],
-        message: "Please approve the following tool calls"
-      }
-    }
+        message: "Please approve the following tool calls",
+      },
+    },
   };
 
   assert.deepEqual(extractTurnPauseApproval(payload), {
@@ -56,10 +56,10 @@ test("TurnPause approval payload is parsed into tools and turn id", () => {
         name: "WebFetch",
         argsText: JSON.stringify({
           url: "https://example.com",
-          prompt: "What is the title?"
-        })
-      }
-    ]
+          prompt: "What is the title?",
+        }),
+      },
+    ],
   });
 });
 
@@ -90,7 +90,9 @@ test("parseAssistantMessage fallback only accepts top-level text payload", () =>
 });
 
 test("parseAssistantMessage fallback skips earlier non-text objects", () => {
-  const events = parseAssistantMessage(`noise {"meta":{"kind":"debug"}} middle {"type":"text","text":"final payload"} tail`);
+  const events = parseAssistantMessage(
+    `noise {"meta":{"kind":"debug"}} middle {"type":"text","text":"final payload"} tail`,
+  );
 
   assert.deepEqual(events, [{ type: "result.text", text: "final payload" }]);
 });
@@ -104,10 +106,12 @@ test("parseAssistantMessage keeps legacy change JSON as plain text", () => {
     "placement":"before"
   }`);
 
-  assert.deepEqual(events, [{
-    type: "result.text",
-    text: '{\n    "type":"change",\n    "operation":"insert-block",\n    "afterText":"intro",\n    "anchor":{"by":"heading","value":"Next"},\n    "placement":"before"\n  }'
-  }]);
+  assert.deepEqual(events, [
+    {
+      type: "result.text",
+      text: '{\n    "type":"change",\n    "operation":"insert-block",\n    "afterText":"intro",\n    "anchor":{"by":"heading","value":"Next"},\n    "placement":"before"\n  }',
+    },
+  ]);
 });
 
 test("parseAssistantMessage keeps fenced legacy change JSON inside surrounding prose", () => {
@@ -123,7 +127,12 @@ test("parseAssistantMessage keeps fenced legacy change JSON inside surrounding p
 
 已生成结果。`);
 
-  assert.deepEqual(events, [{ type: "result.text", text: '我会按你的要求修改：\n\n```json\n{\n  "type":"change",\n  "operation":"append-block",\n  "afterText":"done"\n}\n```\n\n已生成结果。' }]);
+  assert.deepEqual(events, [
+    {
+      type: "result.text",
+      text: '我会按你的要求修改：\n\n```json\n{\n  "type":"change",\n  "operation":"append-block",\n  "afterText":"done"\n}\n```\n\n已生成结果。',
+    },
+  ]);
 });
 
 test("extractUsage accepts canonical usage payloads", () => {
@@ -131,7 +140,7 @@ test("extractUsage accepts canonical usage payloads", () => {
     extractUsage({
       prompt_tokens: 12,
       completion_tokens: 7,
-      total_tokens: 19
+      total_tokens: 19,
     }),
     {
       promptTokens: 12,
@@ -140,9 +149,9 @@ test("extractUsage accepts canonical usage payloads", () => {
       raw: {
         prompt_tokens: 12,
         completion_tokens: 7,
-        total_tokens: 19
-      }
-    }
+        total_tokens: 19,
+      },
+    },
   );
 });
 
@@ -152,8 +161,8 @@ test("extractUsage accepts nested usage payloads with alternate token keys", () 
       usage: {
         input_token_count: 30,
         output_token_count: 12,
-        total_token_count: 42
-      }
+        total_token_count: 42,
+      },
     }),
     {
       promptTokens: 30,
@@ -163,19 +172,19 @@ test("extractUsage accepts nested usage payloads with alternate token keys", () 
         usage: {
           input_token_count: 30,
           output_token_count: 12,
-          total_token_count: 42
-        }
-      }
-    }
+          total_token_count: 42,
+        },
+      },
+    },
   );
 });
 
 test("extractInfoMessage prefers structured text fields", () => {
   assert.equal(
     extractInfoMessage({
-      message: "context compacted"
+      message: "context compacted",
     }),
-    "context compacted"
+    "context compacted",
   );
 });
 
@@ -184,22 +193,22 @@ test("SessionStart provider spec exposes preferred models", () => {
     model: {
       name: "gpt-5.4",
       description: "GPT-5.4 model powering Codex and Codex CLI",
-      thinking: "Enabled"
+      thinking: "Enabled",
     },
     provider: {
       name: "openai-subscription",
       display_name: "OpenAI Subscription",
       preferred_models: [
         { name: "gpt-5.5", description: "Latest model" },
-        { name: "gpt-5.4", thinking: "Enabled" }
-      ]
-    }
+        { name: "gpt-5.4", thinking: "Enabled" },
+      ],
+    },
   };
 
   assert.deepEqual(extractSessionModelSpec(payload), {
     name: "gpt-5.4",
     description: "GPT-5.4 model powering Codex and Codex CLI",
-    thinking: "Enabled"
+    thinking: "Enabled",
   });
   assert.deepEqual(extractSessionProviderSpec(payload), {
     name: "openai-subscription",
@@ -207,8 +216,8 @@ test("SessionStart provider spec exposes preferred models", () => {
     baseUrl: undefined,
     preferredModels: [
       { name: "gpt-5.5", description: "Latest model", thinking: undefined },
-      { name: "gpt-5.4", description: undefined, thinking: "Enabled" }
-    ]
+      { name: "gpt-5.4", description: undefined, thinking: "Enabled" },
+    ],
   });
 });
 

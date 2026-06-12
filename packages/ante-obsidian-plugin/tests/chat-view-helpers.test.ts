@@ -11,9 +11,9 @@ test("buildProcessStatusLines omits transport stream prefixes", () => {
         id: "read",
         label: "Read",
         activeLabel: "Running Read",
-        status: "in_progress"
-      }
-    ]
+        status: "in_progress",
+      },
+    ],
   });
 
   assert.deepEqual(lines, ["Running Read", "▪ Running Read"]);

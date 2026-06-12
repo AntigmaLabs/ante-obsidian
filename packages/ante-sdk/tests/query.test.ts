@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { __test__ } from "../src/query";
 import type { AnteClient } from "../src/session/client";
-import type { ApprovalDecision, ApprovalRequest, Options, SDKMessage, SDKUserMessage } from "../src/types";
+import type {
+  ApprovalDecision,
+  ApprovalRequest,
+  Options,
+  SDKMessage,
+  SDKUserMessage,
+} from "../src/types";
 
 class FakeClient implements AnteClient {
   messages: SDKMessage[] = [];
@@ -10,7 +16,10 @@ class FakeClient implements AnteClient {
   startCalls = 0;
   resumeCalls: string[] = [];
   private onMessage: (message: SDKMessage) => void = () => {};
-  private onDone: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void = () => {};
+  private onDone: (result: {
+    status: "completed" | "failed" | "cancelled";
+    error?: string;
+  }) => void = () => {};
   private sessionResolve: ((sessionId: string) => void) | null = null;
 
   async connect(): Promise<void> {}
@@ -46,7 +55,9 @@ class FakeClient implements AnteClient {
     this.onMessage = handler;
   }
 
-  setDoneHandler(handler: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void): void {
+  setDoneHandler(
+    handler: (result: { status: "completed" | "failed" | "cancelled"; error?: string }) => void,
+  ): void {
     this.onDone = handler;
   }
 
@@ -62,7 +73,7 @@ class FakeClient implements AnteClient {
       cwd: "/tmp",
       model: "model",
       provider: "provider",
-      permissionMode: "default"
+      permissionMode: "default",
     });
     this.sessionResolve?.(sessionId);
   }
@@ -77,7 +88,7 @@ test("query waits for session readiness before sending initial prompt", async ()
   const query = new __test__.AnteQuery(
     "hello",
     { model: "model", provider: "provider" },
-    (_options: Options) => client
+    (_options: Options) => client,
   );
 
   await Promise.resolve();
@@ -93,9 +104,9 @@ test("query waits for session readiness before sending initial prompt", async ()
       cwd: "/tmp",
       model: "model",
       provider: "provider",
-      permissionMode: "default"
+      permissionMode: "default",
     },
-    done: false
+    done: false,
   });
 
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -113,7 +124,7 @@ test("query waits for resumed session before streaming input", async () => {
   const query = new __test__.AnteQuery(
     input(),
     { model: "model", provider: "provider", resume: "ses_existing" },
-    (_options: Options) => client
+    (_options: Options) => client,
   );
 
   await Promise.resolve();

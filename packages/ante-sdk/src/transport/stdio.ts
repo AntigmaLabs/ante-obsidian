@@ -31,14 +31,14 @@ export const resolveCommandPath = (command: string, env: Record<string, string>)
 
   const pathEntries = [
     ...(env.PATH?.split(delimiter) ?? []),
-    ...(process.env.PATH?.split(delimiter) ?? [])
+    ...(process.env.PATH?.split(delimiter) ?? []),
   ].filter(Boolean);
 
   const candidates = [
     ...pathEntries.map((entry) => join(entry, trimmed)),
     join(homedir(), ".ante", "bin", trimmed),
     join("/opt/homebrew/bin", trimmed),
-    join("/usr/local/bin", trimmed)
+    join("/usr/local/bin", trimmed),
   ];
 
   for (const candidate of [...new Set(candidates)]) {
@@ -79,9 +79,9 @@ export class AnteStdioTransport implements AnteTransport {
       cwd: this.config.cwd.trim() || undefined,
       env: {
         ...process.env,
-        ...this.config.env
+        ...this.config.env,
       },
-      stdio: ["pipe", "pipe", "pipe"]
+      stdio: ["pipe", "pipe", "pipe"],
     });
     this.child = child;
     this.stdoutBuffer = "";
@@ -111,7 +111,7 @@ export class AnteStdioTransport implements AnteTransport {
       this.child = null;
       this.onClose({
         code: code ?? undefined,
-        reason: signal === "SIGTERM" ? "SIGTERM" : undefined
+        reason: signal === "SIGTERM" ? "SIGTERM" : undefined,
       });
     });
   }
@@ -143,7 +143,9 @@ export class AnteStdioTransport implements AnteTransport {
     this.onClose = handler;
   }
 
-  setDiagnosticHandler(handler: (event: { stream: "stdout" | "stderr"; text: string }) => void): void {
+  setDiagnosticHandler(
+    handler: (event: { stream: "stdout" | "stderr"; text: string }) => void,
+  ): void {
     this.onDiagnostic = handler;
   }
 }
