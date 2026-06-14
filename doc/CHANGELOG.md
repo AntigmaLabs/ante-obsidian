@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.13 - 2026-06-14
+
+- **Better Obsidian Context**: Improve note, selection, and cursor handling for more accurate chat replies and Markdown edits.
+- **Stable Updates**: Use the stable Ante CLI update channel.
+
 ## 0.6.12 - 2026-06-08
 
 - **Community Review Readiness**: Align the plugin source with Obsidian's current review checks, including API compatibility, settings labels, source typing, and release metadata.
